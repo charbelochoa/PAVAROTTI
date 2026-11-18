@@ -67,6 +67,14 @@ public class DesktopTest implements GhidraLaunchable {
         for (int i = 0; i < 100 && edt(table::getRowCount) == 0; i++) Thread.sleep(100);
         edt(() -> {
             if (table.getRowCount() != 1) throw new AssertionError("No se cargó la fuente.");
+            JTextField search = find(panel, JTextField.class, null);
+            for (String query : new String[]{"CADENA OBSERVADA", finding.digest(), finding.id(), "info"}) {
+                search.setText(query);
+                if (table.getRowCount() != 1) throw new AssertionError("Búsqueda sin resultado: " + query);
+            }
+            search.setText(".*");
+            if (table.getRowCount() != 0) throw new AssertionError("La búsqueda debe ser literal.");
+            search.setText("");
             table.setRowSelectionInterval(0, 0);
             JButton link = find(panel, JButton.class, "Vincular dirección");
             if (!link.isEnabled()) throw new AssertionError("El vínculo está deshabilitado.");

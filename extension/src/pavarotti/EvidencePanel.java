@@ -46,6 +46,7 @@ final class EvidencePanel extends ComponentProviderAdapter {
         bar.addSeparator();
         JLabel label = new JLabel("Buscar ");
         label.setLabelFor(search);
+        search.setToolTipText("Buscar texto en hallazgos, evidencias, identificadores y huellas SHA-256");
         bar.add(label); bar.add(search);
         body.add(bar, BorderLayout.NORTH);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -100,7 +101,17 @@ final class EvidencePanel extends ComponentProviderAdapter {
 
     private void filter() {
         String query = search.getText().strip();
-        sorter.setRowFilter(query.isEmpty() ? null : RowFilter.regexFilter("(?iu)" + Pattern.quote(query)));
+        if (query.isEmpty()) {
+            sorter.setRowFilter(null);
+            return;
+        }
+        Pattern literal = Pattern.compile(query, Pattern.LITERAL | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+        sorter.setRowFilter(new RowFilter<>() {
+            @Override public boolean include(Entry<? extends FindingsModel, ? extends Integer> entry) {
+                Finding finding = entry.getModel().rows.get(entry.getIdentifier());
+                return literal.matcher(finding.details()).find() || literal.matcher(finding.level()).find();
+            }
+        });
     }
 
     private Finding selection() {

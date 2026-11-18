@@ -24,7 +24,7 @@ Mantén el lanzador junto a las carpetas `ghidra` y `runtime`. El escritorio de 
 
 1. En el gestor de proyectos de Ghidra elige **File → New Project → Non-Shared Project** y selecciona una carpeta local. Abre **CodeBrowser** desde el **Tool Chest**.
 2. En el panel **PAVAROTTI**, selecciona **Importar ARTEX…**. Usa el JSON de **Findings → Export → JSON** o prueba con `ejemplos/hallazgos.json`. **Registrar fuente…** permite anotar una URL, un título y una cita observada. El registro es local y la aplicación guarda la URL tal como la introduces.
-3. Selecciona un hallazgo para ver evidencia, activos y procedencia. **Buscar** filtra la tabla y **Actualizar** relee las fuentes del proyecto.
+3. Selecciona un hallazgo para ver evidencia, activos y procedencia. **Buscar** encuentra texto literal en el expediente, incluidas citas, identificadores y huellas SHA-256 y **Actualizar** relee las fuentes del proyecto.
 4. Para asociar un hallazgo a un binario, importa el archivo en Ghidra y ábrelo en el mismo CodeBrowser. Selecciona una dirección en **Listing**, elige el hallazgo y pulsa **Vincular dirección**. Guarda el programa. **Window → Bookmarks** permite volver a esa dirección. La categoría del marcador incluye el SHA-256 y el ID de la fuente.
 
 Para respaldar el trabajo, conserva juntos `<proyecto>.gpr`, `<proyecto>.rep/` y `<proyecto>.pavarotti/`. La última carpeta contiene los documentos originales. Las importaciones admiten hasta 16 MiB por archivo y se deduplican por contenido. El estado «Verificado» reproduce el valor declarado por ARTEX.
