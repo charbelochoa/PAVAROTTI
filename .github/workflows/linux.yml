@@ -1,0 +1,31 @@
+name: Kali y Arch
+on:
+  push:
+    branches: [main]
+    paths: ['launcher/**', 'extension/**', 'scripts/**', 'assets/**', 'tests/**', 'ejemplos/**', '.github/workflows/linux.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  portable:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: false
+      - name: Compilar el paquete de Linux
+        run: python3 scripts/build.py --target linux
+      - name: Extraer y verificar la distribución
+        working-directory: dist
+        run: |
+          sha256sum -c PAVAROTTI-linux-x64.tar.gz.sha256
+          tar -xzf PAVAROTTI-linux-x64.tar.gz
+      - name: Probar el lanzador en Kali Rolling
+        run: |
+          docker run --rm -v "$PWD/dist/PAVAROTTI:/opt/PAVAROTTI:ro" -v "$PWD/tests:/tests:ro" kalilinux/kali-rolling +            bash -ec 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 xvfb xauth libxtst6 libxi6 libxrender1 libfontconfig1 fonts-dejavu-core libgl1 && /opt/PAVAROTTI/PAVAROTTI --check | tee /tmp/check && grep -F "PAVAROTTI OK" /tmp/check && xvfb-run -a python3 /tests/desktop.py /opt/PAVAROTTI'
+      - name: Probar el lanzador en Arch Linux
+        run: |
+          docker run --rm -v "$PWD/dist/PAVAROTTI:/opt/PAVAROTTI:ro" -v "$PWD/tests:/tests:ro" archlinux:base +            bash -ec 'pacman -Syu --noconfirm --needed python xorg-server-xvfb xorg-xauth libxtst libxi libxrender fontconfig ttf-dejavu libglvnd && /opt/PAVAROTTI/PAVAROTTI --check | tee /tmp/check && grep -F "PAVAROTTI OK" /tmp/check && xvfb-run -a python3 /tests/desktop.py /opt/PAVAROTTI'
