@@ -29,6 +29,7 @@ final class EvidencePanel extends ComponentProviderAdapter {
     private final JButton register = new JButton("Registrar fuente…");
     private final JButton link = new JButton("Vincular dirección");
     private final JButton refresh = new JButton("Actualizar");
+    private final JButton tor = new JButton("Abrir en Tor Browser…");
     private boolean busy;
     private boolean closed;
 
@@ -43,6 +44,8 @@ final class EvidencePanel extends ComponentProviderAdapter {
         JToolBar bar = new JToolBar();
         bar.setFloatable(false);
         bar.add(importButton); bar.add(register); bar.add(link); bar.add(refresh);
+        if (System.getProperty("os.name").equals("Linux")) bar.add(tor);
+        tor.addActionListener(e -> openSource());
         bar.addSeparator();
         JLabel label = new JLabel("Buscar ");
         label.setLabelFor(search);
@@ -124,6 +127,20 @@ final class EvidencePanel extends ComponentProviderAdapter {
     void updateActions() {
         importButton.setEnabled(!busy); register.setEnabled(!busy); refresh.setEnabled(!busy);
         link.setEnabled(!busy && selection() != null && plugin.canLink());
+        tor.setEnabled(!busy && selection() != null && !selection().urls().isEmpty());
+    }
+
+    private void openSource() {
+        List<String> urls = selection().urls();
+        Object url = JOptionPane.showInputDialog(body, "Fuente que se abrirá en Tor Browser", "Abrir fuente",
+                JOptionPane.QUESTION_MESSAGE, null, urls.toArray(), urls.getFirst());
+        if (url == null) return;
+        try {
+            new ProcessBuilder("torbrowser-launcher", url.toString()).start();
+            status.setText("Fuente enviada a Tor Browser.");
+        } catch (java.io.IOException ex) {
+            Msg.showError(this, body, "Tor Browser", "Instala torbrowser-launcher y completa su primer inicio.");
+        }
     }
 
     private void importFile() {

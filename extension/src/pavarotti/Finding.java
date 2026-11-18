@@ -7,7 +7,7 @@ import java.util.List;
 
 /** Presentation of ARTEX FindingDTO. Title and verification rules adapted from ARTEX/report. */
 record Finding(String digest, String id, String title, String level, String verification,
-               String assets, String details) {
+               String assets, String details, List<String> urls) {
     static Finding read(String digest, JsonObject row) {
         String id = text(row, "finding_id", text(row, "id", ""));
         if (id.isBlank()) throw new IllegalArgumentException("Falta el identificador del hallazgo.");
@@ -52,7 +52,15 @@ record Finding(String digest, String id, String title, String level, String veri
         add(detail, "ID de la fuente", id);
         add(detail, "SHA-256 del documento", digest);
         return new Finding(digest, id, title, text(row, "severity", "info"), verification,
-                String.join(", ", labels), detail.toString());
+                String.join(", ", labels), detail.toString(), labels.stream().filter(Finding::webUrl).distinct().toList());
+    }
+
+    private static boolean webUrl(String label) {
+        try {
+            var uri = java.net.URI.create(label);
+            return uri.getHost() != null && uri.getRawUserInfo() == null &&
+                    ("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()));
+        } catch (IllegalArgumentException invalid) { return false; }
     }
 
     private static String text(JsonObject obj, String key, String fallback) {
