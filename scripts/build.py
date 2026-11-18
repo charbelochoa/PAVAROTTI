@@ -250,6 +250,15 @@ def build(targets):
             temp.replace(DIST / filename)
             (DIST / (filename + ".sha256")).write_text(sha(DIST / filename) + "  " + filename + "\n", encoding="ascii")
             print("Listo", DIST / filename, flush=True)
+            if not windows:
+                portable = work / "PAVAROTTI-Kali-x64.run"
+                digest = (DIST / (filename + ".sha256")).read_text().split()[0]
+                header = (ROOT / "scripts/portable.sh").read_text(encoding="utf-8").replace("@SHA256@", digest)
+                with portable.open("wb") as out, (DIST / filename).open("rb") as payload:
+                    out.write((header.rstrip() + "\n").encode("utf-8"))
+                    shutil.copyfileobj(payload, out, 1024 * 1024)
+                portable.chmod(0o755)
+                portable.replace(DIST / portable.name)
 
 
 if __name__ == "__main__":

@@ -23,13 +23,12 @@ jobs:
         working-directory: dist
         run: |
           sha256sum -c PAVAROTTI-linux-x64.tar.gz.sha256
-          tar -xzf PAVAROTTI-linux-x64.tar.gz
       - name: Probar el lanzador en Kali Rolling
         run: >-
-          docker run --rm -v "$PWD/dist/PAVAROTTI:/opt/PAVAROTTI:ro"
+          docker run --rm -v "$PWD/dist/PAVAROTTI-Kali-x64.run:/media/PAVAROTTI.run:ro"
           -v "$PWD/tests:/tests:ro" kalilinux/kali-rolling bash /tests/distro.sh
       - name: Probar el lanzador en Arch Linux
         if: "!cancelled() && steps.package.outcome == 'success'"
         run: >-
-          docker run --rm -v "$PWD/dist/PAVAROTTI:/opt/PAVAROTTI:ro"
+          docker run --rm -v "$PWD/dist/PAVAROTTI-Kali-x64.run:/media/PAVAROTTI.run:ro"
           -v "$PWD/tests:/tests:ro" archlinux:base bash /tests/distro.sh

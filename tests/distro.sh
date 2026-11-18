@@ -11,6 +11,8 @@ case "$ID" in
         ;;
     *) exit 2 ;;
 esac
-/opt/PAVAROTTI/PAVAROTTI --check | tee /tmp/pavarotti-check.log
+export XDG_CACHE_HOME=/tmp/pavarotti-cache
+bash /media/PAVAROTTI.run --check | tee /tmp/pavarotti-check.log
 grep -F "PAVAROTTI OK" /tmp/pavarotti-check.log
-xvfb-run -a python3 /tests/desktop.py /opt/PAVAROTTI
+packages=("$XDG_CACHE_HOME"/pavarotti-usb/*/PAVAROTTI)
+xvfb-run -a python3 /tests/desktop.py "${packages[0]}"
