@@ -19,13 +19,17 @@ jobs:
       - name: Compilar el paquete de Linux
         run: python3 scripts/build.py --target linux
       - name: Extraer y verificar la distribución
+        id: package
         working-directory: dist
         run: |
           sha256sum -c PAVAROTTI-linux-x64.tar.gz.sha256
           tar -xzf PAVAROTTI-linux-x64.tar.gz
       - name: Probar el lanzador en Kali Rolling
-        run: |
-          docker run --rm -v "$PWD/dist/PAVAROTTI:/opt/PAVAROTTI:ro" -v "$PWD/tests:/tests:ro" kalilinux/kali-rolling +            bash -ec 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 xvfb xauth libxtst6 libxi6 libxrender1 libfontconfig1 fonts-dejavu-core libgl1 && /opt/PAVAROTTI/PAVAROTTI --check | tee /tmp/check && grep -F "PAVAROTTI OK" /tmp/check && xvfb-run -a python3 /tests/desktop.py /opt/PAVAROTTI'
+        run: >-
+          docker run --rm -v "$PWD/dist/PAVAROTTI:/opt/PAVAROTTI:ro"
+          -v "$PWD/tests:/tests:ro" kalilinux/kali-rolling bash /tests/distro.sh
       - name: Probar el lanzador en Arch Linux
-        run: |
-          docker run --rm -v "$PWD/dist/PAVAROTTI:/opt/PAVAROTTI:ro" -v "$PWD/tests:/tests:ro" archlinux:base +            bash -ec 'pacman -Syu --noconfirm --needed python xorg-server-xvfb xorg-xauth libxtst libxi libxrender fontconfig ttf-dejavu libglvnd && /opt/PAVAROTTI/PAVAROTTI --check | tee /tmp/check && grep -F "PAVAROTTI OK" /tmp/check && xvfb-run -a python3 /tests/desktop.py /opt/PAVAROTTI'
+        if: "!cancelled() && steps.package.outcome == 'success'"
+        run: >-
+          docker run --rm -v "$PWD/dist/PAVAROTTI:/opt/PAVAROTTI:ro"
+          -v "$PWD/tests:/tests:ro" archlinux:base bash /tests/distro.sh

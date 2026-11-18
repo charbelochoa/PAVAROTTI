@@ -2,5 +2,6 @@
 *.java text eol=lf
 *.go text eol=lf
 *.py text eol=lf
+*.sh text eol=lf
 *.svg -text
 *.png binary
