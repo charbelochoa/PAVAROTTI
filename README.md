@@ -15,6 +15,8 @@ La integración de ARTEX es de lectura local. El operador elige los documentos, 
 
 ## Abrir PAVAROTTI
 
+El gestor de proyectos, los menús principales, las herramientas y el icono de Windows llevan el nombre o la máscara porcina de PAVAROTTI. En Kali, el primer arranque desde la USB registra **PAVAROTTI** con el cerdito en el menú de aplicaciones del usuario. Para registrar ese acceso sin abrir el programa, ejecuta `bash ./PAVAROTTI-Kali-x64.run --install-desktop`. El explorador de archivos puede mostrar un icono genérico para el archivo `.run`.
+
 **Desde una memoria USB en Kali x86-64** copia el único archivo `PAVAROTTI-Kali-x64.run` a la memoria. En una terminal abierta en esa carpeta ejecuta `bash ./PAVAROTTI-Kali-x64.run`. También puedes usar `chmod +x` y abrirlo como ejecutable en un volumen que permita ejecución. El primer inicio verifica y extrae Java y Ghidra en `~/.cache/pavarotti-usb` (o bajo `XDG_CACHE_HOME`), por lo que necesitas unos 3 GB libres en el equipo. Puedes crear el proyecto en la USB para llevar también tus evidencias.
 
 **Para visitar una fuente en Tor**, instala en Kali `sudo apt install torbrowser-launcher` y abre Tor Browser una vez para completar su configuración. En el panel selecciona un hallazgo con un activo HTTP(S), pulsa **Abrir en Tor Browser…** y elige la URL. La conexión pertenece a Tor Browser. Ghidra y sus demás herramientas conservan su configuración de red.

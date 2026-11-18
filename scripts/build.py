@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import io
 import os
+import re
 from pathlib import Path, PurePosixPath
 import shutil
 import struct
@@ -68,6 +69,43 @@ def host_jdk(archive):
     return java.parent
 
 
+def compile_brand(work, ghidra, java, classpath):
+    modules = {
+        "Ghidra/Framework/Project": ["ghidra/framework/main/" + n for n in
+            ("FrontEndPlugin", "FrontEndTool", "FileActionManager", "UserAgreementDialog")] +
+            ["ghidra/framework/plugintool/PluginTool", "ghidra/app/plugin/gui/ThemeManagerPlugin"],
+        "Ghidra/Features/Base": ["ghidra/framework/main/GhidraApplicationInformationDisplayFactory",
+                                 "ghidra/app/plugin/runtimeinfo/VersionInfoPanel", "ghidra/GhidraRun"],
+    }
+    # Replace display text in these UI classes, preserving API, help and preference identifiers.
+    literals = re.compile(r'"(?:[^"\\\n]|\\.)*"')
+    def brand(match):
+        label = match.group()
+        if " " in label and "Ghidra Server" not in label and label != '"Ghidra Core"':
+            return re.sub(r"\bGhidra\b", "PAVAROTTI", label)
+        return label
+    result = {}
+    with zipfile.ZipFile(ghidra) as release:
+        for module, names in modules.items():
+            stem = module.rsplit("/", 1)[1]
+            base = module + "/lib/" + stem
+            output = work / ("brand-" + stem)
+            output.mkdir()
+            files = []
+            with zipfile.ZipFile(io.BytesIO(release.read(GHIDRA + "/" + base + "-src.zip"))) as sources:
+                for name in names:
+                    source = work / "ui-src" / (name + ".java")
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    source.write_text(literals.sub(brand, sources.read(name + ".java").decode("utf-8")), encoding="utf-8")
+                    files.append(source.as_posix())
+            args = ["-proc:none", "-encoding", "UTF-8", "-cp", classpath, "-d", output.as_posix(), *files]
+            argfile = output / "options"
+            argfile.write_text("\n".join(f'"{a}"' for a in args), encoding="utf-8")
+            subprocess.run([java / "javac", "@" + str(argfile)], check=True)
+            result[base + ".jar"] = {p.relative_to(output).as_posix(): p.read_bytes() for p in output.rglob("*.class")}
+    return result
+
+
 def compile_plugin(work, ghidra, java):
     libs = work / "libs"
     classes, tests = work / "classes", work / "tests"
@@ -90,13 +128,13 @@ def compile_plugin(work, ghidra, java):
                     ROOT / "tests/pavarotti/SourceStoreTest.java"], check=True)
     subprocess.run([java / "java", "-cp", test_cp, "pavarotti.SourceStoreTest", tests,
                     ROOT / "ejemplos/hallazgos.json"], check=True)
-    shutil.copyfile(ROOT / "assets/sello.png", classes / "pavarotti/sello.png")
+    shutil.copyfile(ROOT / "assets/cerdito.png", classes / "pavarotti/sello.png")
     jar = work / "Pavarotti.jar"
     subprocess.run([java / "jar", "--create", "--file", jar, "-C", classes, "."], check=True)
-    return jar.read_bytes()
+    return jar.read_bytes(), compile_brand(work, ghidra, java, classpath)
 
 
-def branded_resources(src, plugin):
+def branded_resources(src, plugin, branded_classes):
     prefix = GHIDRA + "/"
     modified = {}
     props = "Ghidra/application.properties"
@@ -129,7 +167,6 @@ def branded_resources(src, plugin):
                               TITLE="PAVAROTTI", ACTIVE="true", GROUP="Default",
                               INSTANCE_ID="6820356914200100101"))
     patch_jar(config, {"defaultTools/CodeBrowser.tool": ET.tostring(tool, encoding="utf-8", xml_declaration=True)})
-    patch_jar("Ghidra/Features/Base/lib/Base.jar", {"images/GHIDRA_Splash.png": (ROOT / "assets/portada.png").read_bytes()})
     ico = (ROOT / "assets/pavarotti.ico").read_bytes()
     icons = {}
     for i in range(struct.unpack_from("<H", ico, 4)[0]):
@@ -139,6 +176,17 @@ def branded_resources(src, plugin):
             raise ValueError("El icono debe contener imágenes PNG.")
         icons[f"images/GhidraIcon{width or 256}.png"] = png
     patch_jar("Ghidra/Framework/Gui/lib/Gui.jar", icons)
+    base = branded_classes["Ghidra/Features/Base/lib/Base.jar"]
+    base["images/GHIDRA_Splash.png"] = (ROOT / "assets/portada.png").read_bytes()
+    for n in (1, 2, 3):
+        base[f"images/GHIDRA_{n}.png"] = base["images/GHIDRA_Splash.png"]
+    base["defaultTools/images/greenDragon24.png"] = icons["images/GhidraIcon24.png"]
+    base["defaultTools/images/red-dragon.gif"] = (ROOT / "assets/mascota24.gif").read_bytes()
+    for path, entries in branded_classes.items():
+        patch_jar(path, entries)
+    debugger = "Ghidra/Debug/Debugger/lib/Debugger.jar"
+    patch_jar(debugger, {"images/" + name: icons[f"images/GhidraIcon{size}.png"]
+                          for name, size in (("debugger.png", 16), ("debugger32.png", 32), ("emulator32.png", 32))})
     return modified
 
 
@@ -219,8 +267,8 @@ def build(targets):
     jdks = {t: fetch("jdk-windows.zip" if t == "windows" else "jdk-linux.tar.gz") for t in set(targets) | {HOST}}
     with tempfile.TemporaryDirectory(dir=BUILD) as tmp, zipfile.ZipFile(ghidra) as src:
         work = Path(tmp)
-        plugin = compile_plugin(work, ghidra, host_jdk(jdks[HOST]))
-        patches = branded_resources(src, plugin)
+        plugin, branded_classes = compile_plugin(work, ghidra, host_jdk(jdks[HOST]))
+        patches = branded_resources(src, plugin, branded_classes)
         for target in targets:
             windows = target == "windows"
             exe = build_launcher(work, target)
@@ -230,6 +278,7 @@ def build(targets):
             bundle = Bundle(temp, windows)
             try:
                 bundle.file(exe.name, exe, 0o755)
+                bundle.file("pavarotti.png", ROOT / "assets/cerdito.png")
                 for item in src.infolist():
                     rel = item.filename.removeprefix(GHIDRA + "/")
                     if item.is_dir():

@@ -2,7 +2,7 @@
 from pathlib import Path
 from xml.etree import ElementTree
 import argparse
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -31,5 +31,8 @@ ink.text((500, 868), "PAVAROTTI", font=ImageFont.truetype(args.serif, 88),
          anchor="mm", fill="#e9e1d4", stroke_width=0)
 ink.line((362, 959, 638, 959), fill="#85382d", width=2)
 cover.resize((500, 500), Image.Resampling.LANCZOS).save(ROOT / "assets/portada.png")
-seal = Image.open(ROOT / "assets/sello.png").resize((256, 256), Image.Resampling.LANCZOS)
+head = portrait.crop((0, 0, 650 * scale, 650 * scale))
+seal = ImageOps.autocontrast(head.resize((256, 256), Image.Resampling.LANCZOS), cutoff=(0, 1))
+seal.resize((96, 96), Image.Resampling.LANCZOS).save(ROOT / "assets/cerdito.png")
+seal.resize((24, 24), Image.Resampling.LANCZOS).save(ROOT / "assets/mascota24.gif")
 seal.save(ROOT / "assets/pavarotti.ico", sizes=[(n, n) for n in (16, 24, 32, 40, 48, 64, 128, 256)])
