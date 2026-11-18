@@ -122,6 +122,8 @@ def branded_resources(src, plugin):
     ET.SubElement(tool.find("TOOL"), "PACKAGE", NAME="PAVAROTTI")
     console = tool.find(".//COMPONENT_INFO[@NAME='Console']")
     slot = next(node for node in tool.iter("COMPONENT_NODE") if console in list(node))
+    bottom_split = next(node for node in tool.iter("SPLIT_NODE") if slot in list(node))
+    bottom_split.set("DIVIDER_LOCATION", str(round(int(bottom_split.get("HEIGHT")) * 0.68)))
     console.set("ACTIVE", "false")
     slot.insert(0, ET.Element("COMPONENT_INFO", NAME="PAVAROTTI", OWNER="PavarottiPlugin",
                               TITLE="PAVAROTTI", ACTIVE="true", GROUP="Default",

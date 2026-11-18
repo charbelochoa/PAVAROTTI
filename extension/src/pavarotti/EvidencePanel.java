@@ -8,6 +8,7 @@ import javax.swing.event.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.*;
 import java.awt.*;
+import java.awt.event.*;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -60,7 +61,15 @@ final class EvidencePanel extends ComponentProviderAdapter {
         detail.setText("Selecciona un hallazgo para consultar sus evidencias y su procedencia.");
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
                 new JScrollPane(table), new JScrollPane(detail));
-        split.setResizeWeight(0.55); split.setDividerLocation(440);
+        split.setResizeWeight(0.52);
+        split.addComponentListener(new ComponentAdapter() {
+            @Override public void componentResized(ComponentEvent event) {
+                if (split.getWidth() > 0) {
+                    split.setDividerLocation(0.52);
+                    split.removeComponentListener(this);
+                }
+            }
+        });
         body.add(split, BorderLayout.CENTER);
         status.putClientProperty("html.disable", true);
         body.add(status, BorderLayout.SOUTH);
