@@ -77,7 +77,7 @@ La interfaz queda en `http://127.0.0.1:8080`. Define `PAVAROTTI_WEB_PORT` si ocu
 
 ## Compilar
 
-Se requiere Go 1.24 o posterior. Desde la raíz del repositorio:
+Se requiere Go 1.25 o posterior. CI y el paquete Docker usan Go 1.26.11. Desde la raíz del repositorio:
 
 ```sh
 go test ./...

@@ -33,6 +33,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 - Una conexión fallida del proxy generaba un aviso de HSTS aun cuando no se había recibido ninguna cabecera. Una prueba de regresión comprueba que el incidente queda registrado como fallo de conexión.
 - El historial podía mezclar la versión seleccionada en pantalla con otra lectura del expediente. La vista muestra ahora las versiones anteriores que devolvió el almacén y el inspector muestra la revisión seleccionada.
 - El primer chequeo de persistencia de Compose falló en CI después del reinicio. La verificación ahora espera a la aplicación y compara JSON estructurado.
+- La revisión de dependencias encontró avisos para el controlador de PostgreSQL y dos módulos de Go. Se actualizó a versiones con las correcciones y se fijó Go 1.26.11 en la compilación de CI y Docker.
 - El análisis admite hasta 10,000 registros por ejecución. El almacén y el panel todavía cargan el expediente completo. La paginación, ejecución en segundo plano y métricas de capacidad son requisitos para trabajar con conjuntos mayores.
 - La aplicación aún funciona como estación local. Para uso compartido quedan pendientes los controles de acceso y la auditoría descritos en el hito 6.
 
