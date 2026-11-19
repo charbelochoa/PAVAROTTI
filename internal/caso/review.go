@@ -47,20 +47,26 @@ type Replacement struct {
 }
 
 func (record Record) MatchesDependency(term string) bool {
-	if record.Dependencies == nil {
-		return false
-	}
-	for _, entry := range record.Dependencies.Entries {
-		if strings.Contains(strings.ToLower(entry.Name), term) || strings.Contains(strings.ToLower(entry.Version), term) ||
-			strings.Contains(strings.ToLower(entry.InstalledAs), term) {
-			return true
-		}
-		if entry.Replacement != nil && (strings.Contains(strings.ToLower(entry.Replacement.Name), term) ||
-			strings.Contains(strings.ToLower(entry.Replacement.Version), term)) {
+	for field := range record.dependencySearchFields {
+		if strings.Contains(strings.ToLower(field), term) {
 			return true
 		}
 	}
 	return false
+}
+
+func (record Record) dependencySearchFields(yield func(string) bool) {
+	if record.Dependencies == nil {
+		return
+	}
+	for _, entry := range record.Dependencies.Entries {
+		if !yield(entry.Name) || !yield(entry.Version) || !yield(entry.InstalledAs) {
+			return
+		}
+		if entry.Replacement != nil && (!yield(entry.Replacement.Name) || !yield(entry.Replacement.Version)) {
+			return
+		}
+	}
 }
 
 func (record Record) StaticReview() *CodeReview {
