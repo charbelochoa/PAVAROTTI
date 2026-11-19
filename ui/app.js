@@ -111,7 +111,7 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
   }
   if (record.code_review) view.append(codeReviewPanel(record.id, record.code_review, citation));
   if (record.dependencies) view.append(dependencyPanel(record.dependencies, citation));
-  const binary = record.kind === "binario" && binaryPanel(record, citation?.binary, citation?.binaryWindow);
+  const binary = record.kind === "binario" && binaryPanel(record, citation?.binary, citation?.binaryWindow, citation?.binaryReferences);
   if (binary) view.append(binary);
   if (!record.code_review && !record.traffic && record.signals?.length) {
     const list = element("ul");
@@ -192,7 +192,7 @@ function markBinaryCitation(row, citation, kind, index) {
   }
 }
 
-function binaryPanel(record, citation, windowCitation) {
+function binaryPanel(record, citation, windowCitation, referenceReport) {
   let report;
   try {
     report = JSON.parse(record.details);
@@ -257,10 +257,11 @@ function binaryPanel(record, citation, windowCitation) {
   const entries = binaryInstructionEntries(report.instructions, sections);
   const binaryWindow = ["ELF", "PE", "Mach-O", "Mach-O universal"].includes(report.format) ?
     binaryWindowPanel(report, record, windowCitation?.sha256 === record.sha256 ? windowCitation : undefined,
-      inspectorRequest.signal, binaryReferenceIndex(entries), () => instructions.refreshIncoming?.()) : undefined;
+      referenceReport?.sha256 === record.sha256 ? referenceReport : undefined, inspectorRequest.signal, binaryReferenceIndex(entries),
+      () => instructions.refreshIncoming?.()) : undefined;
   const instructions = binaryInstructionPanel(report, sections, images, {entries, citation,
     cite: (index) => binaryCitationButton(record, "instruccion", index), follow: binaryWindow?.followInstruction,
-    incoming: binaryWindow?.incoming, openReference: binaryWindow?.openReference});
+    incoming: binaryWindow?.incoming, openReference: binaryWindow?.openReference, exportReferences: binaryWindow?.exportReferences});
   const symbols = binarySymbolPanel(report, record, citation, images, binaryWindow?.openSymbol);
   function paintSections() {
     const rows = [];
@@ -325,6 +326,7 @@ function binaryPanel(record, citation, windowCitation) {
     if (citation?.kind === "simbolo") selectedImage = report.symbols?.[citation.index]?.image || 0;
     if (citation?.kind === "instruccion") selectedImage = sections[report.instructions?.[citation.index]?.section]?.image || 0;
     if (windowCitation?.image > 0 && windowCitation.image <= images.length) selectedImage = windowCitation.image;
+    if (referenceReport?.image > 0 && referenceReport.image <= images.length) selectedImage = referenceReport.image;
     if (citation?.kind === "cadena") {
       const offset = Number.parseInt(hits[citation.index]?.offset, 16);
       selectedImage = images.findIndex(({file}) => {
@@ -965,18 +967,25 @@ byId("binary-citation-file").onchange = async (event) => {
   const status = byId("status");
   button.disabled = true;
   try {
-    if (file.size > 4096) throw new Error("El archivo de cita supera los 4 KiB");
+    if (file.size > binaryReferenceReportBytes) throw new Error("El informe supera los 4 MiB");
     const citation = JSON.parse(await file.text());
+    const referenceReport = citation?.schema === binaryReferenceReportSchema;
+    if (!referenceReport && file.size > 4096) throw new Error("El archivo de cita supera los 4 KiB");
     if (typeof citation?.record_id !== "string" ||
       !/^[a-f0-9]{64}-[1-9][0-9]*$/.test(citation.record_id) || !Number.isSafeInteger(citation.revision) ||
-      citation.revision < 1 || !Number.isSafeInteger(citation.index) || citation.index < 0) {
-      throw new Error("El archivo no contiene una cita de binario válida");
+      citation.revision < 1 || (!referenceReport && (!Number.isSafeInteger(citation.index) || citation.index < 0))) {
+      throw new Error("El archivo no contiene una cita o un informe de binario válido");
     }
-    if (citation.schema === binaryWindowSchema && validBinaryWindowCitation(citation)) {
-      await selectRecord(citation.record_id, citation.revision, undefined, undefined, {binaryWindow: citation});
+    if (referenceReport && (!Array.isArray(citation.origins) || !citation.origins.length ||
+      !Number.isSafeInteger(citation.image) || citation.image < 0 || !/^[a-f0-9]{64}$/.test(citation.report_sha256))) {
+      throw new Error("El archivo no contiene un informe de referencias válido");
+    }
+    if (referenceReport || (citation.schema === binaryWindowSchema && validBinaryWindowCitation(citation))) {
+      const link = referenceReport ? {binaryReferences: citation} : {binaryWindow: citation};
+      await selectRecord(citation.record_id, citation.revision, undefined, undefined, link);
       if (selectedRecord?.id !== citation.record_id || selectedRecord.revision !== citation.revision ||
         selectedRecord.kind !== "binario" || selectedRecord.sha256 !== citation.sha256) {
-        throw new Error("La cita no coincide con una revisión de binario en este expediente.");
+        throw new Error("La cita o el informe no coincide con una revisión de binario en este expediente.");
       }
       status.textContent = "";
       return;

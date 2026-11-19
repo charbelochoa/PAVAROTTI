@@ -14,7 +14,7 @@ function validBinaryWindowCitation(citation) {
     location(citation.address) && location(citation.offset);
 }
 
-function binaryWindowPanel(report, record, citation, signal, references, updateReferences) {
+function binaryWindowPanel(report, record, citation, restoredReport, signal, references, updateReferences) {
   const details = element("details", "", "binary-window");
   details.append(element("summary", "Ventana de instrucciones"));
   const label = element("label", "Archivo binario original", "binary-image");
@@ -32,9 +32,12 @@ function binaryWindowPanel(report, record, citation, signal, references, updateR
   let pending;
   let focusOnFile;
   let expectedOrigin;
-  if (expected) {
+  let expectedHash;
+  let referenceAction = restoredReport ? {mode: "verificar", report: restoredReport} : undefined;
+  if (expected || referenceAction) {
     details.open = true;
-    status.textContent = `Selecciona el archivo original para verificar la cita en ${expected.offset}.`;
+    status.textContent = expected ? `Selecciona el archivo original para verificar la cita en ${expected.offset}.` :
+      "Selecciona el archivo original para verificar el informe de referencias.";
     requestAnimationFrame(() => { if (!signal.aborted) input.focus(); });
   }
 
@@ -45,7 +48,38 @@ function binaryWindowPanel(report, record, citation, signal, references, updateR
   function openReference(ref) {
     const location = ref.citation || ref.anchor || {kind: "instruccion", index: ref.index};
     open(location, {expected: ref.citation, preserve: true, focus: ref.citation || ref.anchor ? ref.index : 0,
-      origin: ref.instruction});
+      origin: ref.instruction, windowHash: ref.windowHash});
+  }
+
+  function exportReferences(destination, rows, windowCitation) {
+    referenceAction = {mode: "exportar", report: {schema: binaryReferenceReportSchema,
+      record_id: record.id, revision: record.revision, sha256: record.sha256, image: destination.section.image || 0,
+      destination: binaryReferenceLocation({...destination, citation: windowCitation}),
+      origins: rows.map(binaryReferenceLocation)}};
+    details.open = true;
+    load({preserve: true});
+  }
+
+  async function reviewReferences(action, file, current) {
+    status.textContent = "Verificando el informe de referencias…";
+    const body = new FormData();
+    body.append("informe", JSON.stringify(action.report));
+    body.append("archivo", file);
+    const review = await request(`/api/registro/${encodeURIComponent(record.id)}/referencias-binarias?modo=${action.mode}`,
+      {method: "POST", body, signal: current});
+    if (current.aborted) return;
+    const count = review.report.origins.length;
+    const summary = `${count} ${count === 1 ? "referencia" : "referencias"}`;
+    if (action.mode === "exportar") {
+      const output = JSON.stringify(review.report, null, 2) + "\n";
+      download(new Blob([output], {type: "application/json"}), "PAVAROTTI-informe-referencias.json");
+      referenceAction = undefined;
+      status.textContent = `Informe exportado · ${summary}`;
+      return;
+    }
+    references.restore(review.report, review.origins);
+    status.textContent = `Informe verificado · ${summary}`;
+    renderWindow(review.destination, review.report.destination.row);
   }
 
   async function load({preserve = false, focus} = {}) {
@@ -64,20 +98,23 @@ function binaryWindowPanel(report, record, citation, signal, references, updateR
     const controller = new AbortController();
     pending = controller;
     const current = AbortSignal.any([signal, controller.signal]);
-    status.textContent = "Verificando el archivo y abriendo la ventana…";
-    const query = new URLSearchParams({revision: record.revision, tipo: anchor.kind, indice: anchor.index});
-    if (anchor.path) query.set("pasos", anchor.path);
     try {
+      if (referenceAction) {
+        await reviewReferences(referenceAction, file, current);
+        return;
+      }
+      status.textContent = "Verificando el archivo y abriendo la ventana…";
+      const query = new URLSearchParams({revision: record.revision, tipo: anchor.kind, indice: anchor.index});
+      if (anchor.path) query.set("pasos", anchor.path);
       const data = await request(`/api/registro/${encodeURIComponent(record.id)}/ventana-binaria?${query}`,
         {method: "POST", body: file, signal: current});
       if (current.aborted) return;
       if (expected && Object.entries(data.citation).some(([key, value]) => expected[key] !== value)) {
         throw new Error("La ventana no coincide con la cita guardada.");
       }
-      const location = report.format === "PE" ? "RVA" : "Dirección";
-      const {window} = data;
+      if (expectedHash && expectedHash !== data.citation.window_sha256) throw new Error("La ventana no coincide con el informe guardado.");
       if (expectedOrigin) {
-        const actual = window.instructions[focus];
+        const actual = data.window.instructions[focus];
         const fields = ["address", "offset", "bytes", "target"];
         if (!actual || fields.some((key) => actual[key] !== expectedOrigin[key])) {
           throw new Error("La instrucción verificada difiere del origen de la referencia.");
@@ -85,62 +122,70 @@ function binaryWindowPanel(report, record, citation, signal, references, updateR
       }
       status.textContent = expectedOrigin ? `Origen verificado · ${expectedOrigin.offset}` :
         expected ? `Cita de ventana verificada · ${data.citation.offset}` : `Archivo verificado · ${data.citation.offset}`;
-      const steps = data.citation.path?.split(".") || [];
-      const title = element("p", `${data.name} · ${window.section || "Sin nombre"} · ${window.architecture}`);
-      const address = element("p", `${location} ${data.citation.address} · Archivo ${data.citation.offset}`);
-      const tools = element("div", "", "tools");
-      const save = element("button", "Exportar cita de ventana");
-      save.onclick = () => {
-        const body = JSON.stringify(data.citation, null, 2) + "\n";
-        download(new Blob([body], {type: "application/json"}), "PAVAROTTI-cita-ventana.json");
-      };
-      tools.append(save);
-      let origin;
-      let verifiedParent;
-      if (window.origin && steps.length) {
-        origin = element("p", `Origen del salto ${window.origin.address} · Archivo ${window.origin.offset}`);
-        const parent = {kind: data.citation.kind, index: data.citation.index, path: steps.slice(0, -1).join(".")};
-        const position = Number(steps.at(-1));
-        verifiedParent = {instruction: window.origin, section: {image: window.image}, index: position, anchor: parent};
-        const back = element("button", `Volver a ${window.origin.address}`);
-        back.onclick = () => open(parent, {preserve: true, focus: position});
-        tools.append(back);
-      }
-      const follow = steps.length < binaryWindowPathLimit ? (index) => {
-        open({kind: data.citation.kind, index: data.citation.index, path: [...steps, index].join(".")}, {preserve: true, focus: 0});
-      } : undefined;
-      const sections = [{name: window.section, image: window.image}];
-      const entries = binaryInstructionEntries(window.instructions, sections);
-      references.observe(data.citation, verifiedParent ? [...entries, verifiedParent] : entries);
-      updateReferences();
-      const listing = binaryInstructionPanel({format: report.format, instructions_limited: window.limited}, sections, images,
-        {entries, follow, incoming, openReference});
-      listing.paintImage(window.image);
-      result.replaceChildren(title, address);
-      if (origin) result.append(origin);
-      if (steps.length === binaryWindowPathLimit) result.append(element("p", "Se alcanzó el límite de 32 saltos en el recorrido."));
-      result.append(tools, listing.details);
-      if (focus !== undefined) listing.focusIndex(focus);
+      renderWindow(data, focus);
     } catch (error) {
       if (!current.aborted) status.textContent = error.message;
     }
+  }
+
+  function renderWindow(data, focus) {
+    const location = report.format === "PE" ? "RVA" : "Dirección";
+    const {window} = data;
+    const steps = data.citation.path?.split(".") || [];
+    const title = element("p", `${data.name} · ${window.section || "Sin nombre"} · ${window.architecture}`);
+    const address = element("p", `${location} ${data.citation.address} · Archivo ${data.citation.offset}`);
+    const tools = element("div", "", "tools");
+    const save = element("button", "Exportar cita de ventana");
+    save.onclick = () => {
+      const body = JSON.stringify(data.citation, null, 2) + "\n";
+      download(new Blob([body], {type: "application/json"}), "PAVAROTTI-cita-ventana.json");
+    };
+    tools.append(save);
+    let origin;
+    let verifiedParent;
+    if (window.origin && steps.length) {
+      origin = element("p", `Origen del salto ${window.origin.address} · Archivo ${window.origin.offset}`);
+      const parent = {kind: data.citation.kind, index: data.citation.index, path: steps.slice(0, -1).join(".")};
+      const position = Number(steps.at(-1));
+      verifiedParent = {instruction: window.origin, section: {image: window.image}, index: position, anchor: parent};
+      const back = element("button", `Volver a ${window.origin.address}`);
+      back.onclick = () => open(parent, {preserve: true, focus: position});
+      tools.append(back);
+    }
+    const follow = steps.length < binaryWindowPathLimit ? (index) => {
+      open({kind: data.citation.kind, index: data.citation.index, path: [...steps, index].join(".")}, {preserve: true, focus: 0});
+    } : undefined;
+    const sections = [{name: window.section, image: window.image}];
+    const entries = binaryInstructionEntries(window.instructions, sections);
+    references.observe(data.citation, verifiedParent ? [...entries, verifiedParent] : entries);
+    updateReferences();
+    const listing = binaryInstructionPanel({format: report.format, instructions_limited: window.limited}, sections, images,
+      {entries, follow, incoming, openReference, exportReferences: (destination, rows) => exportReferences(destination, rows, data.citation)});
+    listing.paintImage(window.image);
+    result.replaceChildren(title, address);
+    if (origin) result.append(origin);
+    if (steps.length === binaryWindowPathLimit) result.append(element("p", "Se alcanzó el límite de 32 saltos en el recorrido."));
+    result.append(tools, listing.details);
+    if (focus !== undefined) listing.focusIndex(focus);
   }
 
   function open(location, options) {
     expected = options?.expected;
     focusOnFile = options?.focus;
     expectedOrigin = options?.origin;
+    expectedHash = options?.windowHash;
+    referenceAction = undefined;
     anchor = location;
     details.open = true;
     details.scrollIntoView({block: "nearest"});
     load(options);
   }
   input.onchange = () => {
-    if (anchor) load({focus: focusOnFile});
+    if (anchor || referenceAction) load({focus: focusOnFile, preserve: referenceAction?.mode === "exportar"});
     else status.textContent = "Elige un símbolo o abre el punto de entrada.";
   };
   entry.onclick = () => open({kind: "entrada", index: image});
-  return {details, incoming, openReference, openSymbol(index) { open({kind: "simbolo", index}); },
+  return {details, incoming, openReference, exportReferences, openSymbol(index) { open({kind: "simbolo", index}); },
     followInstruction(index) { open({kind: "instruccion", index, path: "0"}, {focus: 0}); }, paintImage(index) {
     if (image !== undefined && image !== index) {
       pending?.abort();
@@ -148,11 +193,13 @@ function binaryWindowPanel(report, record, citation, signal, references, updateR
       expected = undefined;
       focusOnFile = undefined;
       expectedOrigin = undefined;
+      expectedHash = undefined;
+      referenceAction = undefined;
       result.replaceChildren();
       status.textContent = "";
     }
     image = index;
     entry.disabled = !!report.images?.length && image === 0;
-    if (entry.disabled && !anchor) status.textContent = "Selecciona una imagen Mach-O para abrir su punto de entrada.";
+    if (entry.disabled && !anchor && !referenceAction) status.textContent = "Selecciona una imagen Mach-O para abrir su punto de entrada.";
   }};
 }

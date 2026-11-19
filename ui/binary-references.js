@@ -1,6 +1,18 @@
 "use strict";
 
 const binaryReferenceWindowLimit = 64;
+const binaryReferenceReportSchema = "pavarotti.binary-references.v1";
+const binaryReferenceReportBytes = 4 * 1024 * 1024;
+
+function binaryReferenceLocation(ref) {
+  const anchor = ref.citation || ref.anchor;
+  const location = {kind: anchor?.kind || "instruccion", index: anchor?.index ?? ref.index, row: anchor ? ref.index : 0,
+    address: ref.instruction.address, offset: ref.instruction.offset};
+  if (anchor?.path) location.path = anchor.path;
+  const hash = ref.citation?.window_sha256 || ref.windowHash;
+  if (hash) location.window_sha256 = hash;
+  return location;
+}
 
 function binaryInstructionEntries(instructions, sections) {
   if (!Array.isArray(instructions)) return [];
@@ -17,13 +29,15 @@ function binaryInstructionEntries(instructions, sections) {
 
 function binaryReferenceIndex(saved) {
   const windows = new Map();
+  let restored;
   const byAddress = (image, address) => `${image}:${address}`;
   const sortLocation = (a, b) => a.length - b.length || a.localeCompare(b);
+  const rank = (ref) => ref?.citation ? 3 : ref?.windowHash ? 2 : ref?.anchor ? 1 : 0;
 
   function group(entries, citation) {
     const locations = new Map();
     const targets = new Map();
-    for (const {instruction, section, index, anchor} of entries) {
+    for (const {instruction, section, index, anchor, windowHash} of entries) {
       const image = section.image || 0;
       const address = byAddress(image, instruction.address);
       const offsets = locations.get(address) || new Set();
@@ -32,7 +46,7 @@ function binaryReferenceIndex(saved) {
       if (!instruction.target || !instruction.text) continue;
       const target = byAddress(image, instruction.target);
       const refs = targets.get(target) || [];
-      refs.push({instruction, image, index, citation: anchor ? undefined : citation, anchor});
+      refs.push({instruction, image, index, citation: anchor ? undefined : citation, anchor, windowHash});
       targets.set(target, refs);
     }
     return {locations, targets};
@@ -46,17 +60,22 @@ function binaryReferenceIndex(saved) {
       windows.set(key, group(entries, citation));
       if (windows.size > binaryReferenceWindowLimit) windows.delete(windows.keys().next().value);
     },
+    restore(report, instructions) {
+      restored = group(report.origins.map((anchor, index) => ({instruction: instructions[index],
+        section: {image: report.image}, index: anchor.row, anchor, windowHash: anchor.window_sha256})));
+    },
     incoming(image, address, offset) {
       const target = byAddress(image, address);
       const refs = new Map();
-      for (const source of [recorded, ...windows.values()]) {
+      const sources = restored ? [recorded, restored, ...windows.values()] : [recorded, ...windows.values()];
+      for (const source of sources) {
         const offsets = source.locations.get(target) || [];
         for (const location of offsets) {
           if (location !== offset) return {ambiguous: true, rows: []};
         }
         for (const ref of source.targets.get(target) || []) {
           const key = `${ref.instruction.address}:${ref.instruction.offset}`;
-          if (!refs.get(key)?.citation || ref.citation) refs.set(key, ref);
+          if (rank(ref) >= rank(refs.get(key))) refs.set(key, ref);
         }
       }
       return {ambiguous: false, rows: Array.from(refs.values()).sort((a, b) =>
