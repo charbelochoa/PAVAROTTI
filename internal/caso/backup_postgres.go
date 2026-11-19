@@ -32,6 +32,7 @@ var caseBackupTables = []caseBackupTable{
 			snapshot, result`},
 	{kind: "audit_head", table: "pavarotti_audit_heads", columns: "position", order: "position"},
 	{kind: "audit_event", table: "pavarotti_audit_events", columns: "position, occurred_at, actor, source, action, target, details", order: "position"},
+	{kind: backupWatchlists, table: "pavarotti_watchlists", columns: "state", order: "expediente"},
 }
 
 func (table caseBackupTable) export(ctx context.Context, tx *sql.Tx, caseName string, writer io.Writer) (int, error) {
@@ -141,7 +142,8 @@ func (s *Store) RestoreCase(ctx context.Context, source io.Reader) (BackupSummar
 	if err := tx.QueryRowContext(ctx, `SELECT
 		EXISTS (SELECT 1 FROM pavarotti_evidence_batches WHERE expediente = $1) OR
 		EXISTS (SELECT 1 FROM pavarotti_analysis_jobs WHERE expediente = $1) OR
-		EXISTS (SELECT 1 FROM pavarotti_audit_heads WHERE expediente = $1)`, s.expediente).Scan(&occupied); err != nil {
+		EXISTS (SELECT 1 FROM pavarotti_audit_heads WHERE expediente = $1) OR
+		EXISTS (SELECT 1 FROM pavarotti_watchlists WHERE expediente = $1)`, s.expediente).Scan(&occupied); err != nil {
 		return BackupSummary{}, err
 	}
 	if occupied {

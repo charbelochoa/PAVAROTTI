@@ -84,6 +84,9 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	if err := migrateAudit(ctx, tx); err != nil {
 		return err
 	}
+	if err := migrateWatchlists(ctx, tx); err != nil {
+		return err
+	}
 	if err := migrateHTTPPageIndex(ctx, tx); err != nil {
 		return err
 	}

@@ -764,7 +764,7 @@ function selectAsset(asset, after = "") {
   selectedKey = "";
   selectedRevision = 0;
   returnToEvidence = undefined;
-  selectedAsset = {type: asset.type, value: asset.value, after, back: asset.back, networkAfter: asset.networkAfter};
+  selectedAsset = {type: asset.type, value: asset.value, after, back: asset.back, networkAfter: asset.networkAfter, watched: asset.watched};
   paintSelection();
   byId("inspector-heading").focus({preventScroll: true});
   if (window.matchMedia("(max-width: 970px)").matches) {
@@ -777,7 +777,10 @@ async function loadAsset(asset) {
   const controller = beginInspection("Consultando activo…");
   const params = new URLSearchParams({tipo: asset.type, valor: asset.value, despues: asset.after});
   try {
-    const detail = await request("/api/activos/ficha?" + params, {signal: controller.signal});
+    const response = await fetch("/api/activos/ficha?" + params, {signal: controller.signal});
+    const detail = response.status === 404 && asset.watched && !asset.after ?
+      {type: asset.type, value: asset.value, count: 0, indicators: 0, rows: []} :
+      await (await requireResponse(response)).json();
     if (!controller.signal.aborted) inspectAsset(detail, asset, controller.signal);
   } catch (error) {
     if (!controller.signal.aborted) inspect(undefined, error.message);
@@ -808,6 +811,11 @@ function inspectAsset(detail, asset, signal) {
   const report = element("button", "Cobertura por periodo");
   report.onclick = () => openAssetCoverage(detail);
   actions.append(report);
+  if (canWrite) {
+    const follow = element("button", "Añadir a seguimiento");
+    follow.onclick = () => openWatchlists(detail);
+    actions.append(follow);
+  }
   if (asset.back) {
     const back = element("button", asset.back.label);
     back.onclick = asset.back.open;
@@ -828,6 +836,7 @@ function inspectAsset(detail, asset, signal) {
   view.replaceChildren(element("span", assetKinds[detail.type], "type"), element("h3", detail.value),
     element("p", assetCount(detail)), actions, list, controls);
   if (detail.coverage) list.before(element("p", `Cobertura de red · ${detail.coverage}`));
+  if (asset.watched && !detail.rows.length) list.before(element("p", "Sin evidencia para este activo."));
   if (detail.type === "red") list.before(assetNetworkPanel({...asset, value: detail.value}, signal));
   view.scrollTop = 0;
 }
@@ -989,6 +998,7 @@ function showView(view) {
   byId("filter").hidden = view !== "records";
   byId("filter-asset").hidden = view !== "assets";
   byId("open-asset-coverage").hidden = view !== "assets";
+  byId("open-watchlists").hidden = view !== "assets";
   byId("open-binary-citation").hidden = view !== "binaries";
   byId("open-binary-reference-comparison").hidden = view !== "binaries";
   byId("http-filters").hidden = view !== "http";
@@ -1233,7 +1243,8 @@ const activityLabels = {
   "expediente.restaurado": "Expediente restaurado",
   "actividad.retencion": "Retención de actividad aplicada",
   "senal.clasificada": "Señal clasificada", "tarea.encolada": "Tarea encolada", "tarea.priorizada": "Prioridad cambiada",
-  "tarea.iniciada": "Tarea iniciada", "tarea.finalizada": "Tarea finalizada", "tarea.cancelada": "Tarea cancelada"
+  "tarea.iniciada": "Tarea iniciada", "tarea.finalizada": "Tarea finalizada", "tarea.cancelada": "Tarea cancelada",
+  "seguimiento.cambiado": "Seguimiento actualizado"
 };
 let activityRequest;
 
@@ -1248,6 +1259,7 @@ function activityEntry(event) {
   if (details.count > 1 || (details.count && event.action === "expediente.migrado")) context.push(`${details.count} ${details.count === 1 ? "registro" : "registros"}`);
   if (details.note_revisions) context.push(`${details.note_revisions} ${details.note_revisions === 1 ? "revisión de nota" : "revisiones de notas"}`);
   if (details.triage_revisions) context.push(`${details.triage_revisions} ${details.triage_revisions === 1 ? "decisión" : "decisiones"} de triaje`);
+  if (details.watchlists) context.push(`${details.watchlists} ${details.watchlists === 1 ? "lista" : "listas"} de seguimiento`);
   if (details.removed_events) context.push(`${details.removed_events} ${details.removed_events === 1 ? "evento retirado" : "eventos retirados"}`);
   if (details.retention_before) context.push(`Antes del ${details.retention_before.slice(0, 10)} UTC`);
   if (details.backup_sha256) context.push(`SHA-256 ${details.backup_sha256}`);
@@ -1260,7 +1272,7 @@ function activityEntry(event) {
   if (details.attempt) context.push(`Intento ${details.attempt}`);
   if (context.length) text.append(element("p", context.join(" · ")));
   row.append(text);
-  if (!event.target) return row;
+  if (!event.target || event.action === "seguimiento.cambiado") return row;
   const isQueue = event.action.startsWith("tarea.");
   const open = element("button", isQueue ? "Abrir tarea" : "Abrir evidencia");
   open.onclick = () => {

@@ -113,6 +113,12 @@ footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2re
 .coverage-fields label { display: grid; gap: .15rem; }
 .coverage-fields input, .coverage-fields select { width: 100%; }
 #asset-coverage-status { margin: .65rem 0; }
+#watchlists { width: min(760px, calc(100vw - 1.5rem)); max-height: calc(100dvh - 1.5rem); overflow-wrap: anywhere; }
+.watchlist-fields { align-items: end; }
+.watchlist-fields label { display: grid; flex: 1 1 13rem; gap: .25rem; min-width: 0; }
+.watchlist-fields select, .watchlist-fields input { width: 100%; min-width: 0; }
+#watchlist-status { margin: .65rem 0; }
+#watchlist-rows { max-height: 46vh; }
 #asset-coverage-result h3 { margin: .65rem 0 .3rem; }
 .coverage-counts { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .15rem .6rem; margin: .5rem 0; }
 .coverage-counts dd { margin: 0; text-align: end; }
