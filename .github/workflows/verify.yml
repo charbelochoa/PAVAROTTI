@@ -49,18 +49,30 @@ jobs:
           cat > "$samples/rdap.json" <<'JSON'
           {"objectClassName":"domain","ldhName":"evidencia.example.invalid","status":["active"]}
           JSON
-          cat > "$samples/stix.json" <<'JSON'
-          {"type":"bundle","id":"bundle--b451dd1c-4321-4bee-99b7-7dcaf8148f8f","objects":[{"type":"indicator","spec_version":"2.1","id":"indicator--9324a333-6a0b-4df1-8fdb-d266df2800ea","pattern_type":"stix","pattern":"[domain-name:value = 'evidencia.example.invalid']"}]}
+          printf 'PAVAROTTI CI\n' > "$samples/muestra.bin"
+          digest=$(sha256sum "$samples/muestra.bin")
+          digest=${digest%% *}
+          cat > "$samples/stix.json" <<JSON
+          {"type":"bundle","id":"bundle--b451dd1c-4321-4bee-99b7-7dcaf8148f8f","objects":[
+            {"type":"indicator","spec_version":"2.1","id":"indicator--9324a333-6a0b-4df1-8fdb-d266df2800ea","pattern_type":"stix","pattern":"[domain-name:value = 'evidencia.example.invalid']"},
+            {"type":"indicator","spec_version":"2.1","id":"indicator--02c4f029-91de-4acf-8b9a-8aee0a0a9ec6","pattern_type":"stix","pattern":"[file:hashes.'SHA-256' = '$digest']"},
+            {"type":"ipv4-addr","id":"ipv4-addr--cc679f46-2dbb-5c79-abdf-563768ff1ffa","value":"192.0.2.0/24"}
+          ]}
+          JSON
+          cat > "$samples/dns.json" <<'JSON'
+          {"Status":0,"Answer":[{"name":"dns.example.invalid","type":1,"data":"192.0.2.17"}]}
           JSON
           for image in kalilinux/kali-rolling archlinux:base; do
             docker run --rm --network none -v "$PWD/PAVAROTTI-Kali-x64:/opt/pavarotti:ro" -v "$samples:/samples:ro" "$image" /bin/sh -ec '
               /opt/pavarotti -version >&2
               /opt/pavarotti -datos /tmp/expediente importar rdap /samples/rdap.json >&2
               /opt/pavarotti -datos /tmp/expediente importar stix /samples/stix.json >&2
+              /opt/pavarotti -datos /tmp/expediente importar dns /samples/dns.json >&2
+              /opt/pavarotti -datos /tmp/expediente importar binario /samples/muestra.bin >&2
               /opt/pavarotti -datos /tmp/expediente activos --tipo dominio --valor evidencia.example.invalid --json
               /opt/pavarotti -datos /tmp/expediente analizar --json
             ' > "$samples/resultados.json"
-            python3 - "$samples/resultados.json" <<'PY'
+            python3 - "$samples/resultados.json" "$digest" <<'PY'
           import json
           import sys
           from pathlib import Path
@@ -71,10 +83,15 @@ jobs:
           assert asset["count"] == 2 and asset["indicators"] == 1
           assert {row["role"] for row in asset["rows"]} == {"registro", "indicador"}
           assert all(row["id"] and row["revision"] == 1 for row in asset["rows"])
-          assert report["records"] == 2
+          assert report["records"] == 6 and report["agent_version"] == "2"
           match, = report["matches"]
           assert match["value"] == asset["value"]
           assert {item["kind"] for item in match["evidence"]} == {"rdap", "stix"}
+          sample, = report["hash_matches"]
+          assert sample["value"] == sys.argv[2]
+          assert {item["kind"] for item in sample["evidence"]} == {"binario", "stix"}
+          network, = report["network_matches"]
+          assert network["value"] == "192.0.2.0/24" and network["samples"] == ["192.0.2.17"]
           PY
           done
   compose:

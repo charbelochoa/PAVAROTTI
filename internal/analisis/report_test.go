@@ -26,7 +26,7 @@ func TestAgentReport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report.Records != 4 || len(report.Agents) != 3 || len(report.Assets) != 2 || len(report.Timeline) != 3 {
+	if report.Records != 4 || len(report.Agents) != 4 || len(report.Assets) != 2 || len(report.Timeline) != 3 {
 		t.Fatalf("recuentos incorrectos: %+v", report)
 	}
 	if group := report.Assets[0]; group.Value != "api.example" || group.Count != 3 || group.Evidence[0].SourceID != "1" {

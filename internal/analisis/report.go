@@ -21,17 +21,19 @@ const (
 var ErrLimit = errors.New("el informe admite hasta 10000 registros por ejecución")
 
 type Report struct {
-	InputSHA256  string        `json:"input_sha256,omitempty"`
-	AgentVersion string        `json:"agent_version,omitempty"`
-	Records      int           `json:"records"`
-	Assets       []Group       `json:"assets"`
-	Indicators   []Group       `json:"indicators"`
-	Matches      []Group       `json:"matches"`
-	Hashes       []Group       `json:"hashes"`
-	Signals      []Group       `json:"signals"`
-	Responses    []Group       `json:"responses"`
-	Timeline     []Evidence    `json:"timeline"`
-	Agents       []AgentResult `json:"agents"`
+	InputSHA256    string        `json:"input_sha256,omitempty"`
+	AgentVersion   string        `json:"agent_version,omitempty"`
+	Records        int           `json:"records"`
+	Assets         []Group       `json:"assets"`
+	Indicators     []Group       `json:"indicators"`
+	Matches        []Group       `json:"matches"`
+	HashMatches    []Group       `json:"hash_matches,omitempty"`
+	NetworkMatches []Group       `json:"network_matches,omitempty"`
+	Hashes         []Group       `json:"hashes"`
+	Signals        []Group       `json:"signals"`
+	Responses      []Group       `json:"responses"`
+	Timeline       []Evidence    `json:"timeline"`
+	Agents         []AgentResult `json:"agents"`
 }
 
 type Group struct {
@@ -39,6 +41,7 @@ type Group struct {
 	Scope    string     `json:"scope,omitempty"`
 	Count    int        `json:"count"`
 	Evidence []Evidence `json:"evidence"`
+	Samples  []string   `json:"samples,omitempty"`
 }
 
 type Evidence struct {
@@ -70,6 +73,10 @@ type result struct {
 }
 
 func Analyze(ctx context.Context, records []caso.Record) (Report, error) {
+	return analyze(ctx, records, true)
+}
+
+func analyze(ctx context.Context, records []caso.Record, extended bool) (Report, error) {
 	if err := ctx.Err(); err != nil {
 		return Report{}, err
 	}
@@ -88,6 +95,9 @@ func Analyze(ctx context.Context, records []caso.Record) (Report, error) {
 		return b.date.Compare(a.date)
 	})
 	agents := []func(context.Context, []observation) result{inventory, httpSignals, chronology}
+	if extended {
+		agents = append(agents, correlateEvidence)
+	}
 	tasks := make([]chan result, len(agents))
 	for index, agent := range agents {
 		tasks[index] = make(chan result, 1)
@@ -129,7 +139,9 @@ func (r Report) Text() string {
 	for _, section := range []struct {
 		name   string
 		groups []Group
-	}{{"Activos registrados", r.Assets}, {"Indicadores aportados", r.Indicators}, {"Indicadores coincidentes", r.Matches}, {"Huellas de evidencia", r.Hashes}, {"Respuestas HTTP", r.Responses}, {"Señales HTTP", r.Signals}} {
+	}{{"Activos registrados", r.Assets}, {"Indicadores aportados", r.Indicators}, {"Indicadores coincidentes", r.Matches},
+		{"Coincidencias SHA-256 de muestras", r.HashMatches}, {"Cobertura de red de IP observadas", r.NetworkMatches},
+		{"Huellas de evidencia", r.Hashes}, {"Respuestas HTTP", r.Responses}, {"Señales HTTP", r.Signals}} {
 		if len(section.groups) == 0 {
 			continue
 		}
@@ -140,6 +152,9 @@ func (r Report) Text() string {
 				scope = " · " + group.Scope
 			}
 			fmt.Fprintf(&out, "%s%s  (%d)\n", group.Value, scope, group.Count)
+			if len(group.Samples) > 0 {
+				fmt.Fprintf(&out, "  IP citadas · %s\n", strings.Join(group.Samples, ", "))
+			}
 			for _, ref := range group.Evidence {
 				fmt.Fprintf(&out, "  %s\n", ref.text())
 			}
