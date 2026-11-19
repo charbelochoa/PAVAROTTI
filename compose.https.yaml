@@ -1,0 +1,70 @@
+name: pavarotti-https
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: pavarotti
+      POSTGRES_USER: pavarotti
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "pavarotti", "-d", "pavarotti"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+  app:
+    build: .
+    command:
+      - -sin-navegador
+      - -compartido
+      - -escuchar
+      - 0.0.0.0
+      - -puerto-app
+      - "8443"
+      - -expediente
+      - ${PAVAROTTI_EXPEDIENTE:-principal}
+      - -origen-publico
+      - ${PAVAROTTI_HTTPS_ORIGIN:?Define el origen HTTPS en .env}
+      - -tls-certificado
+      - /run/secrets/tls_certificate
+      - -tls-clave
+      - /run/secrets/tls_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PAVAROTTI_POSTGRES: "postgres://pavarotti@postgres/pavarotti?sslmode=disable"
+      PAVAROTTI_DB_PASSWORD_FILE: /run/secrets/postgres_password
+      PAVAROTTI_HTTPS_ORIGIN: ${PAVAROTTI_HTTPS_ORIGIN:?Define el origen HTTPS en .env}
+    secrets:
+      - postgres_password
+      - tls_certificate
+      - tls_key
+    ports:
+      - "${PAVAROTTI_HTTPS_BIND:-127.0.0.1}:${PAVAROTTI_HTTPS_PORT:-8443}:8443"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          authority=$${PAVAROTTI_HTTPS_ORIGIN#https://};
+          authority=$${authority%/};
+          wget -q --no-check-certificate --header "Host: $${authority%:443}"
+          -O /dev/null https://127.0.0.1:8443/ingresar
+      interval: 4s
+      timeout: 3s
+      retries: 15
+secrets:
+  postgres_password:
+    file: ${PAVAROTTI_DB_PASSWORD_FILE:?Indica la ruta al archivo de contraseña de PostgreSQL}
+  tls_certificate:
+    file: ${PAVAROTTI_TLS_CERT_FILE:?Indica la ruta al certificado TLS en PEM}
+  tls_key:
+    file: ${PAVAROTTI_TLS_KEY_FILE:?Indica la ruta a la clave TLS en PEM}
+volumes:
+  postgres-data:

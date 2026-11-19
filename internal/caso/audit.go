@@ -14,17 +14,18 @@ var (
 )
 
 const (
-	AuditEvidence = "evidencia.incorporada"
-	AuditNote     = "nota.creada"
-	AuditEdit     = "nota.editada"
-	AuditTriage   = "senal.clasificada"
-	AuditImport   = "expediente.migrado"
-	AuditRestore  = "expediente.restaurado"
-	AuditQueue    = "tarea.encolada"
-	AuditPriority = "tarea.priorizada"
-	AuditStart    = "tarea.iniciada"
-	AuditFinish   = "tarea.finalizada"
-	AuditCancel   = "tarea.cancelada"
+	AuditEvidence  = "evidencia.incorporada"
+	AuditNote      = "nota.creada"
+	AuditEdit      = "nota.editada"
+	AuditTriage    = "senal.clasificada"
+	AuditImport    = "expediente.migrado"
+	AuditRestore   = "expediente.restaurado"
+	AuditRetention = "actividad.retencion"
+	AuditQueue     = "tarea.encolada"
+	AuditPriority  = "tarea.priorizada"
+	AuditStart     = "tarea.iniciada"
+	AuditFinish    = "tarea.finalizada"
+	AuditCancel    = "tarea.cancelada"
 )
 
 type AuditDetails struct {
@@ -37,6 +38,8 @@ type AuditDetails struct {
 	NoteRevisions   int         `json:"note_revisions,omitempty"`
 	TriageRevisions int         `json:"triage_revisions,omitempty"`
 	BackupSHA256    string      `json:"backup_sha256,omitempty"`
+	RetentionBefore string      `json:"retention_before,omitempty"`
+	RemovedEvents   int64       `json:"removed_events,omitempty"`
 }
 
 type AuditEvent struct {

@@ -33,6 +33,7 @@ Uso: pavarotti [opciones globales] <comando> [argumentos]
   citar-binario Exporta la ubicación verificada de un binario como JSON.
   usuarios  Administra cuentas de acceso para el expediente PostgreSQL.
   actividad Consulta y exporta la actividad del expediente PostgreSQL.
+  retener-actividad Previsualiza o aplica la retención de actividad respaldada.
   nota      Registra una nota del analista.
   editar    Actualiza una nota con su revisión actual.
   historial Consulta las versiones previas de una nota.
@@ -82,6 +83,8 @@ func Run(args []string, stdout, stderr io.Writer, open func() (*caso.Store, erro
 		err = terminalSharedAccounts(args[1:], stdout, stderr, open)
 	case "actividad":
 		err = terminalActivity(args[1:], stdout, stderr, open)
+	case "retener-actividad":
+		err = terminalAuditRetention(args[1:], stdout, stderr, open)
 	case "nota":
 		err = terminalNote(args[1:], stdout, stderr, open)
 	case "editar":

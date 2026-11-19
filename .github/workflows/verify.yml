@@ -165,3 +165,30 @@ jobs:
           PY
       - if: failure()
         run: docker compose logs --tail 80
+  compose-https:
+    runs-on: ubuntu-24.04
+    env:
+      PAVAROTTI_EXPEDIENTE: pruebas-https
+      PAVAROTTI_HTTPS_ORIGIN: https://127.0.0.1:8377
+      PAVAROTTI_HTTPS_PORT: 8377
+      PAVAROTTI_TEST_ACCOUNT_PASSWORD: cuenta-sintetica-de-compose
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preparar secretos de prueba
+        run: |
+          directory=$(mktemp -d "$RUNNER_TEMP/pavarotti-https.XXXXXX")
+          openssl rand -hex 32 | tr -d '\n' > "$directory/password"
+          openssl req -x509 -newkey rsa:2048 -noenc -days 1 \
+            -subj '/CN=127.0.0.1' -addext 'subjectAltName=IP:127.0.0.1' \
+            -out "$directory/cert.pem" -keyout "$directory/key.pem"
+          sudo chgrp 65532 "$directory/password" "$directory/cert.pem" "$directory/key.pem"
+          chmod 0640 "$directory/password" "$directory/cert.pem" "$directory/key.pem"
+          {
+            printf 'PAVAROTTI_DB_PASSWORD_FILE=%s/password\n' "$directory"
+            printf 'PAVAROTTI_TLS_CERT_FILE=%s/cert.pem\n' "$directory"
+            printf 'PAVAROTTI_TLS_KEY_FILE=%s/key.pem\n' "$directory"
+          } >> "$GITHUB_ENV"
+      - run: docker compose -f compose.https.yaml up --build --wait --wait-timeout 120
+      - run: python3 .github/scripts/check_compose_https.py
+      - if: failure()
+        run: docker compose -f compose.https.yaml logs --tail 80

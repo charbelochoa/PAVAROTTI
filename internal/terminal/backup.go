@@ -24,14 +24,7 @@ func terminalBackup(command string, args []string, stdout, stderr io.Writer, ope
 	if flags.NArg() != 0 || *path == "" {
 		return errors.New("indica el archivo mediante --archivo")
 	}
-	info, err := os.Stat(*path)
-	if err != nil {
-		return err
-	}
-	if !info.Mode().IsRegular() {
-		return errors.New("elige un archivo local regular")
-	}
-	file, err := os.Open(*path)
+	file, err := openBackupFile(*path)
 	if err != nil {
 		return err
 	}
@@ -53,6 +46,17 @@ func terminalBackup(command string, args []string, stdout, stderr io.Writer, ope
 		return err
 	}
 	return printBackupSummary(stdout, summary)
+}
+
+func openBackupFile(path string) (*os.File, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("elige un archivo local regular")
+	}
+	return os.Open(path)
 }
 
 func terminalWriteBackup(args []string, stdout, stderr io.Writer, open openExpediente) error {
