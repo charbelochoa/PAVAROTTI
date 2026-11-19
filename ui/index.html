@@ -64,6 +64,7 @@
       <section class="record-list">
         <div class="views" role="group" aria-label="Vistas del expediente">
           <button id="view-records" aria-pressed="true">Registros</button>
+          <button id="view-assets" aria-pressed="false">Activos</button>
           <button id="view-http" aria-pressed="false">Historial HTTP</button>
         </div>
         <div class="filters">
@@ -81,6 +82,15 @@
             <option value="stix">STIX</option>
             <option value="nota">Notas</option>
           </select>
+          <select id="filter-asset" aria-label="Tipo de activo" hidden>
+            <option value="">Todos los activos</option>
+            <option value="dominio">Dominios</option>
+            <option value="ipv4">IPv4</option>
+            <option value="ipv6">IPv6</option>
+            <option value="sha256">SHA-256</option>
+            <option value="sha1">SHA-1</option>
+            <option value="md5">MD5</option>
+          </select>
           <select id="filter-http" aria-label="Clase de respuesta HTTP" hidden>
             <option value="">Todos los estados</option>
             <option value="1">1xx · Información</option>
@@ -91,7 +101,7 @@
           </select>
         </div>
         <div id="records"></div>
-        <div class="pager" aria-label="Paginación de registros">
+        <div class="pager" aria-label="Paginación del expediente">
           <button id="previous-page" disabled>Anterior</button>
           <output id="page-state" aria-live="polite">Cargando registros…</output>
           <button id="next-page" disabled>Siguiente</button>

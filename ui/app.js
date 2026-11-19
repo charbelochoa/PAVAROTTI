@@ -10,6 +10,8 @@ const element = (tag, text, className) => {
 let selectedKey = "";
 let selectedRevision = 0;
 let selectedRecord;
+let selectedAsset;
+let returnToEvidence;
 let editing;
 let pageStarts = [""];
 let pageIndex = 0;
@@ -22,7 +24,14 @@ let searchTimer;
 let analysisQueue = false;
 let checkingQueue = false;
 let queueSignature = "";
-let httpView = false;
+let currentView = "records";
+let assetSearch = "";
+let recordSearch = "";
+
+const assetKinds = {dominio: "Dominio", ipv4: "IPv4", ipv6: "IPv6", sha256: "SHA-256", sha1: "SHA-1", md5: "MD5"};
+const assetKey = ({type, value}) => `${type}/${value}`;
+const assetCount = ({count, indicators}) =>
+  `${count} ${count === 1 ? "registro" : "registros"}${indicators ? ` · ${indicators} ${indicators === 1 ? "indicador" : "indicadores"}` : ""}`;
 
 async function request(path, options) {
   const response = await fetch(path, options);
@@ -49,15 +58,22 @@ function inspect(record, message = "Selecciona un registro para examinarlo.") {
   if (record.source_id) view.append(element("p", "ID · " + record.source_id));
   if (selectedRevision) {
     view.append(element("p", "Revisión citada " + record.revision));
-    const tools = element("div", "", "tools");
-    const current = element("button", "Abrir revisión vigente");
-    current.onclick = () => selectRecord(record.id);
-    const back = element("button", "Volver al informe");
-    back.onclick = () => byId("report-panel").showModal();
-    tools.append(current, back);
-    view.append(tools);
   } else if (record.id && record.kind === "nota") {
     view.append(element("p", "Revisión " + record.revision));
+  }
+  if (selectedRevision || returnToEvidence) {
+    const tools = element("div", "", "tools");
+    if (selectedRevision) {
+      const current = element("button", "Abrir revisión vigente");
+      current.onclick = () => selectRecord(record.id, 0, returnToEvidence);
+      tools.append(current);
+    }
+    if (returnToEvidence) {
+      const back = element("button", returnToEvidence.label);
+      back.onclick = returnToEvidence.open;
+      tools.append(back);
+    }
+    view.append(tools);
   }
   if (record.sha256) view.append(element("p", "SHA-256 · " + record.sha256));
   if (record.traffic) {
@@ -72,21 +88,26 @@ function inspect(record, message = "Selecciona un registro para examinarlo.") {
   if (record.details) view.append(element("pre", record.details));
 }
 
-function selectRecord(id, revision = 0) {
+function selectRecord(id, revision = 0, back) {
+  selectedAsset = undefined;
+  returnToEvidence = back;
   selectedKey = id;
   selectedRevision = revision;
-  for (const row of byId("records").querySelectorAll("[data-record-id]")) {
-    row.setAttribute("aria-pressed", String(!revision && row.dataset.recordId === id));
-  }
-  if (revision) byId("inspector-heading").focus({preventScroll: true});
+  paintSelection();
+  if (revision || back) byId("inspector-heading").focus({preventScroll: true});
   return loadRecord(id, true);
 }
 
-async function loadRecord(id, scroll = false) {
+function beginInspection(message) {
   inspectorRequest?.abort();
   const controller = new AbortController();
   inspectorRequest = controller;
-  inspect(undefined, "Consultando evidencia…");
+  inspect(undefined, message);
+  return controller;
+}
+
+async function loadRecord(id, scroll = false) {
+  const controller = beginInspection("Consultando evidencia…");
   if (scroll && (selectedRevision || window.matchMedia("(max-width: 970px)").matches)) {
     byId("inspector").scrollIntoView({block: "nearest"});
   }
@@ -99,12 +120,72 @@ async function loadRecord(id, scroll = false) {
   }
 }
 
+function selectAsset(asset, after = "") {
+  selectedKey = "";
+  selectedRevision = 0;
+  returnToEvidence = undefined;
+  selectedAsset = {type: asset.type, value: asset.value, after};
+  paintSelection();
+  byId("inspector-heading").focus({preventScroll: true});
+  if (window.matchMedia("(max-width: 970px)").matches) {
+    byId("inspector").scrollIntoView({block: "nearest"});
+  }
+  return loadAsset(selectedAsset);
+}
+
+async function loadAsset(asset) {
+  const controller = beginInspection("Consultando activo…");
+  const params = new URLSearchParams({tipo: asset.type, valor: asset.value, despues: asset.after});
+  try {
+    const detail = await request("/api/activos/ficha?" + params, {signal: controller.signal});
+    if (!controller.signal.aborted) inspectAsset(detail, asset);
+  } catch (error) {
+    if (!controller.signal.aborted) inspect(undefined, error.message);
+  }
+}
+
+function inspectAsset(detail, asset) {
+  const list = element("div", "", "asset-sources");
+  for (const reference of detail.rows) {
+    const button = element("button");
+    button.append(element("strong", reference.title || reference.kind),
+      element("span", `${reference.kind} · ${reference.role} · rev. ${reference.revision}`, "type"));
+    if (reference.time) button.append(element("span", formatTime(reference.time), "muted"));
+    button.onclick = () => selectRecord(reference.id, reference.revision, {
+      label: "Volver al activo", open: () => selectAsset(asset, asset.after)
+    });
+    list.append(button);
+  }
+  const controls = element("div", "", "tools");
+  if (asset.after) {
+    const first = element("button", "Primeros registros");
+    first.onclick = () => selectAsset(asset);
+    controls.append(first);
+  }
+  if (detail.next) {
+    const next = element("button", "Más registros");
+    next.onclick = () => selectAsset(asset, detail.next);
+    controls.append(next);
+  }
+  const view = byId("record-detail");
+  view.replaceChildren(element("span", assetKinds[detail.type], "type"), element("h3", detail.value),
+    element("p", assetCount(detail)), list, controls);
+  view.scrollTop = 0;
+}
+
+function paintSelection() {
+  for (const row of byId("records").querySelectorAll("[data-record-id], [data-asset-key]")) {
+    const pressed = selectedAsset ? row.dataset.assetKey === assetKey(selectedAsset) :
+      !selectedRevision && row.dataset.recordId === selectedKey;
+    row.setAttribute("aria-pressed", String(pressed));
+  }
+}
+
 function recordNode(record) {
   const row = element("button", "", "record");
   row.type = "button";
   row.dataset.recordId = record.id;
   row.setAttribute("aria-controls", "record-detail");
-  row.setAttribute("aria-pressed", String(!selectedRevision && record.id === selectedKey));
   const traffic = record.traffic;
   if (traffic) {
     row.append(element("span", `${traffic.method} ${traffic.status}`, "type"),
@@ -120,11 +201,24 @@ function recordNode(record) {
   return row;
 }
 
+function assetNode(asset) {
+  const row = element("button", "", "record");
+  row.type = "button";
+  row.dataset.assetKey = assetKey(asset);
+  row.setAttribute("aria-controls", "record-detail");
+  row.append(element("span", assetKinds[asset.type], "type"), element("strong", asset.value),
+    element("span", assetCount(asset), "muted"));
+  row.onclick = () => selectAsset(asset);
+  return row;
+}
+
 function render(rows) {
   const listing = byId("records");
-  listing.replaceChildren(...rows.map(recordNode));
+  const onAssets = currentView === "assets";
+  listing.replaceChildren(...rows.map(onAssets ? assetNode : recordNode));
+  paintSelection();
   listing.scrollTop = 0;
-  if (rows.length === 0) listing.append(element("p", "Sin registros para mostrar."));
+  if (rows.length === 0) listing.append(element("p", onAssets ? "Sin activos para mostrar." : "Sin registros para mostrar."));
 }
 
 function summarize(summary) {
@@ -143,35 +237,41 @@ function summarize(summary) {
 
 function pagingBusy(busy) {
   byId("records").setAttribute("aria-busy", String(busy));
-  const changed = String(filters()) !== pageFilters;
+  const changed = filterKey() !== pageFilters;
   byId("previous-page").disabled = busy || changed || pageIndex === 0;
   byId("next-page").disabled = busy || changed || nextPage === "";
 }
 
 function filters() {
-  const params = new URLSearchParams({tipo: httpView ? "http" : byId("filter").value, buscar: byId("query").value.trim()});
-  if (httpView && byId("filter-http").value) params.set("clase_http", byId("filter-http").value);
+  const type = currentView === "http" ? "http" : byId(currentView === "assets" ? "filter-asset" : "filter").value;
+  const params = new URLSearchParams({tipo: type, buscar: byId("query").value.trim()});
+  if (currentView === "http" && byId("filter-http").value) params.set("clase_http", byId("filter-http").value);
   return params;
 }
+
+function filterKey() { return currentView + "?" + filters(); }
 
 async function loadPage(index, starts = pageStarts) {
   pageRequest?.abort();
   const controller = new AbortController();
   pageRequest = controller;
   pagingBusy(true);
-  byId("page-state").textContent = "Cargando registros…";
+  const onAssets = currentView === "assets";
+  const items = onAssets ? "activos" : "registros";
+  byId("page-state").textContent = `Cargando ${items}…`;
   const search = filters();
-  const currentFilters = String(search);
+  const currentFilters = filterKey();
   search.set("despues", starts[index]);
   try {
-    const page = await request("/api/registro/pagina?" + search, {signal: controller.signal});
+    const path = onAssets ? "/api/activos?" : "/api/registro/pagina?";
+    const page = await request(path + search, {signal: controller.signal});
     if (controller.signal.aborted) return;
     pageIndex = index;
     pageStarts = starts;
     pageFilters = currentFilters;
     nextPage = page.next || "";
     render(page.rows);
-    byId("page-state").textContent = `Página ${pageIndex + 1} · ${page.rows.length} registros`;
+    byId("page-state").textContent = `Página ${pageIndex + 1} · ${page.rows.length} ${items}`;
   } catch (error) {
     if (!controller.signal.aborted) byId("page-state").textContent = error.message;
   } finally {
@@ -185,8 +285,8 @@ async function refresh(message = "", first = false) {
   const controller = new AbortController();
   refreshRequest = controller;
   byId("status").textContent = message;
-  const page = first || String(filters()) !== pageFilters ? loadPage(0, [""]) : loadPage(pageIndex);
-  const detail = selectedKey ? loadRecord(selectedKey) : Promise.resolve();
+  const page = first || filterKey() !== pageFilters ? loadPage(0, [""]) : loadPage(pageIndex);
+  const detail = selectedAsset ? loadAsset(selectedAsset) : selectedKey && loadRecord(selectedKey);
   try {
     const summary = await request("/api/registro/resumen", {signal: controller.signal});
     if (!controller.signal.aborted) summarize(summary);
@@ -204,26 +304,32 @@ byId("query").addEventListener("input", () => {
   pagingBusy(true);
   searchTimer = setTimeout(() => loadPage(0, [""]), 230);
 });
-byId("filter").addEventListener("change", () => {
+for (const id of ["filter", "filter-asset", "filter-http"]) {
+  byId(id).addEventListener("change", () => {
+    clearTimeout(searchTimer);
+    loadPage(0, [""]);
+  });
+}
+function showView(view) {
+  if (currentView === view) return;
+  const query = byId("query");
+  if (currentView === "assets") assetSearch = query.value;
+  else recordSearch = query.value;
+  currentView = view;
   clearTimeout(searchTimer);
-  loadPage(0, [""]);
-});
-byId("filter-http").addEventListener("change", () => {
-  clearTimeout(searchTimer);
-  loadPage(0, [""]);
-});
-function showView(http) {
-  if (httpView === http) return;
-  httpView = http;
-  clearTimeout(searchTimer);
-  byId("view-records").setAttribute("aria-pressed", String(!http));
-  byId("view-http").setAttribute("aria-pressed", String(http));
-  byId("filter").hidden = http;
-  byId("filter-http").hidden = !http;
+  for (const name of ["records", "assets", "http"]) {
+    byId("view-" + name).setAttribute("aria-pressed", String(name === view));
+  }
+  byId("filter").hidden = view !== "records";
+  byId("filter-asset").hidden = view !== "assets";
+  byId("filter-http").hidden = view !== "http";
+  query.placeholder = view === "assets" ? "Buscar dominio, IP o huella" : "Buscar texto, origen, ID o SHA-256";
+  query.maxLength = view === "assets" ? 253 : 256;
+  query.value = view === "assets" ? assetSearch : recordSearch;
+  byId("records").replaceChildren();
   loadPage(0, [""]);
 }
-byId("view-records").onclick = () => showView(false);
-byId("view-http").onclick = () => showView(true);
+for (const view of ["records", "assets", "http"]) byId("view-" + view).onclick = () => showView(view);
 byId("refresh").addEventListener("click", () => refresh());
 
 byId("upload").addEventListener("submit", async (event) => {
@@ -268,6 +374,7 @@ byId("note-form").addEventListener("submit", async (event) => {
     byId("note-panel").close();
     byId("note-form").reset();
     if (result.id) {
+      selectedAsset = undefined;
       selectedKey = result.id;
       selectedRevision = 0;
     }
@@ -312,7 +419,9 @@ function reportDialog(title, text, report) {
         action.title = `${item.id} · revisión ${item.revision}`;
         action.onclick = () => {
           byId("report-panel").close();
-          selectRecord(item.id, item.revision);
+          selectRecord(item.id, item.revision, {
+            label: "Volver al informe", open: () => byId("report-panel").showModal()
+          });
         };
         group.append(action);
       }
