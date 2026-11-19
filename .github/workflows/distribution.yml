@@ -1,0 +1,103 @@
+name: Paquetes PAVAROTTI
+on:
+  push:
+    branches: [main, 'blue-team/**']
+    tags: ['v[0-9]*']
+    paths:
+      - 'packaging/**'
+      - '.github/workflows/distribution.yml'
+      - 'main.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'licenses/**'
+      - 'ui/icono.png'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux-packages:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Construir los ejecutables y empaquetar
+        run: |
+          mkdir -p .build
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o .build/pavarotti .
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -o .build/PAVAROTTI.exe .
+          version_args=()
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            version_args=(--version "${GITHUB_REF_NAME#v}")
+          fi
+          python3 packaging/build_packages.py --linux .build/pavarotti --windows .build/PAVAROTTI.exe --out dist/bundle "${version_args[@]}"
+          python3 packaging/verify_packages.py dist/bundle
+      - name: Instalar el paquete en Kali y Arch
+        run: |
+          bundle="$PWD/dist/bundle"
+          version=$(python3 -c 'import json; print(json.load(open("dist/bundle/build-info.json"))["version"])')
+          digest=$(python3 -c 'import json; print(json.load(open("dist/bundle/build-info.json"))["targets"]["linux-amd64"]["sha256"])')
+          docker run --rm --network none -v "$bundle:/packages:ro" -e VERSION="$version" -e DIGEST="$digest" +            kalilinux/kali-rolling /bin/sh -ec '
+              dpkg -i /packages/*.deb
+              test -z "$(dpkg -V pavarotti)"
+              test "$(pavarotti -version)" = "PAVAROTTI $VERSION"
+              echo "$DIGEST  /usr/bin/pavarotti" | sha256sum -c -
+              grep -Fx "Exec=pavarotti" /usr/share/applications/pavarotti.desktop
+              test -s /usr/share/pixmaps/pavarotti.png
+              pavarotti -datos /tmp/expediente nota --titulo "Instalador comprobado" --texto "Prueba de Kali"
+              dpkg -r pavarotti
+              test -d /tmp/expediente
+            '
+          docker run --rm --network none -v "$bundle:/packages:ro" -e VERSION="$version" -e DIGEST="$digest" +            archlinux:base /bin/sh -ec '
+              pacman -U --noconfirm /packages/*.pkg.tar.xz
+              pacman -Qk pavarotti
+              test "$(pavarotti -version)" = "PAVAROTTI $VERSION"
+              echo "$DIGEST  /usr/bin/pavarotti" | sha256sum -c -
+              grep -Fx "Icon=pavarotti" /usr/share/applications/pavarotti.desktop
+              test -s /usr/share/pixmaps/pavarotti.png
+              pavarotti -datos /tmp/expediente nota --titulo "Instalador comprobado" --texto "Prueba de Arch"
+              pacman -R --noconfirm pavarotti
+              test -d /tmp/expediente
+            '
+          mkdir -p .build/portable
+          tar -xzf "$bundle/PAVAROTTI-$version-linux-x64.tar.gz" -C .build/portable
+          test "$(.build/portable/pavarotti -version)" = "PAVAROTTI $version"
+          echo "$digest  .build/portable/pavarotti" | sha256sum -c -
+  windows-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Construir y ejecutar el paquete portátil
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .build | Out-Null
+          $env:CGO_ENABLED = '0'
+          $env:GOARCH = 'amd64'
+          $env:GOOS = 'linux'
+          go build -trimpath -o .build/pavarotti .
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $env:GOOS = 'windows'
+          go build -trimpath -o .build/PAVAROTTI.exe .
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $options = @()
+          if ($env:GITHUB_REF_TYPE -eq 'tag') { $options = @('--version', $env:GITHUB_REF_NAME.Substring(1)) }
+          python packaging/build_packages.py --linux .build/pavarotti --windows .build/PAVAROTTI.exe --out dist/bundle @options
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python packaging/verify_packages.py dist/bundle
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $manifest = Get-Content -Raw dist/bundle/build-info.json | ConvertFrom-Json
+          Expand-Archive -LiteralPath "dist/bundle/PAVAROTTI-$($manifest.version)-windows-x64.zip" -DestinationPath '.build/portable'
+          $program = '.build/portable/PAVAROTTI.exe'
+          $digest = (Get-FileHash -LiteralPath $program -Algorithm SHA256).Hash
+          if ($digest -ne $manifest.targets.'windows-amd64'.sha256) { throw 'La copia portátil tiene otra huella' }
+          if ((& $program -version) -ne "PAVAROTTI $($manifest.version)") { throw 'Versión inesperada en el paquete' }
+          & $program -datos .build/expediente nota --titulo 'Paquete comprobado' --texto 'Prueba de Windows'
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $records = & $program -datos .build/expediente listar --json | ConvertFrom-Json
+          if ($records[0].details -ne 'Prueba de Windows') { throw 'No se reabrió el expediente de prueba' }
