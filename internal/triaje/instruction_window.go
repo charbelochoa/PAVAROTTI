@@ -12,7 +12,8 @@ import (
 )
 
 const MaxBinaryBytes = 32 << 20
-const maxWindowInstructions = 64
+const MaxWindowInstructions = 64
+const MaxInstructionSteps = 32
 
 var ErrInstructionLocation = errors.New("la ubicación no corresponde a una sección ejecutable con bytes decodificables")
 
@@ -22,6 +23,7 @@ type InstructionWindow struct {
 	Section      string        `json:"section"`
 	Instructions []Instruction `json:"instructions"`
 	Limited      bool          `json:"limited"`
+	Origin       *Instruction  `json:"origin,omitempty"`
 }
 
 type codeSpan struct {
@@ -43,41 +45,62 @@ type codeImage struct {
 	spans        []codeSpan
 }
 
-func OpenInstructionWindow(data []byte, imageIndex int, symbol *Symbol) (InstructionWindow, error) {
-	if len(data) == 0 || len(data) > MaxBinaryBytes || imageIndex < 0 || (symbol != nil && symbol.Image != imageIndex) {
+func OpenInstructionWindow(data []byte, imageIndex int, symbol *Symbol, steps ...int) (InstructionWindow, error) {
+	if len(data) == 0 || len(data) > MaxBinaryBytes || imageIndex < 0 || len(steps) > MaxInstructionSteps || (symbol != nil && symbol.Image != imageIndex) {
 		return InstructionWindow{}, ErrInstructionLocation
 	}
 	image := binaryCodeImage(data, imageIndex)
 	if image.decode == nil || (symbol == nil && image.entry == nil) {
 		return InstructionWindow{}, ErrInstructionLocation
 	}
-	span, delta, ok := image.findSpan(symbol)
+	entry := image.entry
+	var physical *uint64
+	var section string
+	if symbol != nil {
+		address, validAddress := ParseBinaryHex(symbol.Address)
+		offset, validOffset := ParseBinaryHex(symbol.Offset)
+		if !validAddress || !validOffset || symbol.Forwarder != "" {
+			return InstructionWindow{}, ErrInstructionLocation
+		}
+		entry = &codeEntry{position: address}
+		physical, section = &offset, symbol.Section
+	}
+	window, err := image.readWindow(data, *entry, physical, section)
+	for _, step := range steps {
+		if err != nil || step < 0 || step >= len(window.Instructions) {
+			return InstructionWindow{}, ErrInstructionLocation
+		}
+		origin := window.Instructions[step]
+		target, valid := ParseBinaryHex(origin.Target)
+		if !valid {
+			return InstructionWindow{}, ErrInstructionLocation
+		}
+		window, err = image.readWindow(data, codeEntry{position: target}, nil, "")
+		if err != nil {
+			return InstructionWindow{}, err
+		}
+		window.Origin = &origin
+	}
+	return window, err
+}
+
+func (image codeImage) readWindow(data []byte, location codeEntry, physical *uint64, section string) (InstructionWindow, error) {
+	span, delta, ok := image.findSpan(location, physical, section)
 	if !ok {
 		return InstructionWindow{}, ErrInstructionLocation
 	}
 	position := image.file.offset + span.offset + delta
 	end := image.file.offset + span.offset + span.size
-	rows, limited := appendInstructions(make([]Instruction, 0, maxWindowInstructions), data[position:end], 0,
-		span.address+delta, position, image.decode, image.linked, maxWindowInstructions)
+	rows, limited := appendInstructions(make([]Instruction, 0, MaxWindowInstructions), data[position:end], 0,
+		span.address+delta, position, image.decode, image.linked, MaxWindowInstructions)
 	if len(rows) == 0 {
 		return InstructionWindow{}, ErrInstructionLocation
 	}
-	return InstructionWindow{Image: imageIndex, Architecture: image.architecture, Section: span.name, Instructions: rows, Limited: limited}, nil
+	return InstructionWindow{Image: image.file.index, Architecture: image.architecture, Section: span.name, Instructions: rows, Limited: limited}, nil
 }
 
-func (image codeImage) findSpan(symbol *Symbol) (codeSpan, uint64, bool) {
-	var anchor, physical uint64
-	var physicalEntry bool
-	if symbol == nil {
-		anchor, physicalEntry = image.entry.position, image.entry.physical
-	} else {
-		var validAddress, validOffset bool
-		anchor, validAddress = ParseBinaryHex(symbol.Address)
-		physical, validOffset = ParseBinaryHex(symbol.Offset)
-		if !validAddress || !validOffset || symbol.Forwarder != "" {
-			return codeSpan{}, 0, false
-		}
-	}
+func (image codeImage) findSpan(location codeEntry, physical *uint64, section string) (codeSpan, uint64, bool) {
+	anchor := location.position
 	var chosen codeSpan
 	var delta uint64
 	for _, span := range image.spans {
@@ -85,14 +108,14 @@ func (image codeImage) findSpan(symbol *Symbol) (codeSpan, uint64, bool) {
 			continue
 		}
 		base := span.address
-		if physicalEntry {
+		if location.physical {
 			base = span.offset
 		}
 		if anchor < base || anchor-base >= span.size {
 			continue
 		}
 		at := anchor - base
-		if symbol != nil && ((symbol.Section != "" && symbol.Section != span.name) || physical != image.file.offset+span.offset+at) {
+		if physical != nil && ((section != "" && section != span.name) || *physical != image.file.offset+span.offset+at) {
 			continue
 		}
 		if chosen.size != 0 {
