@@ -36,18 +36,23 @@ func BenchmarkHistoryPages(b *testing.B) {
 				b.Fatalf("primera página: %d, %v", len(first.Rows), err)
 			}
 			for _, target := range []struct {
-				name  string
-				query PageRequest
+				name     string
+				query    PageRequest
+				expected int
 			}{
-				{"primera", PageRequest{Kind: "http"}},
-				{"siguiente", PageRequest{Kind: "http", After: first.Next}},
-				{"dia_y_regla", PageRequest{Kind: "http", HTTPFrom: day.Format(time.DateOnly), HTTPTo: day.Format(time.DateOnly), HTTPRule: "hsts-ausente"}},
+				{"primera", PageRequest{Kind: "http"}, DefaultPageSize},
+				{"siguiente", PageRequest{Kind: "http", After: first.Next}, DefaultPageSize},
+				{"dia_y_regla", PageRequest{Kind: "http", HTTPFrom: day.Format(time.DateOnly), HTTPTo: day.Format(time.DateOnly), HTTPRule: "hsts-ausente"}, DefaultPageSize},
+				{"texto_origen", PageRequest{Kind: "http", Search: "https://198.18.0.255"}, 1},
 			} {
 				b.Run(target.name, func(b *testing.B) {
+					if _, err := store.Page(b.Context(), target.query); err != nil {
+						b.Fatal(err)
+					}
 					b.ReportAllocs()
 					for b.Loop() {
 						page, err := store.Page(b.Context(), target.query)
-						if err != nil || len(page.Rows) != DefaultPageSize {
+						if err != nil || len(page.Rows) != target.expected {
 							b.Fatalf("página: %d, %v", len(page.Rows), err)
 						}
 					}

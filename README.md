@@ -28,6 +28,8 @@ Usa **Anterior** y **Siguiente** para recorrer los resultados de 50 en 50. La b�
 
 El historial HTTP usa un índice de PostgreSQL para la navegación y los filtros estructurados. En los expedientes existentes, el índice se rellena por lotes al abrir el historial. El almacén local conserva en memoria las filas resumidas que ya leyó, con un presupuesto de caché de 32 MiB.
 
+El buscador encuentra fragmentos literales, incluidos los caracteres `%` y `_`, en títulos, orígenes, detalles y datos de dependencias. La mesa prepara el índice de texto de PostgreSQL en segundo plano y admite búsquedas durante la preparación. PostgreSQL aprovecha `pg_trgm` cuando la instalación permite habilitarlo.
+
 **Historial HTTP** reúne el proxy y los archivos HAR. Muestra método, estado, fecha, origen, tipo MIME, latencia y número de señales. Combina filtros por captura, método, clase de respuesta, fechas UTC y regla pasiva. El inspector muestra la cabecera observada y el motivo de cada señal. Desde un informe puedes abrir la respuesta citada y ver resaltada su regla.
 
 En **Comparar capturas**, define el origen, el tipo de captura y las fechas UTC inclusivas de cada periodo. La tabla usa los registros guardados y muestra recuentos y diferencias por clase de respuesta, fallo del proxy y señal. **Con evaluación confirmada** cuenta las respuestas cuyo registro identifica la aplicación de reglas. Las señales históricas siguen visibles aunque falte ese dato. Cada fila admite hasta cinco citas por periodo a la revisión original. El informe admite hasta 10,000 observaciones distintas, 32 MiB de entrada y 100 filas de resultados.
