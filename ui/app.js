@@ -1026,6 +1026,82 @@ function reportDialog(title, text, report) {
 const jobLabels = {queued: "En cola", running: "En ejecución", succeeded: "Informe listo", canceled: "Cancelada", failed: "Falló"};
 const priorityLabels = ["baja", "normal", "alta"];
 
+const activityLabels = {
+  "evidencia.incorporada": "Evidencia incorporada", "nota.creada": "Nota registrada", "nota.editada": "Nota editada",
+  "expediente.migrado": "Expediente migrado",
+  "senal.clasificada": "Señal clasificada", "tarea.encolada": "Tarea encolada", "tarea.priorizada": "Prioridad cambiada",
+  "tarea.iniciada": "Tarea iniciada", "tarea.finalizada": "Tarea finalizada", "tarea.cancelada": "Tarea cancelada"
+};
+let activityRequest;
+
+function activityEntry(event) {
+  const row = element("li", "", "activity-entry");
+  const text = element("div");
+  const details = event.details;
+  const source = event.source === "sesion" ? "Sesión" : "Rol de PostgreSQL";
+  text.append(element("strong", activityLabels[event.action] || event.action),
+    element("p", `${formatTime(event.time)} · ${source} · ${event.actor}`));
+  const context = [];
+  if (details.count > 1 || (details.count && event.action === "expediente.migrado")) context.push(`${details.count} ${details.count === 1 ? "registro" : "registros"}`);
+  if (details.note_revisions) context.push(`${details.note_revisions} ${details.note_revisions === 1 ? "revisión de nota" : "revisiones de notas"}`);
+  if (details.triage_revisions) context.push(`${details.triage_revisions} ${details.triage_revisions === 1 ? "decisión" : "decisiones"} de triaje`);
+  if (details.finding) {
+    const {rule, line, column} = details.finding;
+    context.push(`${rule} · línea ${line}, columna ${column} · decisión ${details.revision}`);
+  } else if (details.revision) context.push(`Revisión ${details.revision}`);
+  if (details.status) context.push(jobLabels[details.status] || triageLabels[details.status] || details.status);
+  if (details.priority !== undefined) context.push(`Prioridad ${priorityLabels[details.priority]}`);
+  if (details.attempt) context.push(`Intento ${details.attempt}`);
+  if (context.length) text.append(element("p", context.join(" · ")));
+  row.append(text);
+  if (!event.target) return row;
+  const isQueue = event.action.startsWith("tarea.");
+  const open = element("button", isQueue ? "Abrir tarea" : "Abrir evidencia");
+  open.onclick = () => {
+    byId("activity-panel").close();
+    if (isQueue) {
+      showAnalysisJob(event.target);
+      return;
+    }
+    const finding = details.finding;
+    const citation = finding && {name: finding.rule, line: finding.line, column: finding.column};
+    selectRecord(event.target, finding ? 1 : details.revision || 1, undefined, undefined, citation);
+  };
+  row.append(open);
+  return row;
+}
+
+async function loadActivity(before = 0) {
+  activityRequest?.abort();
+  const controller = new AbortController();
+  activityRequest = controller;
+  const status = byId("activity-status");
+  const more = byId("activity-more");
+  const list = byId("activity-list");
+  if (!before) list.replaceChildren();
+  status.textContent = "Consultando actividad…";
+  more.disabled = true;
+  try {
+    const page = await request(`/api/actividad?antes=${before}`, {signal: controller.signal});
+    if (controller.signal.aborted) return;
+    list.append(...page.events.map(activityEntry));
+    status.textContent = list.children.length ? "" : "Todavía no hay actividad registrada.";
+    more.hidden = !page.next;
+    more.onclick = () => loadActivity(page.next);
+  } catch (error) {
+    if (!controller.signal.aborted) status.textContent = error.message;
+  } finally {
+    if (activityRequest === controller) more.disabled = false;
+  }
+}
+
+byId("open-activity").onclick = () => {
+  byId("activity-more").hidden = true;
+  byId("activity-panel").showModal();
+  loadActivity();
+};
+byId("activity-panel").addEventListener("close", () => activityRequest?.abort());
+
 async function showAnalysisJob(id) {
   try {
     const result = await request("/api/analisis/tareas/" + encodeURIComponent(id));
@@ -1155,6 +1231,7 @@ Promise.all([request("/api/app"), request("/credits.json")]).then(([app, credits
     byId("logout").hidden = false;
   }
   analysisQueue = app.analysis_queue;
+  byId("open-activity").hidden = !app.activity;
   if (analysisQueue) {
     byId("analysis-queue").hidden = false;
     byId("analyze").textContent = "Encolar análisis";

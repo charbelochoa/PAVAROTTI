@@ -47,6 +47,7 @@ Usa **Anterior** y **Siguiente** para recorrer los resultados de 50 en 50. La b�
 - **Cruces en el informe.** Los informes incluyen coincidencias SHA-256 entre muestras e indicadores y cobertura de IP observadas por DNS o HTTP dentro de rangos RDAP y prefijos STIX. Cada cruce lleva citas a las revisiones del expediente.
 - **Trazabilidad.** Cada análisis identifica la versión de sus agentes y la huella de su instantánea. En **Referencias de evidencia**, elige una sección y abre en el inspector la revisión citada. Puedes consultar esa revisión después de editar una nota y saltar de nuevo a la versión vigente.
 - **Tareas de análisis.** Con PostgreSQL puedes encolar informes por prioridad, cancelar tareas y abrir los resultados incluso después de reiniciar la aplicación.
+- **Actividad.** Con PostgreSQL, la mesa y la terminal consultan incorporaciones de evidencia, notas, triaje, migraciones y cambios de estado de la cola. Cada evento se guarda con la operación y muestra su hora, el operador y la revisión o tarea correspondiente.
 - **Edición.** Las notas conservan su historial. Una edición requiere la revisión vigente para evitar sobrescribir cambios. Los hallazgos importados conservan su huella y procedencia.
 
 ## Uso
@@ -92,6 +93,8 @@ Usa `editar --id ID --revision N --texto "Nueva observación"` con el ID y la re
 ## PostgreSQL y Docker
 
 El ejecutable usa almacenamiento local por defecto. Para compartir un expediente entre la interfaz y el CLI, configura `PAVAROTTI_POSTGRES` con la URL de conexión o pasa `-postgres`. Ambos leen y guardan los mismos registros cuando usan la misma base de datos y el mismo nombre en `-expediente`. El usuario de PostgreSQL necesita permisos de creación de tablas para inicializar el esquema.
+
+La actividad empieza al instalar la 0.4.2. Las operaciones del modo HTTPS se atribuyen a la cuenta de la sesión. La terminal, la instancia local y el ejecutor figuran con el rol de PostgreSQL que aplicó el cambio. El registro incluye metadatos y referencias de evidencia. En la terminal, `actividad --limite 50 --salida actividad.json` guarda una página. Pasa su campo `next` a `--antes` para consultar eventos anteriores.
 
 ### Acceso al expediente por HTTPS
 

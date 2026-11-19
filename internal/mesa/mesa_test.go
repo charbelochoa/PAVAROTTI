@@ -40,6 +40,9 @@ func TestExpediente(t *testing.T) {
 			t.Fatalf("%s: %d", path, got)
 		}
 	}
+	if got := call("GET", "/api/actividad", "", "").Code; got != http.StatusConflict {
+		t.Fatalf("actividad con almacén local: %d", got)
+	}
 	if got := call("POST", "/api/archivo/hallazgos", "http://wrong.invalid", report).Code; got != 403 {
 		t.Fatalf("origen ajeno: %d", got)
 	}

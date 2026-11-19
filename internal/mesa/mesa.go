@@ -21,6 +21,7 @@ type Settings struct {
 	Proxy         string              `json:"proxy,omitempty"`
 	Target        string              `json:"target,omitempty"`
 	AnalysisQueue bool                `json:"analysis_queue"`
+	Activity      bool                `json:"activity,omitempty"`
 	Shared        bool                `json:"shared,omitempty"`
 	Case          string              `json:"case,omitempty"`
 	Account       *caso.SharedAccount `json:"account,omitempty"`
@@ -51,6 +52,7 @@ func Handler(host string, config Settings, store *caso.Store, resources fs.FS) h
 	}
 	mux.HandleFunc("GET /api/app", func(w http.ResponseWriter, r *http.Request) {
 		state := config
+		state.Activity = store.HasAuditLog()
 		if account, ok := r.Context().Value(sharedAccountKey{}).(caso.SharedAccount); ok {
 			state.Account = &account
 		}
@@ -212,6 +214,7 @@ func Handler(host string, config Settings, store *caso.Store, resources fs.FS) h
 	directoryRoutes(mux, store)
 	codeTriageRoutes(mux, store)
 	binaryCitationRoute(mux, store)
+	activityRoute(mux, store)
 	var handler http.Handler = mux
 	origin := "http://" + host
 	if config.Shared {

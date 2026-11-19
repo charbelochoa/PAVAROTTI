@@ -111,6 +111,13 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: #ddd
 #groups dd { margin: 0; color: var(--dim); }
 dialog { color: inherit; width: min(560px, calc(100vw - 2rem)); }
 dialog::backdrop { background: #09070ad9; }
+#activity-panel { width: min(720px, calc(100vw - 2rem)); }
+#activity-status { margin-top: .45rem; }
+#activity-list { display: grid; gap: .4rem; max-height: 58vh; overflow: auto; padding: 0; list-style: none; }
+.activity-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem; padding: .55rem .2rem; border-bottom: 1px solid var(--line); }
+.activity-entry p { font-size: .82rem; overflow-wrap: anywhere; }
+.activity-entry button { padding: .35rem .55rem; }
+@media (max-width: 520px) { .activity-entry { grid-template-columns: 1fr; justify-items: start; } }
 #references { display: grid; gap: .7rem; padding: 0; list-style: none; }
 #references li { padding-bottom: .7rem; border-bottom: 1px solid var(--line); }
 #references li > a:first-child { font-weight: 700; }
