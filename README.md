@@ -33,6 +33,7 @@ Usa **Anterior** y **Siguiente** para recorrer los resultados de 50 en 50. La b�
 - **Binarios.** Triaje estático de cabeceras y secciones PE, ELF y Mach-O con SHA-256.
 - **Indicadores.** Importa dominios, direcciones IP y huellas desde un archivo de texto, un valor por línea. El informe correlaciona dominios e IP con los activos que ya constan en el expediente y cita los registros que justifican cada coincidencia.
 - **DNS.** Carga una respuesta DNS en JSON o un arreglo de respuestas con `Status`, `Question` y `Answer`. La vista **DNS** conserva valores, TTL, respuestas negativas y huella del archivo. Los destinos de A, AAAA, CNAME, NS, PTR, MX y SRV entran en el inventario de activos del expediente.
+- **RDAP.** Importa archivos JSON de dominio, resultados de búsqueda de dominios y rangos IP. El inspector conserva la posición en el archivo, su huella, servidores de nombre, estados y fechas del registro. La importación omite las fichas de contacto y los enlaces del archivo.
 - **Análisis.** Tres agentes locales de inventario, señales HTTP y cronología trabajan en paralelo sobre la evidencia del expediente. El revisor de código Go añade señales con línea y columna sin compilar ni ejecutar la fuente.
 - **Trazabilidad.** Cada análisis identifica la versión de sus agentes y la huella de su instantánea de entrada. Las referencias del informe incluyen el ID y la revisión de cada registro.
 - **Tareas de análisis.** Con PostgreSQL puedes encolar informes por prioridad, cancelar tareas y abrir los resultados incluso después de reiniciar la aplicación.
@@ -58,6 +59,7 @@ Usa el nombre del ejecutable de tu plataforma en lugar de `pavarotti` en estos e
 pavarotti ayuda
 pavarotti -datos ./expediente importar indicadores indicadores.txt
 pavarotti -datos ./expediente importar dns observaciones.json
+pavarotti -datos ./expediente importar rdap registro-dominio.json
 pavarotti -datos ./expediente importar codigo revision.go
 pavarotti -datos ./expediente nota --titulo "Turno de revisión" --texto "Validación manual pendiente"
 pavarotti -datos ./expediente listar --buscar "validación" --json

@@ -16,13 +16,13 @@ import (
 const MaxBytes = 32 << 20
 
 var (
-	ErrKind = errors.New("tipo de archivo desconocido, usa har, hallazgos, binario, codigo, indicadores o dns")
+	ErrKind = errors.New("tipo de archivo desconocido, usa har, hallazgos, binario, codigo, indicadores, dns o rdap")
 	ErrSize = errors.New("el archivo supera el límite de 32 MiB")
 )
 
 func Parse(kind string, reader io.Reader) ([]caso.Record, error) {
 	switch kind {
-	case "har", "hallazgos", "binario", "codigo", "indicadores", "dns":
+	case "har", "hallazgos", "binario", "codigo", "indicadores", "dns", "rdap":
 	default:
 		return nil, ErrKind
 	}
@@ -47,6 +47,8 @@ func Parse(kind string, reader io.Reader) ([]caso.Record, error) {
 		return parseIndicators(data)
 	case "dns":
 		return parseDNS(data)
+	case "rdap":
+		return parseRDAP(data)
 	case "codigo":
 		report, err := revision.ReviewGo(data)
 		if err != nil {
