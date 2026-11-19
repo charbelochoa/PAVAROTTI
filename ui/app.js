@@ -150,7 +150,9 @@ function inspectAsset(detail, asset) {
     const button = element("button");
     button.append(element("strong", reference.title || reference.kind),
       element("span", `${reference.kind} · ${reference.role} · rev. ${reference.revision}`, "type"));
-    if (reference.network) button.append(element("span", reference.network, "muted"));
+    if (reference.network && reference.title !== "Red · " + reference.network) {
+      button.append(element("span", reference.network, "muted"));
+    }
     if (reference.time) button.append(element("span", formatTime(reference.time), "muted"));
     button.onclick = () => selectRecord(reference.id, reference.revision, {
       label: "Volver al activo", open: () => selectAsset(asset, asset.after)
@@ -273,7 +275,9 @@ async function loadPage(index, starts = pageStarts) {
     pageFilters = currentFilters;
     nextPage = page.next || "";
     render(page.rows);
-    byId("page-state").textContent = `Página ${pageIndex + 1} · ${page.rows.length} ${items}`;
+    const count = page.rows.length;
+    const label = count === 1 ? (onAssets ? "activo" : "registro") : items;
+    byId("page-state").textContent = `Página ${pageIndex + 1} · ${count} ${label}`;
   } catch (error) {
     if (!controller.signal.aborted) byId("page-state").textContent = error.message;
   } finally {
