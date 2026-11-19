@@ -144,13 +144,21 @@ func chronology(ctx context.Context, observations []observation) result {
 }
 
 func observedHosts(source string) []string {
+	return sourceHosts(source, false)
+}
+
+func sourceHosts(source string, allowSingleLabel bool) []string {
 	if len(source) > 16<<10 {
 		return nil
 	}
 	seen := make(map[string]bool)
 	var hosts []string
 	for part := range strings.SplitSeq(source, ",") {
-		if host := networkHost(part); host != "" && !seen[host] {
+		host := networkHost(part)
+		if host == "" && allowSingleLabel {
+			host = namedHost(strings.TrimSpace(part))
+		}
+		if host != "" && !seen[host] {
 			hosts = append(hosts, host)
 			seen[host] = true
 			if len(hosts) == 32 {
@@ -182,8 +190,15 @@ func networkHost(value string) string {
 	if address, err := netip.ParseAddr(input); err == nil {
 		return address.WithZone("").Unmap().String()
 	}
+	if !explicit && !strings.Contains(strings.TrimSuffix(input, "."), ".") {
+		return ""
+	}
+	return namedHost(input)
+}
+
+func namedHost(input string) string {
 	host := strings.ToLower(strings.TrimSuffix(input, "."))
-	if len(host) > 253 || (!explicit && !strings.Contains(host, ".")) {
+	if len(host) > 253 {
 		return ""
 	}
 	for label := range strings.SplitSeq(host, ".") {

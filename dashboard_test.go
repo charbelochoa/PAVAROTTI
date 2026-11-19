@@ -191,6 +191,16 @@ func TestEdicionAnalisisYRevision(t *testing.T) {
 	if !strings.Contains(dnsPage, "A example.invalid") {
 		t.Fatal(dnsPage)
 	}
+	assets := call("GET", "/api/activos?tipo=ipv4&buscar=192.0.2", "", 200).Body.String()
+	if !strings.Contains(assets, `"value":"192.0.2.17"`) {
+		t.Fatal(assets)
+	}
+	card := call("GET", "/api/activos/ficha?tipo=dominio&valor=example.invalid", "", 200).Body.String()
+	if !strings.Contains(card, `"kind":"dns"`) || !strings.Contains(card, records[0].ID) || !strings.Contains(card, `"revision":2`) {
+		t.Fatal(card)
+	}
+	call("GET", "/api/activos/ficha?tipo=dominio&valor=missing.example.invalid", "", 404)
+	call("GET", "/api/activos?limite=101", "", 400)
 	call("POST", "/api/analisis/tareas", `{"priority":1}`, 409)
 	data := call("POST", "/api/analisis", "", 200).Body.String()
 	if !strings.Contains(data, "example.invalid") || !strings.Contains(data, records[0].ID) || !strings.Contains(data, "192.0.2.17") {
