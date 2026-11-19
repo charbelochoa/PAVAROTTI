@@ -55,10 +55,29 @@ jobs:
       - run: docker compose up --build --wait --wait-timeout 120
       - run: curl --fail --silent http://127.0.0.1:8376/api/app
       - run: docker compose exec -T app pavarotti nota --titulo "Prueba local" --texto "Evidencia en PostgreSQL"
+      - run: docker compose exec -T app pavarotti encolar --prioridad 2 > tarea-ci.json
       - run: docker compose restart app
       - run: curl --fail --silent --retry 10 --retry-connrefused http://127.0.0.1:8376/api/app
       - run: |
           docker compose exec -T app pavarotti listar --json > expediente-ci.json
           python3 -c 'import json; assert any(r["details"] == "Evidencia en PostgreSQL" for r in json.load(open("expediente-ci.json")))'
+      - run: |
+          python3 - <<'PY'
+          import json
+          import time
+          import urllib.request
+          task = json.load(open("tarea-ci.json"))
+          for _ in range(25):
+              with urllib.request.urlopen("http://127.0.0.1:8376/api/analisis/tareas/" + task["id"], timeout=3) as response:
+                  job = json.load(response)["job"]
+              if job["state"] == "succeeded":
+                  assert job["result"]["input_sha256"] == task["sha256"]
+                  assert job["result"]["records"] == 1
+                  break
+              assert job["state"] in ("queued", "running"), job
+              time.sleep(1)
+          else:
+              raise SystemExit("No se recuperó el informe al reiniciar Compose")
+          PY
       - if: failure()
         run: docker compose logs --tail 80
