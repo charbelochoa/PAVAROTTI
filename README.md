@@ -143,6 +143,34 @@ docker compose exec app pavarotti analizar --json
 
 La interfaz queda en `http://127.0.0.1:8080`. Define `PAVAROTTI_WEB_PORT` si ocupas otro puerto. PostgreSQL guarda el expediente en un volumen. Puedes parar los servicios con `docker compose down` y volver a abrirlos con el mismo expediente.
 
+### Docker Compose con HTTPS
+
+`compose.https.yaml` usa un volumen propio y publica HTTPS en `127.0.0.1` de forma predeterminada. Define en `.env` el origen que usará el navegador y las rutas de los archivos montados como secretos.
+
+```dotenv
+PAVAROTTI_EXPEDIENTE=incidente-01
+PAVAROTTI_HTTPS_ORIGIN=https://127.0.0.1:8443
+PAVAROTTI_DB_PASSWORD_FILE=/ruta/privada/postgres.password
+PAVAROTTI_TLS_CERT_FILE=/ruta/privada/certificado.pem
+PAVAROTTI_TLS_KEY_FILE=/ruta/privada/tls.key
+```
+
+El certificado PEM y su clave identifican el host del origen. El navegador debe confiar en la autoridad emisora. Escribe la contraseña de PostgreSQL en una sola línea UTF-8, con final LF o sin salto de línea. La imagen lee los secretos como `65532:65532`. En Linux puedes asignar el grupo numérico `65532` a los tres archivos y darles permisos `0640`. El puerto exterior se configura con `PAVAROTTI_HTTPS_PORT` y la IP del anfitrión con `PAVAROTTI_HTTPS_BIND`.
+
+```sh
+docker compose -f compose.https.yaml up --build --wait
+docker compose -f compose.https.yaml exec -T app pavarotti -expediente incidente-01 \
+  usuarios guardar --nombre investigacion --rol analista --clave-archivo - < /ruta/privada/analista.password
+```
+
+Abre `PAVAROTTI_HTTPS_ORIGIN` con la cuenta del expediente. El servicio PostgreSQL se comunica con la aplicación por la red de Compose. Para trasladar un expediente, monta su copia con permisos de lectura para `65532:65532` y restáurala en el volumen HTTPS.
+
+```sh
+docker compose -f compose.https.yaml run --rm \
+  -v /ruta/privada/copia.jsonl:/respaldo.jsonl:ro app \
+  -expediente incidente-01 restaurar --archivo /respaldo.jsonl
+```
+
 Con PostgreSQL, **Encolar análisis** guarda una instantánea del expediente. La sección **Tareas de análisis** muestra el estado, los intentos y el enlace al informe terminado. Una asignación abandonada vence a los 15 segundos desde la última renovación y puede recuperarse hasta completar tres intentos. La misma huella y versión reutilizan la tarea activa o el informe que ya existe. Si trabajas con un expediente en archivos locales, **Analizar expediente** sigue ejecutando el informe directamente.
 
 ```sh
