@@ -45,12 +45,33 @@ type codeImage struct {
 	spans        []codeSpan
 }
 
-func OpenInstructionWindow(data []byte, imageIndex int, symbol *Symbol, steps ...int) (InstructionWindow, error) {
-	if len(data) == 0 || len(data) > MaxBinaryBytes || imageIndex < 0 || len(steps) > MaxInstructionSteps || (symbol != nil && symbol.Image != imageIndex) {
-		return InstructionWindow{}, ErrInstructionLocation
+type InstructionImage struct {
+	data  []byte
+	image codeImage
+}
+
+func OpenInstructionImage(data []byte, imageIndex int) (*InstructionImage, error) {
+	if len(data) == 0 || len(data) > MaxBinaryBytes || imageIndex < 0 {
+		return nil, ErrInstructionLocation
 	}
 	image := binaryCodeImage(data, imageIndex)
-	if image.decode == nil || (symbol == nil && image.entry == nil) {
+	if image.decode == nil {
+		return nil, ErrInstructionLocation
+	}
+	return &InstructionImage{data: data, image: image}, nil
+}
+
+func OpenInstructionWindow(data []byte, imageIndex int, symbol *Symbol, steps ...int) (InstructionWindow, error) {
+	image, err := OpenInstructionImage(data, imageIndex)
+	if err != nil {
+		return InstructionWindow{}, err
+	}
+	return image.Window(symbol, steps...)
+}
+
+func (original *InstructionImage) Window(symbol *Symbol, steps ...int) (InstructionWindow, error) {
+	image := original.image
+	if len(steps) > MaxInstructionSteps || (symbol == nil && image.entry == nil) || (symbol != nil && symbol.Image != image.file.index) {
 		return InstructionWindow{}, ErrInstructionLocation
 	}
 	entry := image.entry
@@ -65,7 +86,7 @@ func OpenInstructionWindow(data []byte, imageIndex int, symbol *Symbol, steps ..
 		entry = &codeEntry{position: address}
 		physical, section = &offset, symbol.Section
 	}
-	window, err := image.readWindow(data, *entry, physical, section)
+	window, err := image.readWindow(original.data, *entry, physical, section)
 	for _, step := range steps {
 		if err != nil || step < 0 || step >= len(window.Instructions) {
 			return InstructionWindow{}, ErrInstructionLocation
@@ -75,13 +96,23 @@ func OpenInstructionWindow(data []byte, imageIndex int, symbol *Symbol, steps ..
 		if !valid {
 			return InstructionWindow{}, ErrInstructionLocation
 		}
-		window, err = image.readWindow(data, codeEntry{position: target}, nil, "")
+		window, err = image.readWindow(original.data, codeEntry{position: target}, nil, "")
 		if err != nil {
 			return InstructionWindow{}, err
 		}
 		window.Origin = &origin
 	}
 	return window, err
+}
+
+func (original *InstructionImage) MatchesLocation(address, offset string) bool {
+	position, validPosition := ParseBinaryHex(address)
+	physical, validOffset := ParseBinaryHex(offset)
+	if !validPosition || !validOffset {
+		return false
+	}
+	span, delta, unique := original.image.findSpan(codeEntry{position: position}, nil, "")
+	return unique && original.image.file.offset+span.offset+delta == physical
 }
 
 func (image codeImage) readWindow(data []byte, location codeEntry, physical *uint64, section string) (InstructionWindow, error) {

@@ -1,6 +1,6 @@
 "use strict";
 
-function binaryInstructionPanel(report, sections, images, {entries, citation, cite, follow, incoming, openReference}) {
+function binaryInstructionPanel(report, sections, images, {entries, citation, cite, follow, incoming, openReference, exportReferences}) {
   const details = element(cite ? "details" : "div", "", "binary-instructions");
   const title = element("summary", "Instrucciones");
   if (cite) details.append(title);
@@ -151,6 +151,9 @@ function binaryInstructionPanel(report, sections, images, {entries, citation, ci
     }
     const list = element("ol", "", "binary-list");
     const more = element("button", "Mostrar más referencias");
+    const save = element("button", "Exportar referencias");
+    const destination = selectedEntry;
+    save.onclick = () => exportReferences(destination, rows);
     let shown = 0;
     function appendPage() {
       for (const ref of rows.slice(shown, shown + 25)) {
@@ -166,7 +169,7 @@ function binaryInstructionPanel(report, sections, images, {entries, citation, ci
       more.hidden = shown >= rows.length;
     }
     more.onclick = appendPage;
-    references.append(list, more);
+    references.append(list, more, save);
     appendPage();
   }
   function resetList() {

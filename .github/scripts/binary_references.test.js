@@ -5,8 +5,8 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const source = fs.readFileSync(path.join(__dirname, "../../ui/binary-references.js"), "utf8");
-const {binaryInstructionEntries: entries, binaryReferenceIndex: indexReferences, binaryReferenceWindowLimit: limit} =
-  vm.runInNewContext(`${source}\n({binaryInstructionEntries, binaryReferenceIndex, binaryReferenceWindowLimit})`);
+const {binaryInstructionEntries: entries, binaryReferenceIndex: indexReferences, binaryReferenceWindowLimit: limit, binaryReferenceLocation: locationFor} =
+  vm.runInNewContext(`${source}\n({binaryInstructionEntries, binaryReferenceIndex, binaryReferenceWindowLimit, binaryReferenceLocation})`);
 
 const jump = (address, offset, target, section = 0) => ({address, offset, target, section, text: "jmp", bytes: "eb01"});
 const target = (address, offset, section = 0) => ({address, offset, section, text: "ret", bytes: "c3"});
@@ -75,4 +75,18 @@ test("retains saved references and evicts the oldest of the observed windows", (
   assert.equal(result.rows[0].instruction.offset, "0x200");
   assert.equal(result.rows.some((row) => row.instruction.offset === "0x1000"), false);
   assert.equal(result.rows[1].instruction.offset, "0x1001");
+});
+
+test("preserves window hashes and selected rows when restored references are exported again", () => {
+  const index = indexReferences([]);
+  const instruction = jump("0x1020", "0x120", "0x1040");
+  const origin = {kind: "entrada", index: 1, path: "0.1", row: 4, address: "0x1020", offset: "0x120", window_sha256: "a".repeat(64)};
+  index.restore({image: 1, origins: [origin]}, [instruction]);
+  index.observe({image: 1, address: "0x1040", offset: "0x140"}, [
+    {instruction, section: {image: 1}, index: 4, anchor: {kind: "entrada", index: 1, path: "0.1"}}
+  ]);
+  const result = index.incoming(1, "0x1040", "0x140").rows;
+  assert.equal(result.length, 1);
+  const location = locationFor(result[0]);
+  for (const [field, value] of Object.entries(origin)) assert.equal(location[field], value);
 });

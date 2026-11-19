@@ -47,15 +47,41 @@ type BinaryWindowReport struct {
 	Name     string                   `json:"name"`
 }
 
+type binaryWindowEvidence struct {
+	record         caso.Record
+	inspection     triaje.Binary
+	inspectionHash string
+	source         io.Reader
+	data           []byte
+	images         map[int]*triaje.InstructionImage
+}
+
+func openBinaryWindowEvidence(ctx context.Context, store *caso.Store, id string, revision int, source io.Reader) (*binaryWindowEvidence, error) {
+	record, inspection, err := loadBinaryInspection(ctx, store, id, revision)
+	if err != nil {
+		return nil, err
+	}
+	return &binaryWindowEvidence{record: record, inspection: inspection, inspectionHash: caso.Hash([]byte(record.Details)),
+		source: source, images: make(map[int]*triaje.InstructionImage)}, nil
+}
+
 func OpenBinaryWindow(ctx context.Context, store *caso.Store, request BinaryWindowRequest, source io.Reader) (BinaryWindowReport, error) {
-	steps, valid := instructionPath(request.Path)
-	if !valid || request.RecordID == "" || request.Revision < 1 || request.Index < 0 {
+	if _, valid := instructionPath(request.Path); !valid || request.RecordID == "" || request.Revision < 1 || request.Index < 0 {
 		return BinaryWindowReport{}, ErrBinaryWindowRequest
 	}
-	record, report, err := loadBinaryInspection(ctx, store, request.RecordID, request.Revision)
+	evidence, err := openBinaryWindowEvidence(ctx, store, request.RecordID, request.Revision, source)
 	if err != nil {
 		return BinaryWindowReport{}, err
 	}
+	return evidence.window(ctx, request)
+}
+
+func (evidence *binaryWindowEvidence) window(ctx context.Context, request BinaryWindowRequest) (BinaryWindowReport, error) {
+	steps, valid := instructionPath(request.Path)
+	if !valid || request.Index < 0 {
+		return BinaryWindowReport{}, ErrBinaryWindowRequest
+	}
+	report := &evidence.inspection
 	image := request.Index
 	name := "Punto de entrada"
 	var symbol *triaje.Symbol
@@ -69,7 +95,7 @@ func OpenBinaryWindow(ctx context.Context, store *caso.Store, request BinaryWind
 		symbol = &report.Symbols[request.Index]
 		image, name = symbol.Image, symbol.Name
 	case "instruccion":
-		if instructionCitationOffset(report, request.Index) == "" {
+		if instructionCitationOffset(*report, request.Index) == "" {
 			return BinaryWindowReport{}, caso.ErrNotFound
 		}
 		saved = &report.Instructions[request.Index]
@@ -82,26 +108,20 @@ func OpenBinaryWindow(ctx context.Context, store *caso.Store, request BinaryWind
 	if image < 0 || (len(report.Images) == 0 && image != 0) || (len(report.Images) > 0 && (image == 0 || image > len(report.Images))) {
 		return BinaryWindowReport{}, ErrBinaryWindowRequest
 	}
-	if report.Size <= 0 || report.Size > triaje.MaxBinaryBytes {
-		return BinaryWindowReport{}, ErrBinaryWindowSample
-	}
-	data, err := io.ReadAll(io.LimitReader(source, int64(report.Size)+1))
-	if err != nil {
-		return BinaryWindowReport{}, fmt.Errorf("leer el archivo original: %w", err)
-	}
-	if len(data) != report.Size || caso.Hash(data) != record.SHA256 {
-		return BinaryWindowReport{}, ErrBinaryWindowSample
+	if err := evidence.readSample(ctx); err != nil {
+		return BinaryWindowReport{}, err
 	}
 	if saved != nil {
 		offset, _ := triaje.ParseBinaryHex(saved.Offset)
-		if hex.EncodeToString(data[offset:offset+uint64(len(saved.Bytes)/2)]) != saved.Bytes {
+		if hex.EncodeToString(evidence.data[offset:offset+uint64(len(saved.Bytes)/2)]) != saved.Bytes {
 			return BinaryWindowReport{}, triaje.ErrInstructionLocation
 		}
 	}
-	if err := ctx.Err(); err != nil {
+	decoded, err := evidence.image(image)
+	if err != nil {
 		return BinaryWindowReport{}, err
 	}
-	window, err := triaje.OpenInstructionWindow(data, image, symbol, steps...)
+	window, err := decoded.Window(symbol, steps...)
 	if err != nil {
 		return BinaryWindowReport{}, err
 	}
@@ -113,9 +133,42 @@ func OpenBinaryWindow(ctx context.Context, store *caso.Store, request BinaryWind
 	if window.Origin != nil {
 		name = "Destino directo"
 	}
-	citation := BinaryWindowCitation{Schema: BinaryWindowSchema, BinaryWindowRequest: request, SHA256: record.SHA256,
-		InspectionSHA256: caso.Hash([]byte(record.Details)), WindowSHA256: caso.Hash(encoded), Image: image, Address: first.Address, Offset: first.Offset}
+	citation := BinaryWindowCitation{Schema: BinaryWindowSchema, BinaryWindowRequest: request, SHA256: evidence.record.SHA256,
+		InspectionSHA256: evidence.inspectionHash, WindowSHA256: caso.Hash(encoded), Image: image, Address: first.Address, Offset: first.Offset}
 	return BinaryWindowReport{Citation: citation, Window: window, Name: name}, nil
+}
+
+func (evidence *binaryWindowEvidence) readSample(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if evidence.data != nil {
+		return nil
+	}
+	size := evidence.inspection.Size
+	if size <= 0 || size > triaje.MaxBinaryBytes {
+		return ErrBinaryWindowSample
+	}
+	data, err := io.ReadAll(io.LimitReader(evidence.source, int64(size)+1))
+	if err != nil {
+		return fmt.Errorf("leer el archivo original: %w", err)
+	}
+	if len(data) != size || caso.Hash(data) != evidence.record.SHA256 {
+		return ErrBinaryWindowSample
+	}
+	evidence.data = data
+	return ctx.Err()
+}
+
+func (evidence *binaryWindowEvidence) image(index int) (*triaje.InstructionImage, error) {
+	if decoded := evidence.images[index]; decoded != nil {
+		return decoded, nil
+	}
+	decoded, err := triaje.OpenInstructionImage(evidence.data, index)
+	if err == nil {
+		evidence.images[index] = decoded
+	}
+	return decoded, err
 }
 
 func instructionPath(path string) ([]int, bool) {

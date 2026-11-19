@@ -169,6 +169,10 @@ func TestSharedDashboard(t *testing.T) {
 	call("POST", window, origin, string(sample), nil, 401)
 	call("POST", window, "https://otro.invalid", string(sample), reader, 403)
 	call("POST", window, origin, string(sample), reader, 200)
+	references := "/api/registro/" + id + "/referencias-binarias?modo=verificar"
+	call("POST", references, origin, "", nil, 401)
+	call("POST", references, "https://otro.invalid", "", reader, 403)
+	call("POST", references, origin, "", reader, 400)
 	call("POST", "/api/acceso/salir", origin, "", analyst, 204)
 	call("GET", "/api/app", "", "", analyst, 401)
 }
