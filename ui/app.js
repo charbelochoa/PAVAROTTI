@@ -8,6 +8,7 @@ const element = (tag, text, className) => {
   return node;
 };
 let records = [];
+let selectedKey = "";
 
 async function request(path, options) {
   const response = await fetch(path, options);
@@ -20,24 +21,48 @@ function formatTime(value) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
-function recordNode(record) {
-  const row = element("details", "", "record");
-  const summary = element("summary");
-  summary.append(element("span", record.kind, "type"), element("strong", record.title),
-    element("span", record.source, "muted"));
-  row.append(summary, element("p", formatTime(record.time)));
-  if (record.source_id) row.append(element("p", "ID · " + record.source_id));
-  if (record.sha256) row.append(element("p", "SHA-256 · " + record.sha256));
+function key(record) {
+  return JSON.stringify([record.kind, record.time, record.title, record.source_id, record.sha256]);
+}
+
+function inspect(record) {
+  const view = byId("record-detail");
+  view.replaceChildren();
+  if (!record) {
+    view.append(element("p", "Selecciona un registro para examinarlo."));
+    return;
+  }
+  view.append(element("span", record.kind, "type"), element("h3", record.title), element("p", formatTime(record.time)));
+  if (record.source) view.append(element("p", record.source));
+  if (record.source_id) view.append(element("p", "ID · " + record.source_id));
+  if (record.sha256) view.append(element("p", "SHA-256 · " + record.sha256));
   if (record.traffic) {
     const item = record.traffic;
-    row.append(element("p", `${item.type || "Tipo desconocido"} · ${item.millis} ms`));
+    view.append(element("p", `${item.type || "Tipo desconocido"} · ${item.millis} ms`));
   }
   if (record.signals?.length) {
     const list = element("ul");
     for (const signal of record.signals) list.append(element("li", signal));
-    row.append(list);
+    view.append(list);
   }
-  if (record.details) row.append(element("pre", record.details));
+  if (record.details) view.append(element("pre", record.details));
+}
+
+function recordNode(record) {
+  const row = element("button", "", "record");
+  row.type = "button";
+  row.setAttribute("aria-controls", "record-detail");
+  row.setAttribute("aria-pressed", String(key(record) === selectedKey));
+  row.append(element("span", record.kind, "type"), element("strong", record.title));
+  if (record.source) row.append(element("span", record.source, "muted"));
+  row.onclick = () => {
+    const prior = byId("records").querySelector('[aria-pressed="true"]');
+    prior?.setAttribute("aria-pressed", "false");
+    selectedKey = key(record);
+    row.setAttribute("aria-pressed", "true");
+    inspect(record);
+    if (window.matchMedia("(max-width: 970px)").matches) byId("inspector").scrollIntoView({block: "nearest"});
+  };
   return row;
 }
 
@@ -47,7 +72,9 @@ function render() {
   const matching = records.filter((entry) =>
     (!kind || entry.kind === kind) && JSON.stringify(entry).toLowerCase().includes(query));
   const listing = byId("records");
-  listing.replaceChildren(...matching.slice(0, 250).map(recordNode));
+  const shown = matching.slice(0, 250);
+  inspect(shown.find((record) => key(record) === selectedKey));
+  listing.replaceChildren(...shown.map(recordNode));
   if (matching.length === 0) listing.append(element("p", "Sin registros para mostrar."));
   if (matching.length > 250) listing.append(element("p", "Primeros 250 resultados. Usa la búsqueda para acotar."));
 }

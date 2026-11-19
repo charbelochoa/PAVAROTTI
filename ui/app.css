@@ -10,19 +10,20 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; }
-header, .brand, .list-head, .filters, .actions { display: flex; align-items: center; gap: 1rem; }
-header { padding: 1rem clamp(1rem, 4vw, 4rem); justify-content: space-between; border-bottom: 1px solid var(--line); }
+header, .brand, nav, .filters, .actions { display: flex; align-items: center; gap: 1rem; }
+header { padding: .7rem clamp(1rem, 3vw, 2rem); justify-content: space-between; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+nav { gap: .4rem; flex-wrap: wrap; }
 header img { border: 1px solid #684747; }
 h1 { font-size: 1.35rem; letter-spacing: .18em; }
 h1, h2, p { margin: 0; }
 h2 { font-size: 1.05rem; }
 p, .muted { color: var(--dim); }
 a { color: var(--accent); }
-main { display: grid; grid-template-columns: minmax(232px, 280px) minmax(0, 1fr); gap: clamp(1rem, 3vw, 2.4rem); margin: auto; max-width: 1450px; padding: clamp(1rem, 4vw, 3rem); }
+main { display: grid; grid-template-columns: minmax(210px, 245px) minmax(330px, 1fr) minmax(250px, .72fr); gap: .75rem; align-items: start; margin: auto; max-width: 1700px; padding: clamp(.75rem, 2vw, 1.5rem); }
 aside, .workspace { display: grid; align-content: start; gap: 1rem; min-width: 0; }
 section, .intro, #distribution, dialog { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 1rem; }
 .intro { padding-top: 0; }
-.portrait { display: block; height: 180px; width: 100%; object-fit: contain; }
+.portrait { display: block; height: 136px; width: 100%; object-fit: contain; }
 .intro > p, section > p { margin-top: .5rem; }
 .totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
 .totals strong { font-size: clamp(1.45rem, 4vw, 2.4rem); display: block; color: var(--accent); line-height: 1.2; }
@@ -35,25 +36,32 @@ button:hover { border-color: var(--accent); }
 button:disabled { opacity: .6; cursor: wait; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .primary { background: #552e31; border-color: #a05b5d; }
-.wide { width: 100%; margin-top: .6rem; }
-.list-head { justify-content: space-between; margin-bottom: .8rem; }
-.filters { align-items: stretch; }
+.filters { align-items: stretch; margin: .65rem 0; flex-wrap: wrap; gap: .45rem; }
 .filters input { flex: 1; }
-#status { margin: .7rem 0; }
-.record { border-top: 1px solid var(--line); padding: .7rem 0; }
-.record summary { display: flex; flex-wrap: wrap; gap: .35rem .8rem; align-items: baseline; }
-.record summary::before { content: "▸"; color: var(--accent); }
-.record[open] summary::before { content: "▾"; }
-.type { color: var(--accent); font-size: .8rem; }
-.record p, .record li, #groups dd { overflow-wrap: anywhere; }
+footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2rem); font-size: .82rem; }
+#records { max-height: 65vh; overflow: auto; }
+.record { display: grid; width: 100%; grid-template-columns: 7rem minmax(0, 1fr); gap: .05rem .7rem; text-align: left; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+.record[aria-pressed="true"] { background: #39272b; box-shadow: inset 3px 0 var(--accent); }
+.record .muted { grid-column: 2; }
+.type { color: var(--accent); font-size: .8rem; overflow-wrap: anywhere; }
+.record strong, .record .muted { overflow-wrap: anywhere; }
+#inspector { position: sticky; top: 1rem; min-width: 0; }
+#record-detail { max-height: 75vh; overflow: auto; margin-top: .6rem; overflow-wrap: anywhere; }
+#record-detail h3 { margin: .4rem 0; }
+#record-detail p { margin-top: .4rem; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: #ddd2cc; }
 #groups { display: grid; grid-template-columns: max-content 1fr; gap: .4rem .8rem; }
 #groups dd { margin: 0; color: var(--dim); }
 dialog { color: inherit; width: min(560px, calc(100vw - 2rem)); }
 dialog::backdrop { background: #09070ad9; }
 .actions { justify-content: end; }
-@media (max-width: 770px) {
+@media (max-width: 970px) {
+  main { grid-template-columns: minmax(195px, 220px) minmax(0, 1fr); }
+  #inspector { grid-column: 2; position: static; }
+}
+@media (max-width: 680px) {
   main { grid-template-columns: 1fr; }
+  #inspector { grid-column: 1; }
   .portrait { height: 140px; }
   .filters { flex-wrap: wrap; }
   .filters input { flex-basis: 100%; }

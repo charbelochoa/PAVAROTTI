@@ -12,7 +12,11 @@
 <body>
   <header>
     <div class="brand"><img src="/icono.png" alt="" width="40" height="40"><h1>PAVAROTTI</h1></div>
-    <button id="credits">Créditos</button>
+    <nav aria-label="Herramientas del expediente">
+      <button id="refresh">Actualizar</button>
+      <button id="add-note">Registrar nota</button>
+      <button id="credits">Créditos</button>
+    </nav>
   </header>
   <main>
     <aside>
@@ -39,7 +43,6 @@
           <input id="evidence" type="file" name="evidence" required>
           <button class="primary">Analizar y guardar</button>
         </form>
-        <button id="add-note" class="wide">Registrar nota</button>
       </section>
     </aside>
     <div class="workspace">
@@ -53,10 +56,7 @@
         <dl id="groups"></dl>
       </details>
       <section class="record-list">
-        <div class="list-head">
-          <h2>Registros</h2>
-          <button id="refresh">Actualizar</button>
-        </div>
+        <h2>Registros</h2>
         <div class="filters">
           <input type="search" id="query" aria-label="Buscar en el expediente" placeholder="Buscar texto, origen, ID o SHA-256">
           <select id="filter" aria-label="Filtrar por tipo">
@@ -68,11 +68,15 @@
             <option value="nota">Notas</option>
           </select>
         </div>
-        <p role="status" id="status"></p>
         <div id="records"></div>
       </section>
     </div>
+    <section aria-label="Detalle de la selección" id="inspector">
+      <h2>Inspector de evidencia</h2>
+      <div id="record-detail"><p>Selecciona un registro para examinarlo.</p></div>
+    </section>
   </main>
+  <footer><p role="status" id="status">Expediente local</p></footer>
   <dialog id="credit-panel">
     <h2>Créditos</h2>
     <p id="version"></p>
