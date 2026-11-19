@@ -47,6 +47,7 @@ button:disabled { opacity: .6; cursor: wait; }
 .filters input { flex: 1; }
 .http-filters { align-items: center; }
 .http-filters input { flex: 0 1 auto; }
+#filter-http-rule { max-width: 100%; }
 .views { display: flex; flex-wrap: wrap; gap: .35rem; border-bottom: 1px solid var(--line); padding-bottom: .45rem; }
 .views button { background: transparent; }
 .views button[aria-pressed="true"] { background: #39272b; border-color: var(--accent); }

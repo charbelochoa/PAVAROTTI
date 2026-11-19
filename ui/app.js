@@ -36,7 +36,8 @@ const views = {
   http: {kind: "http", placeholder: "Buscar origen, señal o tipo MIME"}
 };
 
-const httpFilters = {"filter-http": "clase_http", "filter-capture": "captura", "filter-method": "metodo", "filter-from": "desde", "filter-to": "hasta"};
+const httpFilters = {"filter-http": "clase_http", "filter-capture": "captura", "filter-method": "metodo",
+  "filter-http-rule": "regla_http", "filter-from": "desde", "filter-to": "hasta"};
 const captureLabel = (kind) => ({"tráfico": "Proxy inverso", "archivo HAR": "Archivo HAR"})[kind] || kind;
 
 const assetKinds = {dominio: "Dominio", ipv4: "IPv4", ipv6: "IPv6", red: "Red", sha256: "SHA-256", sha1: "SHA-1", md5: "MD5"};
@@ -73,7 +74,7 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
   view.append(element("span", record.kind, "type"), element("h3", record.title), element("p", formatTime(record.time)));
   if (record.source) view.append(element("p", record.source));
   if (record.source_id) {
-    const label = record.code_review || record.dependencies || record.kind === "binario" ? "Archivo" : "ID";
+    const label = record.kind === "archivo HAR" ? "Entrada HAR" : record.code_review || record.dependencies || record.kind === "binario" ? "Archivo" : "ID";
     view.append(element("p", `${label} · ${record.source_id}`));
   }
   if (selectedRevision) {
@@ -105,15 +106,16 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
       details.append(element("dt", label), element("dd", String(value)));
     }
     view.append(details);
+    const signals = httpFindingPanel(record, citation?.http_rule);
+    if (signals) view.append(signals);
   }
   if (record.code_review) view.append(codeReviewPanel(record.id, record.code_review, citation));
   if (record.dependencies) view.append(dependencyPanel(record.dependencies, citation));
   const binary = record.kind === "binario" && binaryPanel(record, citation?.binary);
   if (binary) view.append(binary);
-  if (!record.code_review && record.signals?.length) {
+  if (!record.code_review && !record.traffic && record.signals?.length) {
     const list = element("ul");
     for (const signal of record.signals) list.append(element("li", signal));
-    if (record.traffic) view.append(element("h4", "Señales HTTP"));
     view.append(list);
   }
   if (!record.code_review && !binary && record.details) view.append(element("pre", record.details));
@@ -122,6 +124,34 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
     linked.focus({preventScroll: true});
     linked.scrollIntoView({block: "nearest"});
   }
+}
+
+function httpFindingPanel(record, citedRule) {
+  const findings = record.http_findings || [];
+  const shown = new Set(findings.map(({label}) => label));
+  const previous = (record.signals || []).filter((label) => !shown.has(label));
+  if (!findings.length && !previous.length) return null;
+  const panel = element("div", "", "audit-panel");
+  panel.append(element("h4", "Señales HTTP"));
+  const listing = element("div", "", "audit-items");
+  for (const finding of findings) {
+    const row = element("div", "", "audit-item");
+    row.dataset.httpRule = finding.rule;
+    row.append(element("strong", finding.label), element("span", `${finding.header} · ${finding.rule}`, "type"),
+      element("p", finding.observation));
+    if (finding.rule === citedRule) {
+      row.classList.add("audit-cited");
+      row.tabIndex = -1;
+    }
+    listing.append(row);
+  }
+  panel.append(listing);
+  if (previous.length) {
+    const list = element("ul");
+    list.append(...previous.map((label) => element("li", label)));
+    panel.append(list);
+  }
+  return panel;
 }
 
 function binaryCitationURL({record_id, revision, kind, index}) {
@@ -1226,7 +1256,13 @@ byId("logout").onclick = async (event) => {
     button.disabled = false;
   }
 };
-Promise.all([request("/api/app"), request("/credits.json")]).then(([app, credits]) => {
+Promise.all([request("/api/app"), request("/credits.json"), request("/api/http/reglas")]).then(([app, credits, rules]) => {
+  const ruleFilter = byId("filter-http-rule");
+  for (const rule of rules) {
+    const option = element("option", rule.label);
+    option.value = rule.rule;
+    ruleFilter.append(option);
+  }
   canWrite = !app.shared || app.account?.role === "analista";
   for (const id of ["evidence-tools", "analyze", "add-note", "edit-note", "analysis-priority-label"]) byId(id).hidden = !canWrite;
   if (app.case) byId("case-heading").textContent = app.case;

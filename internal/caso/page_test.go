@@ -49,7 +49,8 @@ func testPage(t *testing.T, store *Store) {
 	}
 	entries[0] = Record{Kind: "archivo HAR", Time: "2026-11-18T21:00:00Z", Title: "GET 404",
 		Traffic: &Traffic{Method: "GET", Status: 404, Type: "text/html", Millis: 12, Bucket: 16},
-		Signals: []string{"Señal del HAR"}, Details: "Detalle que solo se obtiene desde el inspector"}
+		Signals: []string{"Señal del HAR"}, Details: "Detalle que solo se obtiene desde el inspector",
+		HTTPFindings: []HTTPFinding{{Rule: "hsts-ausente", Label: "Señal del HAR"}}}
 	if err := store.Save(entries); err != nil {
 		t.Fatal(err)
 	}
@@ -99,11 +100,13 @@ func testPage(t *testing.T, store *Store) {
 		t.Fatalf("filtro por clase de estado: %+v, %v", httpPage, err)
 	}
 	httpPage, err = store.Page(ctx, PageRequest{Kind: "http", HTTPClass: 4, HTTPSource: "archivo HAR", HTTPMethod: "GET",
-		HTTPFrom: "2026-11-18", HTTPTo: "2026-11-18", Search: "Señal del HAR"})
+		HTTPFrom: "2026-11-18", HTTPTo: "2026-11-18", HTTPRule: "hsts-ausente", Search: "Señal del HAR"})
 	if err != nil || len(httpPage.Rows) != 1 || httpPage.Rows[0].Kind != "archivo HAR" {
 		t.Fatalf("filtros HTTP combinados: %+v, %v", httpPage, err)
 	}
 	for _, noMatch := range []PageRequest{
+		{Kind: "http", HTTPRule: "hsts-inactiva"},
+		{Kind: "http", HTTPRule: "hsts-ausente", HTTPSource: "tráfico"},
 		{Kind: "http", HTTPSource: "tráfico", HTTPMethod: "GET"},
 		{Kind: "http", HTTPSource: "archivo HAR", HTTPMethod: "POST"},
 		{Kind: "http", HTTPFrom: "2026-11-19"},
@@ -115,6 +118,8 @@ func testPage(t *testing.T, store *Store) {
 		}
 	}
 	for _, invalid := range []PageRequest{
+		{Kind: "nota", HTTPRule: "hsts-ausente"},
+		{Kind: "http", HTTPRule: "sin espacio"},
 		{Kind: "nota", HTTPSource: "archivo HAR"},
 		{Kind: "http", HTTPSource: "desconocido"},
 		{Kind: "http", HTTPMethod: "DESCONOCIDO"},
