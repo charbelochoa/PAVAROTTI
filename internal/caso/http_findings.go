@@ -16,3 +16,8 @@ func (record Record) MatchesHTTPRule(rule string) bool {
 		return finding.Rule == rule
 	}))
 }
+
+func (record Record) HTTPTransportFailure() bool {
+	return record.Kind == "tráfico" && record.Traffic != nil && record.Traffic.Status == 502 && record.HTTPRuleSet == 0 &&
+		slices.Contains(record.Signals, ProxyNoResponseSignal)
+}

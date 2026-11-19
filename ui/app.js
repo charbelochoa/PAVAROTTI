@@ -698,7 +698,7 @@ function selectAsset(asset, after = "") {
   selectedKey = "";
   selectedRevision = 0;
   returnToEvidence = undefined;
-  selectedAsset = {type: asset.type, value: asset.value, after};
+  selectedAsset = {type: asset.type, value: asset.value, after, back: asset.back, networkAfter: asset.networkAfter};
   paintSelection();
   byId("inspector-heading").focus({preventScroll: true});
   if (window.matchMedia("(max-width: 970px)").matches) {
@@ -712,26 +712,40 @@ async function loadAsset(asset) {
   const params = new URLSearchParams({tipo: asset.type, valor: asset.value, despues: asset.after});
   try {
     const detail = await request("/api/activos/ficha?" + params, {signal: controller.signal});
-    if (!controller.signal.aborted) inspectAsset(detail, asset);
+    if (!controller.signal.aborted) inspectAsset(detail, asset, controller.signal);
   } catch (error) {
     if (!controller.signal.aborted) inspect(undefined, error.message);
   }
 }
 
-function inspectAsset(detail, asset) {
+function assetEvidenceButton(reference, back, beforeSelect) {
+  const button = element("button");
+  const labels = [reference.kind, reference.role, `rev. ${reference.revision}`].filter(Boolean);
+  button.append(element("strong", reference.title || reference.kind), element("span", labels.join(" · "), "type"));
+  if (reference.network && reference.title !== "Red · " + reference.network) {
+    button.append(element("span", reference.network, "muted"));
+  }
+  if (reference.time) button.append(element("span", formatTime(reference.time), "muted"));
+  button.onclick = () => {
+    beforeSelect?.();
+    selectRecord(reference.id, reference.revision, back);
+  };
+  return button;
+}
+
+function inspectAsset(detail, asset, signal) {
   const list = element("div", "", "asset-sources");
-  for (const reference of detail.rows) {
-    const button = element("button");
-    button.append(element("strong", reference.title || reference.kind),
-      element("span", `${reference.kind} · ${reference.role} · rev. ${reference.revision}`, "type"));
-    if (reference.network && reference.title !== "Red · " + reference.network) {
-      button.append(element("span", reference.network, "muted"));
-    }
-    if (reference.time) button.append(element("span", formatTime(reference.time), "muted"));
-    button.onclick = () => selectRecord(reference.id, reference.revision, {
-      label: "Volver al activo", open: () => selectAsset(asset, asset.after)
-    });
-    list.append(button);
+  list.append(...detail.rows.map((reference) => assetEvidenceButton(reference, {
+    label: "Volver al activo", open: () => selectAsset(asset, asset.after)
+  })));
+  const actions = element("div", "", "tools");
+  const report = element("button", "Cobertura por periodo");
+  report.onclick = () => openAssetCoverage(detail);
+  actions.append(report);
+  if (asset.back) {
+    const back = element("button", asset.back.label);
+    back.onclick = asset.back.open;
+    actions.append(back);
   }
   const controls = element("div", "", "tools");
   if (asset.after) {
@@ -746,8 +760,9 @@ function inspectAsset(detail, asset) {
   }
   const view = byId("record-detail");
   view.replaceChildren(element("span", assetKinds[detail.type], "type"), element("h3", detail.value),
-    element("p", assetCount(detail)), list, controls);
+    element("p", assetCount(detail)), actions, list, controls);
   if (detail.coverage) list.before(element("p", `Cobertura de red · ${detail.coverage}`));
+  if (detail.type === "red") list.before(assetNetworkPanel({...asset, value: detail.value}, signal));
   view.scrollTop = 0;
 }
 
@@ -907,6 +922,7 @@ function showView(view) {
   }
   byId("filter").hidden = view !== "records";
   byId("filter-asset").hidden = view !== "assets";
+  byId("open-asset-coverage").hidden = view !== "assets";
   byId("open-binary-citation").hidden = view !== "binaries";
   byId("http-filters").hidden = view !== "http";
   query.placeholder = views[view].placeholder;
