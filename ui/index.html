@@ -110,7 +110,9 @@
             <option value="sha1">SHA-1</option>
             <option value="md5">MD5</option>
           </select>
-          <select id="filter-http" aria-label="Clase de respuesta HTTP" hidden>
+        </div>
+        <div class="filters http-filters" id="http-filters" role="group" aria-label="Filtros del historial HTTP" hidden>
+          <select id="filter-http" aria-label="Clase de respuesta HTTP">
             <option value="">Todos los estados</option>
             <option value="1">1xx · Información</option>
             <option value="2">2xx · Éxito</option>
@@ -118,6 +120,18 @@
             <option value="4">4xx · Error del cliente</option>
             <option value="5">5xx · Error del servidor</option>
           </select>
+          <select id="filter-capture" aria-label="Origen de captura HTTP">
+            <option value="">Todas las capturas</option>
+            <option value="tráfico">Proxy inverso</option>
+            <option value="archivo HAR">Archivo HAR</option>
+          </select>
+          <select id="filter-method" aria-label="Método HTTP">
+            <option value="">Todos los métodos</option>
+            <option>GET</option><option>HEAD</option><option>POST</option><option>PUT</option>
+            <option>DELETE</option><option>OPTIONS</option><option>PATCH</option><option value="OTRO">Otros métodos</option>
+          </select>
+          <label for="filter-from">Desde (UTC)</label><input type="date" id="filter-from">
+          <label for="filter-to">Hasta (UTC)</label><input type="date" id="filter-to">
         </div>
         <div id="records"></div>
         <div class="pager" aria-label="Paginación del expediente">

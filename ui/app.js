@@ -30,6 +30,10 @@ let queueSignature = "";
 let currentView = "records";
 let assetSearch = "";
 let recordSearch = "";
+let httpSearch = "";
+
+const httpFilters = {"filter-http": "clase_http", "filter-capture": "captura", "filter-method": "metodo", "filter-from": "desde", "filter-to": "hasta"};
+const captureLabel = (kind) => ({"tráfico": "Proxy inverso", "archivo HAR": "Archivo HAR"})[kind] || kind;
 
 const assetKinds = {dominio: "Dominio", ipv4: "IPv4", ipv6: "IPv6", red: "Red", sha256: "SHA-256", sha1: "SHA-1", md5: "MD5"};
 const assetKey = ({type, value}) => `${type}/${value}`;
@@ -88,13 +92,19 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
   if (record.kind === "stix") view.append(stixPanel(record));
   if (record.traffic) {
     const item = record.traffic;
-    view.append(element("p", `${item.type || "Tipo desconocido"} · ${item.millis} ms`));
+    const details = element("dl", "", "http-details");
+    for (const [label, value] of [["Captura", captureLabel(record.kind)], ["Método", item.method || "Sin método"],
+      ["Estado", item.status || "Sin respuesta"], ["Tipo MIME", item.type || "Sin tipo"], ["Latencia", `${item.millis} ms`]]) {
+      details.append(element("dt", label), element("dd", String(value)));
+    }
+    view.append(details);
   }
   if (record.code_review) view.append(codeReviewPanel(record.id, record.code_review, citation));
   if (record.dependencies) view.append(dependencyPanel(record.dependencies, citation));
   if (!record.code_review && record.signals?.length) {
     const list = element("ul");
     for (const signal of record.signals) list.append(element("li", signal));
+    if (record.traffic) view.append(element("h4", "Señales HTTP"));
     view.append(list);
   }
   if (!record.code_review && record.details) view.append(element("pre", record.details));
@@ -479,9 +489,9 @@ function recordNode(record) {
   row.setAttribute("aria-controls", "record-detail");
   const traffic = record.traffic;
   if (traffic) {
-    row.append(element("span", `${traffic.method} ${traffic.status}`, "type"),
+    row.append(element("span", `${traffic.method} ${traffic.status || "Sin respuesta"}`, "type"),
       element("strong", record.source || record.title));
-    const details = [record.kind === "archivo HAR" ? "HAR" : "Proxy", traffic.type || "Sin tipo MIME", traffic.millis + " ms"];
+    const details = [captureLabel(record.kind), formatTime(record.time), traffic.type || "Sin tipo MIME", traffic.millis + " ms"];
     if (record.signal_count) details.push(`${record.signal_count} ${record.signal_count === 1 ? "señal" : "señales"}`);
     row.append(element("span", details.join(" · "), "muted"));
   } else {
@@ -536,7 +546,11 @@ function pagingBusy(busy) {
 function filters() {
   const type = currentView === "http" ? "http" : byId(currentView === "assets" ? "filter-asset" : "filter").value;
   const params = new URLSearchParams({tipo: type, buscar: byId("query").value.trim()});
-  if (currentView === "http" && byId("filter-http").value) params.set("clase_http", byId("filter-http").value);
+  if (currentView === "http") {
+    for (const [id, name] of Object.entries(httpFilters)) {
+      if (byId(id).value) params.set(name, byId(id).value);
+    }
+  }
   return params;
 }
 
@@ -597,7 +611,7 @@ byId("query").addEventListener("input", () => {
   pagingBusy(true);
   searchTimer = setTimeout(() => loadPage(0, [""]), 230);
 });
-for (const id of ["filter", "filter-asset", "filter-http"]) {
+for (const id of ["filter", "filter-asset", ...Object.keys(httpFilters)]) {
   byId(id).addEventListener("change", () => {
     clearTimeout(searchTimer);
     loadPage(0, [""]);
@@ -607,6 +621,7 @@ function showView(view) {
   if (currentView === view) return;
   const query = byId("query");
   if (currentView === "assets") assetSearch = query.value;
+  else if (currentView === "http") httpSearch = query.value;
   else recordSearch = query.value;
   currentView = view;
   clearTimeout(searchTimer);
@@ -615,10 +630,11 @@ function showView(view) {
   }
   byId("filter").hidden = view !== "records";
   byId("filter-asset").hidden = view !== "assets";
-  byId("filter-http").hidden = view !== "http";
-  query.placeholder = view === "assets" ? "Buscar dominio, IP, red o huella" : "Buscar texto, origen, ID o SHA-256";
+  byId("http-filters").hidden = view !== "http";
+  query.placeholder = {assets: "Buscar dominio, IP, red o huella", http: "Buscar origen, señal o tipo MIME",
+    records: "Buscar texto, origen, ID o SHA-256"}[view];
   query.maxLength = view === "assets" ? 253 : 256;
-  query.value = view === "assets" ? assetSearch : recordSearch;
+  query.value = {assets: assetSearch, http: httpSearch, records: recordSearch}[view];
   byId("records").replaceChildren();
   loadPage(0, [""]);
 }

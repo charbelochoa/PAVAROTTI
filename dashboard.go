@@ -70,7 +70,11 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 	})
 	mux.HandleFunc("GET /api/registro/pagina", func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
-		request := caso.PageRequest{Kind: query.Get("tipo"), Search: query.Get("buscar"), After: query.Get("despues")}
+		request := caso.PageRequest{
+			Kind: query.Get("tipo"), Search: query.Get("buscar"), After: query.Get("despues"),
+			HTTPSource: query.Get("captura"), HTTPMethod: query.Get("metodo"),
+			HTTPFrom: query.Get("desde"), HTTPTo: query.Get("hasta"),
+		}
 		if size := query.Get("limite"); size != "" {
 			limit, err := strconv.Atoi(size)
 			if err != nil || limit < 1 || limit > 100 {

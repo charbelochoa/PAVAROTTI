@@ -39,6 +39,10 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 		FROM evidence
 		WHERE ($3 = '' OR (stamp, id COLLATE "C") < ($4::text COLLATE "C", $3::text COLLATE "C"))
 		  AND ($7::integer = 0 OR left(current_record->'traffic'->>'status', 1) = $7::integer::text)
+		  AND ($8 = '' OR kind = $8)
+		  AND ($9 = '' OR current_record->'traffic'->>'method' = $9)
+		  AND ($10 = '' OR left(time, 10) COLLATE "C" >= $10)
+		  AND ($11 = '' OR (length(time) >= 10 AND left(time, 10) COLLATE "C" <= $11))
 		  AND ($5 = '' OR strpos(translate(lower(concat_ws(chr(31),
 		       id, kind, time, current_record->>'title', current_record->>'source',
 		       current_record->>'source_id', current_record->>'sha256', current_record->>'details',
@@ -55,7 +59,8 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 			      strpos(lower(COALESCE(item->'replacement'->>'version', '')), $5) > 0
 		  ))
 		ORDER BY stamp DESC, id COLLATE "C" DESC LIMIT $6
-	`, s.expediente, request.Kind, after.ID, after.Stamp, strings.ToLower(request.Search), limit, request.HTTPClass)
+	`, s.expediente, request.Kind, after.ID, after.Stamp, strings.ToLower(request.Search), limit,
+		request.HTTPClass, request.HTTPSource, request.HTTPMethod, request.HTTPFrom, request.HTTPTo)
 	if err != nil {
 		return nil, err
 	}

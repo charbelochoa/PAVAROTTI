@@ -26,7 +26,7 @@ La mesa de trabajo mantiene el expediente a la izquierda, los registros al centr
 
 Usa **Anterior** y **Siguiente** para recorrer los resultados de 50 en 50. La búsqueda y el filtro se aplican al expediente completo. El inspector carga los detalles al seleccionar un registro y los mantiene visibles al cambiar de página.
 
-**Historial HTTP** reúne el proxy y los archivos HAR. Muestra método, estado, origen, tipo MIME, latencia y número de señales. Filtra por clase de respuesta y selecciona una fila para examinar sus señales sin salir de la mesa de trabajo.
+**Historial HTTP** reúne el proxy y los archivos HAR. Muestra método, estado, fecha, origen, tipo MIME, latencia y número de señales. Combina filtros por captura, método, clase de respuesta y fechas UTC. Selecciona una fila para examinar su evidencia y las señales asociadas sin salir de la mesa de trabajo.
 
 - **Tráfico.** Proxy inverso HTTP(S) de un solo destino e importación de HAR. El expediente registra origen, estado HTTP, tipo MIME, latencia y señales de configuración. Las señales sirven para priorizar la revisión manual.
 - **Evidencia.** Importación de hallazgos JSON con huella SHA-256 del archivo y búsqueda por texto, origen, ID o huella. También puedes registrar notas manuales.

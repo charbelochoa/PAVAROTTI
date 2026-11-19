@@ -98,6 +98,33 @@ func testPage(t *testing.T, store *Store) {
 		httpPage.Rows[0].Traffic.Status != 404 || httpPage.Rows[0].Traffic.Millis != 12 || httpPage.Rows[0].SignalCount != 1 {
 		t.Fatalf("filtro por clase de estado: %+v, %v", httpPage, err)
 	}
+	httpPage, err = store.Page(ctx, PageRequest{Kind: "http", HTTPClass: 4, HTTPSource: "archivo HAR", HTTPMethod: "GET",
+		HTTPFrom: "2026-11-18", HTTPTo: "2026-11-18", Search: "Señal del HAR"})
+	if err != nil || len(httpPage.Rows) != 1 || httpPage.Rows[0].Kind != "archivo HAR" {
+		t.Fatalf("filtros HTTP combinados: %+v, %v", httpPage, err)
+	}
+	for _, noMatch := range []PageRequest{
+		{Kind: "http", HTTPSource: "tráfico", HTTPMethod: "GET"},
+		{Kind: "http", HTTPSource: "archivo HAR", HTTPMethod: "POST"},
+		{Kind: "http", HTTPFrom: "2026-11-19"},
+		{Kind: "http", HTTPTo: "2026-11-17"},
+	} {
+		page, err := store.Page(ctx, noMatch)
+		if err != nil || len(page.Rows) != 0 {
+			t.Fatalf("filtro HTTP %+v: %+v, %v", noMatch, page, err)
+		}
+	}
+	for _, invalid := range []PageRequest{
+		{Kind: "nota", HTTPSource: "archivo HAR"},
+		{Kind: "http", HTTPSource: "desconocido"},
+		{Kind: "http", HTTPMethod: "DESCONOCIDO"},
+		{Kind: "http", HTTPFrom: "2026-02-30"},
+		{Kind: "http", HTTPFrom: "2026-11-18", HTTPTo: "2026-11-17"},
+	} {
+		if _, err := store.Page(ctx, invalid); !errors.Is(err, ErrInvalidPage) {
+			t.Fatalf("filtro HTTP inválido %+v: %v", invalid, err)
+		}
+	}
 	if _, err := store.Record(ctx, strings.Repeat("a", 64)+"-1"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("registro inexistente: %v", err)
 	}
