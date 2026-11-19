@@ -22,6 +22,8 @@
 
 PAVAROTTI es la estación de investigación Blue Team del colectivo. Gestiona evidencia local y permite revisar tráfico web, hallazgos y binarios desde el mismo expediente.
 
+La mesa de trabajo mantiene el expediente a la izquierda, los registros al centro y el inspector de evidencia a la derecha. La selección permanece visible al actualizar el expediente.
+
 - **Tráfico.** Proxy inverso HTTP(S) de un solo destino e importación de HAR. El expediente registra origen, estado HTTP, tipo MIME, latencia y señales de configuración. Las señales sirven para priorizar la revisión manual.
 - **Evidencia.** Importación de hallazgos JSON con huella SHA-256 del archivo y búsqueda por texto, origen, ID o huella. También puedes registrar notas manuales.
 - **Binarios.** Triaje estático de cabeceras y secciones PE, ELF y Mach-O con SHA-256.

@@ -16,6 +16,9 @@ type exportedFinding struct {
 	Severity     string          `json:"severity"`
 	Status       string          `json:"status"`
 	Verification string          `json:"verification_status"`
+	VerifyNote   string          `json:"verification_note"`
+	Reason       string          `json:"confidence_rationale"`
+	Counter      string          `json:"counterevidence"`
 	Summary      string          `json:"summary"`
 	Evidence     string          `json:"evidence"`
 	Report       string          `json:"report"`
@@ -54,13 +57,19 @@ func Findings(data []byte) ([]Record, error) {
 				assets = append(assets, label)
 			}
 		}
-		details := strings.Join([]string{
-			"Severidad: " + item.Severity, "Estado: " + item.Status, "Verificación declarada: " + item.Verification,
-			"Fecha de origen: " + item.Timestamp, "Activos: " + strings.Join(assets, ", "),
-			item.Summary, item.Evidence, item.Report,
-		}, "\n")
+		var details []string
+		for _, field := range []struct{ title, value string }{
+			{"Severidad", item.Severity}, {"Estado", item.Status}, {"Verificación declarada", item.Verification},
+			{"Fecha de origen", item.Timestamp}, {"Activos", strings.Join(assets, ", ")},
+			{"Resumen", item.Summary}, {"Evidencia", item.Evidence}, {"Nota de verificación", item.VerifyNote},
+			{"Fundamento", item.Reason}, {"Contraevidencia", item.Counter}, {"Informe", item.Report},
+		} {
+			if value := strings.TrimSpace(field.value); value != "" {
+				details = append(details, field.title+"\n"+value)
+			}
+		}
 		results = append(results, Record{Kind: "hallazgo", Time: timestamp, Title: title,
-			Source: strings.Join(assets, ", "), SourceID: id, SHA256: hash, Details: strings.TrimSpace(details)})
+			Source: strings.Join(assets, ", "), SourceID: id, SHA256: hash, Details: strings.Join(details, "\n\n")})
 	}
 	return results, nil
 }
