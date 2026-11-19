@@ -28,6 +28,10 @@ Usa **Anterior** y **Siguiente** para recorrer los resultados de 50 en 50. La b�
 
 **Historial HTTP** reúne el proxy y los archivos HAR. Muestra método, estado, fecha, origen, tipo MIME, latencia y número de señales. Combina filtros por captura, método, clase de respuesta, fechas UTC y regla pasiva. El inspector muestra la cabecera observada y el motivo de cada señal. Desde un informe puedes abrir la respuesta citada y ver resaltada su regla.
 
+En **Comparar capturas**, define el origen, el tipo de captura y las fechas UTC inclusivas de cada periodo. La tabla usa los registros guardados y muestra recuentos y diferencias por clase de respuesta, fallo del proxy y señal. **Con evaluación confirmada** cuenta las respuestas cuyo registro identifica la aplicación de reglas. Las señales históricas siguen visibles aunque falte ese dato. Cada fila admite hasta cinco citas por periodo a la revisión original. El informe admite hasta 10,000 observaciones distintas, 32 MiB de entrada y 100 filas de resultados.
+
+Usa **Exportar JSON** para conservar los criterios, resultados, citas y la huella de entrada. **Abrir informe JSON** recupera ese resultado guardado con sus criterios, incluso si el expediente ya incorporó capturas nuevas. Abre las citas desde el expediente que contiene la evidencia.
+
 - **Tráfico.** Proxy inverso HTTP(S) de un solo destino e importación de HAR. Las reglas pasivas comprueban tipo MIME, `nosniff`, controles de marcos, `Referrer-Policy`, `max-age` de HSTS, redirecciones a HTTP y atributos de cookies. El expediente guarda los recuentos de cookies, el origen y el motivo de cada señal.
 - **Evidencia.** Importación de hallazgos JSON con huella SHA-256 del archivo y búsqueda por texto, origen, ID o huella. También puedes registrar notas manuales.
 - **Binarios.** Triaje estático de cabeceras PE, ELF y Mach-O. Consulta hasta 256 secciones, 128 vistas previas de cadenas ASCII y 2,048 símbolos definidos por archivo. El inspector busca símbolos en las tablas ELF, COFF y Mach-O y muestra su desplazamiento cuando la sección tiene respaldo físico. La huella SHA-256 abre la ficha del activo.
@@ -73,6 +77,7 @@ pavarotti -datos ./expediente importar dns observaciones.json
 pavarotti -datos ./expediente importar rdap registro-dominio.json
 pavarotti -datos ./expediente importar stix indicadores-stix.json
 pavarotti -datos ./expediente listar --tipo har --regla-http hsts-ausente --json
+pavarotti -datos ./expediente comparar-http --origen-a https://example.invalid --captura-a har --desde-a 2026-11-01 --hasta-a 2026-11-07 --origen-b https://example.invalid --captura-b har --desde-b 2026-11-08 --hasta-b 2026-11-14 --salida comparacion.json
 pavarotti -datos ./expediente importar codigo revision.go
 pavarotti -datos ./expediente citar-binario --id ID --revision 1 --tipo cadena --indice 0 --salida cita.json
 pavarotti -datos ./expediente importar gomod go.mod

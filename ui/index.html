@@ -8,6 +8,7 @@
   <link rel="icon" href="/icono.png">
   <link rel="stylesheet" href="/app.css">
   <script src="/app.js" defer></script>
+  <script src="/http-comparison.js" defer></script>
 </head>
 <body>
   <header>
@@ -139,6 +140,7 @@
           </select>
           <label for="filter-from">Desde (UTC)</label><input type="date" id="filter-from">
           <label for="filter-to">Hasta (UTC)</label><input type="date" id="filter-to">
+          <button type="button" id="open-http-comparison">Comparar capturas</button>
         </div>
         <div id="records"></div>
         <div class="pager" aria-label="Paginación del expediente">
@@ -206,6 +208,54 @@
     </details>
     <pre id="report-text"></pre>
     <form method="dialog"><button>Cerrar</button></form>
+  </dialog>
+  <dialog id="http-comparison" aria-labelledby="http-comparison-title">
+    <div class="comparison-heading">
+      <h2 id="http-comparison-title">Comparar capturas HTTP</h2>
+      <form method="dialog"><button>Cerrar</button></form>
+    </div>
+    <form id="http-comparison-form">
+      <div class="comparison-windows">
+        <fieldset>
+          <legend>Periodo A</legend>
+          <label for="compare-origin-a">Origen HTTP(S)</label>
+          <input id="compare-origin-a" name="origen_a" type="text" inputmode="url" maxlength="768" placeholder="Todos los orígenes">
+          <label for="compare-capture-a">Captura</label>
+          <select id="compare-capture-a" name="captura_a">
+            <option value="">Todas las capturas</option>
+            <option value="tráfico">Proxy inverso</option>
+            <option value="archivo HAR">Archivo HAR</option>
+          </select>
+          <div class="comparison-dates">
+            <label>Desde (UTC)<input name="desde_a" type="date" required></label>
+            <label>Hasta (UTC)<input name="hasta_a" type="date" required></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Periodo B</legend>
+          <label for="compare-origin-b">Origen HTTP(S)</label>
+          <input id="compare-origin-b" name="origen_b" type="text" inputmode="url" maxlength="768" placeholder="Todos los orígenes">
+          <label for="compare-capture-b">Captura</label>
+          <select id="compare-capture-b" name="captura_b">
+            <option value="">Todas las capturas</option>
+            <option value="tráfico">Proxy inverso</option>
+            <option value="archivo HAR">Archivo HAR</option>
+          </select>
+          <div class="comparison-dates">
+            <label>Desde (UTC)<input name="desde_b" type="date" required></label>
+            <label>Hasta (UTC)<input name="hasta_b" type="date" required></label>
+          </div>
+        </fieldset>
+      </div>
+      <div class="tools">
+        <button class="primary" id="http-compare-run">Comparar</button>
+        <button type="button" id="http-compare-open">Abrir informe JSON</button>
+        <button type="button" id="http-compare-export" hidden>Exportar JSON</button>
+        <input type="file" id="http-compare-file" accept=".json,application/json" aria-label="Informe de comparación" hidden>
+      </div>
+    </form>
+    <p id="http-compare-status" role="status"></p>
+    <div id="http-compare-result" hidden></div>
   </dialog>
   <dialog id="triage-panel" aria-labelledby="triage-title">
     <h2 id="triage-title">Clasificar señal</h2>
