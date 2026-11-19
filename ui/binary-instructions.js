@@ -204,8 +204,11 @@ function binaryInstructionPanel(report, sections, images, {entries, citation, ci
   return {details, paintImage, refreshIncoming,
     hasSection(index) { return withCode.has(index); },
     showSection(index) { reveal(entries.find(({instruction}) => instruction.section === index), true); },
-    focusIndex(index) {
+    focusIndex(index, showReferences = false) {
       const entry = entries.find((item) => item.index === index);
-      if (entry) reveal(entry, true);
+      if (entry) {
+        reveal(entry, true);
+        if (showReferences && !references.hidden) references.open = true;
+      }
     }};
 }
