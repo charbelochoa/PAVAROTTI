@@ -1,10 +1,11 @@
-package main
+package mesa
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"sync"
@@ -60,7 +61,7 @@ func (limit *loginLimiter) admit(address string, now time.Time) bool {
 	}
 }
 
-func sharedDashboard(mux *http.ServeMux, store *caso.Store, origin string) http.Handler {
+func sharedDashboard(mux *http.ServeMux, store *caso.Store, origin string, resources fs.FS) http.Handler {
 	cookieName := "__Host-pavarotti-" + caso.Hash([]byte(origin + "\n" + store.SharedCase()))[:16]
 	limiter := loginLimiter{windows: make(map[string]loginWindow), slots: make(chan struct{}, 4)}
 	setCookie := func(w http.ResponseWriter, value string, expires time.Time, maxAge int) {
@@ -141,7 +142,7 @@ func sharedDashboard(mux *http.ServeMux, store *caso.Store, origin string) http.
 			return
 		}
 		ctx := context.WithValue(r.Context(), sharedAccountKey{}, account)
-		mux.ServeHTTP(w, r.WithContext(ctx))
+		mux.ServeHTTP(w, r.WithContext(store.AuditContext(ctx, account)))
 	})
 }
 

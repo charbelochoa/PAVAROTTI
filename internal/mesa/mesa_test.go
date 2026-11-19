@@ -1,4 +1,4 @@
-package main
+package mesa
 
 import (
 	"encoding/json"
@@ -16,6 +16,8 @@ import (
 	"pavarotti/internal/triaje"
 )
 
+var testResources = os.DirFS("../..")
+
 func TestExpediente(t *testing.T) {
 	const host = "127.0.0.1:7000"
 	const report = `[{"id":4,"name":"Revisión de acceso","evidence":"Cabecera revisada"}]`
@@ -25,7 +27,7 @@ func TestExpediente(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := dashboard(host, settings{Version: version}, store)
+	app := Handler(host, Settings{Version: "version-de-prueba"}, store, testResources)
 	call := func(method, path, origin, body string) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(method, "http://"+host+path, strings.NewReader(body))
 		request.Header.Set("Origin", origin)
@@ -37,6 +39,9 @@ func TestExpediente(t *testing.T) {
 		if got := call("GET", path, "", "").Code; got != 200 {
 			t.Fatalf("%s: %d", path, got)
 		}
+	}
+	if got := call("GET", "/api/actividad", "", "").Code; got != http.StatusConflict {
+		t.Fatalf("actividad con almacén local: %d", got)
 	}
 	if got := call("POST", "/api/archivo/hallazgos", "http://wrong.invalid", report).Code; got != 403 {
 		t.Fatalf("origen ajeno: %d", got)
@@ -142,7 +147,7 @@ func TestEdicionAnalisisYRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := dashboard(host, settings{}, store)
+	app := Handler(host, Settings{}, store, testResources)
 	call := func(method, path, body string, expected int) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(method, "http://"+host+path, strings.NewReader(body))

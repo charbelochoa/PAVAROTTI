@@ -1,4 +1,4 @@
-package main
+package mesa
 
 import (
 	"bytes"
@@ -7,8 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"pavarotti/internal/analisis"
 	"pavarotti/internal/caso"
 	"pavarotti/internal/ingesta"
+	"pavarotti/internal/terminal"
 )
 
 func TestBinaryCitationUsesStoredRevision(t *testing.T) {
@@ -29,7 +31,7 @@ func TestBinaryCitationUsesStoredRevision(t *testing.T) {
 	}
 	id := page.Rows[0].ID
 	const host = "127.0.0.1:8443"
-	handler := dashboard(host, settings{}, store)
+	handler := Handler(host, Settings{}, store, testResources)
 	get := func(query string, status int) *httptest.ResponseRecorder {
 		t.Helper()
 		request := httptest.NewRequest("GET", "http://"+host+"/api/registro/"+id+"/cita-binaria?"+query, nil)
@@ -41,9 +43,9 @@ func TestBinaryCitationUsesStoredRevision(t *testing.T) {
 		return response
 	}
 	result := get("revision=1&tipo=cadena&indice=0", 200)
-	expected := binaryCitation{Schema: binaryCitationSchema, RecordID: id, Revision: 1, SHA256: records[0].SHA256,
+	expected := analisis.BinaryCitation{Schema: analisis.BinaryCitationSchema, RecordID: id, Revision: 1, SHA256: records[0].SHA256,
 		InspectionSHA256: caso.Hash([]byte(records[0].Details)), Kind: "cadena", Index: 0, Offset: "0x1"}
-	var web binaryCitation
+	var web analisis.BinaryCitation
 	if err := json.Unmarshal(result.Body.Bytes(), &web); err != nil || web != expected {
 		t.Fatalf("cita web: %+v, %v", web, err)
 	}
@@ -53,12 +55,12 @@ func TestBinaryCitationUsesStoredRevision(t *testing.T) {
 	get("revision=1&tipo=cadena&indice=-1", 400)
 	get("revision=1&tipo=invalido&indice=0", 400)
 	var stdout, stderr bytes.Buffer
-	handled, err := terminal([]string{"citar-binario", "--id", id, "--revision", "1", "--tipo", "cadena", "--indice", "0"},
+	handled, err := terminal.Run([]string{"citar-binario", "--id", id, "--revision", "1", "--tipo", "cadena", "--indice", "0"},
 		&stdout, &stderr, func() (*caso.Store, error) { return store, nil })
 	if !handled || err != nil {
 		t.Fatalf("CLI: %v, %s", err, &stderr)
 	}
-	var cli binaryCitation
+	var cli analisis.BinaryCitation
 	if err := json.Unmarshal(stdout.Bytes(), &cli); err != nil || cli != web {
 		t.Fatalf("cita CLI: %+v, %v", cli, err)
 	}

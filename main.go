@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"flag"
 	"fmt"
@@ -20,10 +21,16 @@ import (
 
 	"pavarotti/internal/analisis"
 	"pavarotti/internal/caso"
+	"pavarotti/internal/config"
+	"pavarotti/internal/mesa"
+	"pavarotti/internal/terminal"
 	"pavarotti/internal/trafico"
 )
 
-const version = "0.4.1"
+const version = "0.4.2"
+
+//go:embed ui/* licenses/*
+var resources embed.FS
 
 func main() {
 	directory := flag.String("datos", "", "carpeta del expediente local")
@@ -76,7 +83,7 @@ func main() {
 		return caso.Open(filepath.Join(config, "PAVAROTTI", "expediente"))
 	}
 	if args := flag.Args(); len(args) > 0 && args[0] != "servir" {
-		handled, err := terminal(args, os.Stdout, os.Stderr, openStore)
+		handled, err := terminal.Run(args, os.Stdout, os.Stderr, openStore)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -87,7 +94,7 @@ func main() {
 	} else if len(args) > 1 {
 		log.Fatal("coloca las opciones de servir antes del comando")
 	}
-	transport, err := prepareSharedTransport(*shared, *webBind, *public, *certificate, *certificateKey, *uiPort, *publishPort, *postgres != "", *upstream != "")
+	transport, err := mesa.PrepareSharedTransport(*shared, *webBind, *public, *certificate, *certificateKey, *uiPort, *publishPort, *postgres != "", *upstream != "")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -114,7 +121,7 @@ func databaseURL(dsn, password string) (string, error) {
 	return parsed.String(), nil
 }
 
-func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int, browser, worker bool, shared *sharedTransport) error {
+func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int, browser, worker bool, shared *mesa.SharedTransport) error {
 	var target *url.URL
 	if upstream != "" {
 		var err error
@@ -131,7 +138,7 @@ func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int,
 		bind = "0.0.0.0"
 	}
 	if shared != nil {
-		bind = shared.address
+		bind = shared.Address
 	}
 	app, err := listen(bind, uiPort)
 	if err != nil {
@@ -142,11 +149,11 @@ func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int,
 	if publishPort != 0 {
 		appAddress = net.JoinHostPort("127.0.0.1", strconv.Itoa(publishPort))
 	}
-	config := settings{Version: version, AnalysisQueue: store.HasAnalysisQueue()}
+	settings := mesa.Settings{Version: version, AnalysisQueue: store.HasAnalysisQueue()}
 	scheme := "http://"
 	if shared != nil {
-		appAddress, scheme = shared.host, "https://"
-		config.Shared, config.Case = true, store.SharedCase()
+		appAddress, scheme = shared.Host, "https://"
+		settings.Shared, settings.Case = true, store.SharedCase()
 	}
 	servers := make(map[net.Listener]*http.Server)
 	if target != nil {
@@ -159,18 +166,18 @@ func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int,
 		if target.Host == proxyAddress || target.Host == appAddress {
 			return errors.New("el destino coincide con un puerto local de PAVAROTTI")
 		}
-		config.Proxy, config.Target = "http://"+proxyAddress, caso.Origin(target.String())
+		settings.Proxy, settings.Target = "http://"+proxyAddress, caso.Origin(target.String())
 		servers[proxy] = newServer(trafico.Reverse(target, proxyAddress, store))
 	}
-	servers[app] = newServer(dashboard(appAddress, config, store))
+	servers[app] = newServer(mesa.Handler(appAddress, settings, store, resources))
 	if shared != nil {
-		servers[app].TLSConfig = shared.tls
+		servers[app].TLSConfig = shared.TLS
 		servers[app].ReadTimeout = 2 * time.Minute
 		servers[app].WriteTimeout = 2 * time.Minute
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if worker && config.AnalysisQueue {
+	if worker && settings.AnalysisQueue {
 		workerDone := make(chan struct{})
 		go func() {
 			defer close(workerDone)
@@ -195,8 +202,8 @@ func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int,
 	}
 	localURL := scheme + appAddress
 	fmt.Println("PAVAROTTI", localURL)
-	if config.Proxy != "" {
-		fmt.Println("Proxy", config.Proxy, "→", config.Target)
+	if settings.Proxy != "" {
+		fmt.Println("Proxy", settings.Proxy, "→", settings.Target)
 	}
 	if browser {
 		open(localURL)
@@ -228,4 +235,15 @@ func open(address string) {
 		command = exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", address)
 	}
 	go func() { _ = command.Run() }()
+}
+
+func databasePassword() (string, error) {
+	value, path := os.Getenv("PAVAROTTI_DB_PASSWORD"), os.Getenv("PAVAROTTI_DB_PASSWORD_FILE")
+	if path == "" {
+		return value, nil
+	}
+	if value != "" || path == "-" {
+		return "", errors.New("configura la contraseña de PostgreSQL mediante una variable o un archivo de secretos")
+	}
+	return config.ReadSecret(path, nil, 4096)
 }

@@ -1,10 +1,10 @@
-package main
+package mesa
 
 import (
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"slices"
@@ -16,14 +16,12 @@ import (
 	"pavarotti/internal/ingesta"
 )
 
-//go:embed ui/* licenses/*
-var resources embed.FS
-
-type settings struct {
+type Settings struct {
 	Version       string              `json:"version"`
 	Proxy         string              `json:"proxy,omitempty"`
 	Target        string              `json:"target,omitempty"`
 	AnalysisQueue bool                `json:"analysis_queue"`
+	Activity      bool                `json:"activity,omitempty"`
 	Shared        bool                `json:"shared,omitempty"`
 	Case          string              `json:"case,omitempty"`
 	Account       *caso.SharedAccount `json:"account,omitempty"`
@@ -36,7 +34,7 @@ type noteInput struct {
 	Revision int    `json:"revision"`
 }
 
-func dashboard(host string, config settings, store *caso.Store) http.Handler {
+func Handler(host string, config Settings, store *caso.Store, resources fs.FS) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFileFS(w, r, resources, "ui/index.html")
@@ -54,6 +52,7 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 	}
 	mux.HandleFunc("GET /api/app", func(w http.ResponseWriter, r *http.Request) {
 		state := config
+		state.Activity = store.HasAuditLog()
 		if account, ok := r.Context().Value(sharedAccountKey{}).(caso.SharedAccount); ok {
 			state.Account = &account
 		}
@@ -168,7 +167,7 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		save(w, store, []caso.Record{record})
+		save(w, r, store, []caso.Record{record})
 	})
 	mux.HandleFunc("PATCH /api/nota/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var note noteInput
@@ -177,7 +176,7 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 			http.Error(w, "Nota inválida", http.StatusBadRequest)
 			return
 		}
-		record, err := store.Edit(r.PathValue("id"), note.Revision, note.Title, note.Source, note.Details)
+		record, err := store.EditContext(r.Context(), r.PathValue("id"), note.Revision, note.Title, note.Source, note.Details)
 		if err != nil {
 			editError(w, err)
 			return
@@ -215,11 +214,12 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 	directoryRoutes(mux, store)
 	codeTriageRoutes(mux, store)
 	binaryCitationRoute(mux, store)
+	activityRoute(mux, store)
 	var handler http.Handler = mux
 	origin := "http://" + host
 	if config.Shared {
 		origin = "https://" + host
-		handler = sharedDashboard(mux, store, origin)
+		handler = sharedDashboard(mux, store, origin, resources)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
@@ -258,8 +258,8 @@ func respond(w http.ResponseWriter, data any) {
 	replyJSON(w, http.StatusOK, data)
 }
 
-func save(w http.ResponseWriter, store *caso.Store, records []caso.Record) {
-	if err := store.Save(records); err != nil {
+func save(w http.ResponseWriter, r *http.Request, store *caso.Store, records []caso.Record) {
+	if _, err := store.SaveEvidence(r.Context(), records); err != nil {
 		http.Error(w, "No se pudo guardar el expediente", http.StatusInternalServerError)
 		return
 	}

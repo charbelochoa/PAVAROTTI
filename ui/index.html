@@ -17,6 +17,7 @@
       <button id="analyze" hidden>Analizar expediente</button>
       <button id="export-stix">Exportar STIX</button>
       <button id="add-note" hidden>Registrar nota</button>
+      <button id="open-activity" hidden>Actividad</button>
       <button id="credits">Créditos</button>
       <button id="logout" hidden>Cerrar sesión</button>
     </nav>
@@ -168,6 +169,13 @@
     </section>
   </main>
   <footer><p role="status" id="status">Expediente local</p></footer>
+  <dialog id="activity-panel" aria-labelledby="activity-title">
+    <h2 id="activity-title">Actividad del expediente</h2>
+    <p id="activity-status" role="status"></p>
+    <ol id="activity-list"></ol>
+    <button id="activity-more" hidden>Mostrar eventos anteriores</button>
+    <form method="dialog"><button>Cerrar</button></form>
+  </dialog>
   <dialog id="credit-panel" aria-labelledby="credit-title">
     <h2 id="credit-title">Créditos</h2>
     <p id="version"></p>

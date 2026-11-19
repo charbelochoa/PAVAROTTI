@@ -76,7 +76,12 @@ func (s *Store) classifyCodePostgres(ctx context.Context, batch string, ordinal 
 		return CodeDisposition{}, ErrRevisionConflict
 	}
 	next.Time = Now()
-	if err := putCodeTriage(ctx, tx, s.expediente, batch, ordinal, next); err != nil {
+	if _, err := putCodeTriage(ctx, tx, s.expediente, batch, ordinal, next); err != nil {
+		return CodeDisposition{}, err
+	}
+	if err := s.appendAudit(ctx, tx, AuditTriage, fmt.Sprintf("%s-%d", batch, ordinal), AuditDetails{
+		Revision: next.Revision, Finding: &next.FindingKey, Status: next.Status,
+	}); err != nil {
 		return CodeDisposition{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -85,30 +90,30 @@ func (s *Store) classifyCodePostgres(ctx context.Context, batch string, ordinal 
 	return next, nil
 }
 
-func putCodeTriage(ctx context.Context, tx *sql.Tx, expediente, batch string, ordinal int, item CodeDisposition) error {
+func putCodeTriage(ctx context.Context, tx *sql.Tx, expediente, batch string, ordinal int, item CodeDisposition) (bool, error) {
 	data, err := json.Marshal(item)
 	if err != nil {
-		return err
+		return false, err
 	}
 	key := item.FindingKey.hash()
 	result, err := tx.ExecContext(ctx, `INSERT INTO pavarotti_code_triage
 		(expediente, batch_key, ordinal, finding_key, revision, entry) VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT DO NOTHING`, expediente, batch, ordinal, key, item.Revision, data)
 	if err != nil {
-		return err
+		return false, err
 	}
 	inserted, err := result.RowsAffected()
 	if err != nil || inserted > 0 {
-		return err
+		return inserted > 0, err
 	}
 	var same bool
 	if err := tx.QueryRowContext(ctx, `SELECT entry = $6::jsonb FROM pavarotti_code_triage
 		WHERE expediente = $1 AND batch_key = $2 AND ordinal = $3 AND finding_key = $4 AND revision = $5`,
 		expediente, batch, ordinal, key, item.Revision, data).Scan(&same); err != nil {
-		return err
+		return false, err
 	}
 	if !same {
-		return fmt.Errorf("clasificación %d de %s-%d: %w", item.Revision, batch, ordinal, ErrMigrationConflict)
+		return false, fmt.Errorf("clasificación %d de %s-%d: %w", item.Revision, batch, ordinal, ErrMigrationConflict)
 	}
-	return nil
+	return false, nil
 }

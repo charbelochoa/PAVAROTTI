@@ -29,6 +29,26 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 
 `go test -count=1 ./...` ejecuta la suite local. Para incluir PostgreSQL, configura `PAVAROTTI_TEST_POSTGRES` con un servidor de pruebas separado. `go vet ./...` completa la revisión estática. CI construye y prueba las configuraciones de la matriz y comprueba avisos de dependencias con `govulncheck`.
 
+## Arquitectura del repositorio
+
+| Ruta | Responsabilidad |
+| --- | --- |
+| `main.go` | Opciones de arranque, selección del almacén, empaquetado de recursos y ciclo de vida del servidor. |
+| `internal/mesa` y `ui` | Servidor HTTP, sesiones y permisos en `internal/mesa`. HTML, estilos y comportamiento de la interfaz en `ui`. |
+| `internal/terminal` | Comandos, argumentos y formatos de salida. Usa los mismos servicios que la mesa. |
+| `internal/caso` y `internal/config` | Evidencia, revisiones, autenticación, cola y auditoría en `internal/caso`. Lectura de secretos en `internal/config`. |
+| `internal/analisis` | Preparación de instantáneas, correlación, agentes e informes. |
+| `internal/ingesta`, `internal/trafico`, `internal/triaje` y `internal/revision` | Importación de artefactos, observación HTTP, inspección de binarios y revisión de código y dependencias, respectivamente. |
+
+## Cobertura defensiva de la mesa
+
+| Flujo | Disponible | Trabajo pendiente y prueba de cierre |
+| --- | --- | --- |
+| Expedientes, terminal y agentes | Evidencia con procedencia, inventario de activos, cola persistente, revisión de código Go y exportación STIX. | Guardar un informe de cobertura por activo y periodo. Exportarlo, abrir sus citas y confirmar los cruces al restaurar el expediente. |
+| Inspección estática de binarios | PE, ELF y Mach-O con secciones, cadenas, símbolos y citas por desplazamiento. | Mostrar exportaciones PE y símbolos Mach-O universales. Navegar instrucciones y referencias en secciones de muestras locales y comprobar sus desplazamientos con archivos de referencia. |
+| Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros y señales de cabeceras. | Ampliar las reglas pasivas y comparar capturas por origen y periodo. Verificar cada señal con respuestas de prueba y citas reproducibles. |
+| Operación compartida | Instalación nativa, Docker Compose local, HTTPS con roles, PostgreSQL y actividad por expediente. | Probar el respaldo y la restauración, la retención y el arranque HTTPS con Compose. |
+
 ## Hallazgos de la revisión de 0.3
 
 - Una conexión fallida del proxy generaba un aviso de HSTS aun cuando no se había recibido ninguna cabecera. Una prueba de regresión comprueba que el incidente queda registrado como fallo de conexión.
@@ -36,7 +56,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 - El primer chequeo de persistencia de Compose falló en CI después del reinicio. La verificación ahora espera a la aplicación y compara JSON estructurado.
 - La revisión de dependencias encontró avisos para el controlador de PostgreSQL y dos módulos de Go. Se actualizó a versiones con las correcciones y se fijó Go 1.26.11 en la compilación de CI y Docker.
 - El análisis admite hasta 10,000 registros por ejecución. Desde 0.3.1, el panel consulta 50 registros por página y carga la evidencia completa al seleccionarla. PostgreSQL filtra antes de entregar resultados. El almacén local recorre los lotes y mantiene en memoria la página candidata. Ambos almacenes aún recorren los datos para responder búsquedas amplias.
-- La configuración compartida de 0.4.0 usa PostgreSQL y HTTPS. Añade cuentas de lectura y análisis por expediente. Quedan pendientes la auditoría operativa, la retención y la restauración descritas en el hito 6.
+- La configuración compartida usa PostgreSQL y HTTPS con cuentas de lectura y análisis por expediente. Desde la 0.4.2, las operaciones nuevas generan eventos de auditoría. Quedan pendientes el respaldo, la restauración y la retención del hito 6.
 
 ## Orden de implementación
 
@@ -51,8 +71,9 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 9. **Flujo de revisión humana.** 0.3.9 revisa directorios desde la mesa y el CLI, conserva las rutas relativas y presenta el resultado de cada archivo. Guarda el estado, fecha y justificación de cada señal con revisiones de triaje. Las pruebas verifican la recuperación tras reiniciar, la migración a PostgreSQL y el rechazo de escrituras con una revisión obsoleta.
 10. **Mesa de investigación compartida.** 0.4.0 añade acceso HTTPS con roles por expediente, filtros combinados sobre el historial HTTP y un inspector de binarios que abre cadenas desde una sección y conecta la huella con los activos. La prueba comprueba cada flujo desde el navegador con un lector y un analista.
 11. **Símbolos y citas de binarios.** 0.4.1 guarda símbolos definidos de tablas ELF, COFF y Mach-O. La mesa exporta una cita JSON con la huella del archivo, la huella del análisis, el ID, la revisión y el desplazamiento. Al reabrirla, verifica esos datos y señala la fila citada. Las revisiones previas siguen mostrando los metadatos que guardaron.
-12. **Auditoría y restauración.** Asociar las incorporaciones, ediciones, decisiones de triaje y operaciones de cola a un operador y al expediente. Registrar las acciones confirmadas junto con la transacción que aplica el cambio. Probar escrituras concurrentes, aislamiento y que los errores de validación y conflictos de revisión conservan el estado previo. Restaurar una copia en una base nueva y comprobar sus referencias antes de definir la retención.
-13. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
+12. **Auditoría de operaciones.** La 0.4.2 registra incorporaciones, ediciones, triaje, migraciones y cambios de la cola en la misma transacción. La mesa abre la revisión de evidencia o tarea del evento. Las pruebas cubren conflictos concurrentes, retroceso cuando falla la auditoría y separación de expedientes.
+13. **Respaldo y restauración.** Generar una copia consistente con evidencia, revisiones, triaje, tareas y actividad. Restaurarla en una base nueva, comprobar sus referencias y definir cómo aplicar retención.
+14. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
 
 ## Flujo de trabajo OSINT
 
@@ -71,4 +92,4 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 
 ## Ramas y commits
 
-Usa ramas `blue-team/<capacidad>` para cambios que puedan revisarse por separado. Integra a `main` con la matriz verde. Los mensajes siguen `commit #N` y el número avanza para cada cambio comprobable. Una funcionalidad, una regresión, una mejora de configuración y su documentación pueden merecer commits separados cuando cada uno tiene un motivo propio. La meta de 1,000 commits se mide con `git rev-list --count main`.
+Usa ramas `blue-team/<capacidad>` para cambios que puedan revisarse por separado. Integra a `main` con la matriz verde. Escribe cada título en inglés sencillo, en cuatro o cinco palabras que describan el cambio. La meta de 1,000 commits se mide con `git rev-list --count main`.

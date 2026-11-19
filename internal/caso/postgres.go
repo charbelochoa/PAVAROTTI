@@ -80,6 +80,9 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	if err := migrateSharedAccess(ctx, tx); err != nil {
 		return err
 	}
+	if err := migrateAudit(ctx, tx); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 

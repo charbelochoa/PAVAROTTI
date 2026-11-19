@@ -1,4 +1,4 @@
-package main
+package mesa
 
 import (
 	"context"
@@ -56,7 +56,10 @@ func TestSharedDashboard(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		for _, statement := range []string{
+			"DELETE FROM pavarotti_audit_events WHERE expediente = $1",
+			"DELETE FROM pavarotti_audit_heads WHERE expediente = $1",
 			"DELETE FROM pavarotti_case_members WHERE expediente = $1",
+			"DELETE FROM pavarotti_note_revisions WHERE expediente = $1",
 			"DELETE FROM pavarotti_evidence_batches WHERE expediente = $1",
 		} {
 			if _, err := db.ExecContext(ctx, statement, name); err != nil {
@@ -72,7 +75,7 @@ func TestSharedDashboard(t *testing.T) {
 	}
 	const host = "127.0.0.1:8443"
 	const origin = "https://" + host
-	handler := dashboard(host, settings{Version: version, Shared: true, Case: name}, store)
+	handler := Handler(host, Settings{Version: "version-de-prueba", Shared: true, Case: name}, store, testResources)
 	call := func(method, target, requestOrigin, body string, cookie *http.Cookie, status int) *httptest.ResponseRecorder {
 		t.Helper()
 		if strings.HasPrefix(target, "/") {
@@ -99,6 +102,7 @@ func TestSharedDashboard(t *testing.T) {
 	call("GET", "/ingresar", "", "", nil, 200)
 	call("GET", "/api/app", "", "", nil, 401)
 	call("GET", "/api/exportar/stix", "", "", nil, 401)
+	call("GET", "/api/actividad", "", "", nil, 401)
 	call("GET", "/api/registro/"+strings.Repeat("a", 64)+"-1/cita-binaria?revision=1&tipo=cadena&indice=0", "", "", nil, 401)
 	call("GET", "http://"+host+"/ingresar", "", "", nil, 403)
 	call("POST", "/api/acceso/ingresar", "https://otro.invalid", "{}", nil, 403)
@@ -124,7 +128,7 @@ func TestSharedDashboard(t *testing.T) {
 	}
 	reader := login(caso.SharedReader)
 	state := call("GET", "/api/app", "", "", reader, 200)
-	var config settings
+	var config Settings
 	if err := json.Unmarshal(state.Body.Bytes(), &config); err != nil || config.Case != name ||
 		config.Account == nil || config.Account.Role != caso.SharedReader {
 		t.Fatalf("perfil del lector: %+v, %v", config, err)
@@ -137,6 +141,28 @@ func TestSharedDashboard(t *testing.T) {
 	listing := call("GET", "/api/registro/pagina", "", "", reader, 200)
 	if !strings.Contains(listing.Body.String(), "Fuente aprobada") {
 		t.Fatal("la cuenta lectora no recibió la nota")
+	}
+	var records caso.Page
+	if err := json.Unmarshal(listing.Body.Bytes(), &records); err != nil || len(records.Rows) != 1 {
+		t.Fatalf("registros: %+v, %v", records, err)
+	}
+	const edit = `{"title":"Fuente revisada","details":"Actualización privada","revision":1}`
+	call("PATCH", "/api/nota/"+records.Rows[0].ID, origin, edit, analyst, 200)
+	call("PATCH", "/api/nota/"+records.Rows[0].ID, origin, edit, analyst, 409)
+	call("GET", "/api/actividad?limite=0", "", "", reader, 400)
+	activity := call("GET", "/api/actividad?limite=1", "", "", reader, 200)
+	var history caso.AuditPage
+	if err := json.Unmarshal(activity.Body.Bytes(), &history); err != nil || len(history.Events) != 1 || history.Next != 2 {
+		t.Fatalf("página de actividad: %+v, %v", history, err)
+	}
+	updated := history.Events[0]
+	if updated.Action != caso.AuditEdit || updated.Actor != caso.SharedAnalyst || updated.Source != "sesion" ||
+		updated.Target != records.Rows[0].ID || updated.Details.Revision != 2 || strings.Contains(activity.Body.String(), "Actualización privada") {
+		t.Fatalf("evento web: %+v", updated)
+	}
+	earlier := call("GET", "/api/actividad?antes=2&limite=1", "", "", reader, 200)
+	if err := json.Unmarshal(earlier.Body.Bytes(), &history); err != nil || len(history.Events) != 1 || history.Events[0].Action != caso.AuditNote {
+		t.Fatalf("actividad anterior: %+v, %v", history, err)
 	}
 	call("POST", "/api/acceso/salir", origin, "", analyst, 204)
 	call("GET", "/api/app", "", "", analyst, 401)

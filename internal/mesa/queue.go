@@ -1,4 +1,4 @@
-package main
+package mesa
 
 import (
 	"encoding/json"
@@ -41,7 +41,7 @@ func analysisQueueRoutes(mux *http.ServeMux, store *caso.Store) {
 			queueError(w, err)
 			return
 		}
-		text, err := analysisJobText(job)
+		text, err := analisis.JobText(job)
 		if err != nil {
 			queueError(w, err)
 			return
@@ -56,17 +56,6 @@ func analysisQueueRoutes(mux *http.ServeMux, store *caso.Store) {
 		}
 		respond(w, job)
 	})
-}
-
-func analysisJobText(job caso.AnalysisJob) (string, error) {
-	if job.State != "succeeded" {
-		return "", nil
-	}
-	var report analisis.Report
-	if err := json.Unmarshal(job.Result, &report); err != nil {
-		return "", err
-	}
-	return report.Text(), nil
 }
 
 func replyJSON(w http.ResponseWriter, status int, data any) {

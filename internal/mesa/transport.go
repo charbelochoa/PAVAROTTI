@@ -1,4 +1,4 @@
-package main
+package mesa
 
 import (
 	"crypto/tls"
@@ -8,18 +8,17 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 )
 
-type sharedTransport struct {
-	address string
-	host    string
-	tls     *tls.Config
+type SharedTransport struct {
+	Address string
+	Host    string
+	TLS     *tls.Config
 }
 
-func prepareSharedTransport(enabled bool, address, origin, certificate, key string, uiPort, publishPort int, postgres, proxy bool) (*sharedTransport, error) {
+func PrepareSharedTransport(enabled bool, address, origin, certificate, key string, uiPort, publishPort int, postgres, proxy bool) (*SharedTransport, error) {
 	if !enabled {
 		if address != "" || origin != "" || certificate != "" || key != "" {
 			return nil, errors.New("las opciones HTTPS y de escucha requieren -compartido")
@@ -55,8 +54,8 @@ func prepareSharedTransport(enabled bool, address, origin, certificate, key stri
 	if err := pair.Leaf.VerifyHostname(hostname); err != nil {
 		return nil, fmt.Errorf("el certificado no corresponde al origen compartido: %w", err)
 	}
-	return &sharedTransport{address: address, host: publicHost,
-		tls: &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{pair}}}, nil
+	return &SharedTransport{Address: address, Host: publicHost,
+		TLS: &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{pair}}}, nil
 }
 
 func sharedOrigin(origin string) (string, string, error) {
@@ -80,15 +79,4 @@ func sharedOrigin(origin string) (string, string, error) {
 		}
 	}
 	return hostname, hostname, nil
-}
-
-func databasePassword() (string, error) {
-	value, path := os.Getenv("PAVAROTTI_DB_PASSWORD"), os.Getenv("PAVAROTTI_DB_PASSWORD_FILE")
-	if path == "" {
-		return value, nil
-	}
-	if value != "" || path == "-" {
-		return "", errors.New("configura la contraseña de PostgreSQL mediante una variable o un archivo de secretos")
-	}
-	return readSecret(path, nil, 4096)
 }

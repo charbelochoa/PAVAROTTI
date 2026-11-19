@@ -42,7 +42,7 @@ func (s *Store) ImportLocal(path string) (int, error) {
 		return 0, err
 	}
 	defer tx.Rollback()
-	count := 0
+	var imported AuditDetails
 	for _, entry := range entries {
 		key, isJSON := strings.CutSuffix(entry.Name(), ".json")
 		if !entry.Type().IsRegular() || !isJSON || !isBatchKey(key) {
@@ -61,7 +61,7 @@ func (s *Store) ImportLocal(path string) (int, error) {
 			return 0, err
 		}
 		if inserted {
-			count += len(batch)
+			imported.Count += len(batch)
 		}
 		for index, record := range batch {
 			if record.StaticReview() != nil {
@@ -70,8 +70,12 @@ func (s *Store) ImportLocal(path string) (int, error) {
 						return err
 					}
 					for _, item := range history {
-						if err := putCodeTriage(ctx, tx, s.expediente, key, index+1, item); err != nil {
+						added, err := putCodeTriage(ctx, tx, s.expediente, key, index+1, item)
+						if err != nil {
 							return err
+						}
+						if added {
+							imported.TriageRevisions++
 						}
 					}
 					return nil
@@ -91,16 +95,25 @@ func (s *Store) ImportLocal(path string) (int, error) {
 				if edited.ID != record.ID || edited.Kind != record.Kind || edited.Revision != offset+2 {
 					return 0, fmt.Errorf("historial inválido para %s", record.ID)
 				}
-				if err := putLocalEdit(ctx, tx, s.expediente, key, index+1, edited); err != nil {
+				added, err := putLocalEdit(ctx, tx, s.expediente, key, index+1, edited)
+				if err != nil {
 					return 0, err
 				}
+				if added {
+					imported.NoteRevisions++
+				}
 			}
+		}
+	}
+	if imported.Count+imported.NoteRevisions+imported.TriageRevisions > 0 {
+		if err := s.appendAudit(ctx, tx, AuditImport, "", imported); err != nil {
+			return 0, err
 		}
 	}
 	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
-	return count, nil
+	return imported.Count, nil
 }
 
 func putLocalBatch(ctx context.Context, tx *sql.Tx, expediente, key string, data []byte) (bool, error) {
@@ -126,31 +139,31 @@ func putLocalBatch(ctx context.Context, tx *sql.Tx, expediente, key string, data
 	return false, nil
 }
 
-func putLocalEdit(ctx context.Context, tx *sql.Tx, expediente, key string, ordinal int, edited Record) error {
+func putLocalEdit(ctx context.Context, tx *sql.Tx, expediente, key string, ordinal int, edited Record) (bool, error) {
 	snapshot, err := json.Marshal(edited)
 	if err != nil {
-		return err
+		return false, err
 	}
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO pavarotti_note_revisions (expediente, batch_key, ordinal, revision, snapshot)
 		VALUES ($1, $2, $3, $4, $5) ON CONFLICT (expediente, batch_key, ordinal, revision) DO NOTHING`,
 		expediente, key, ordinal, edited.Revision, snapshot)
 	if err != nil {
-		return err
+		return false, err
 	}
 	inserted, err := result.RowsAffected()
 	if err != nil || inserted > 0 {
-		return err
+		return inserted > 0, err
 	}
 	var same bool
 	if err := tx.QueryRowContext(ctx, `
 		SELECT snapshot = $5::jsonb FROM pavarotti_note_revisions
 		WHERE expediente = $1 AND batch_key = $2 AND ordinal = $3 AND revision = $4`,
 		expediente, key, ordinal, edited.Revision, snapshot).Scan(&same); err != nil {
-		return err
+		return false, err
 	}
 	if !same {
-		return fmt.Errorf("%s revisión %d: %w", edited.ID, edited.Revision, ErrMigrationConflict)
+		return false, fmt.Errorf("%s revisión %d: %w", edited.ID, edited.Revision, ErrMigrationConflict)
 	}
-	return nil
+	return false, nil
 }

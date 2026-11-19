@@ -1,4 +1,4 @@
-package main
+package terminal
 
 import (
 	"bytes"
@@ -24,7 +24,7 @@ func TestTerminalExpediente(t *testing.T) {
 	call := func(args ...string) string {
 		t.Helper()
 		var out, stderr bytes.Buffer
-		handled, err := terminal(args, &out, &stderr, open)
+		handled, err := Run(args, &out, &stderr, open)
 		if !handled || err != nil {
 			t.Fatalf("terminal %v: handled=%t err=%v stderr=%s", args, handled, err, stderr.String())
 		}
@@ -57,7 +57,7 @@ func TestTerminalArchivoExportadoNoSeSobrescribe(t *testing.T) {
 		t.Fatal(err)
 	}
 	open := func() (*caso.Store, error) { return caso.Open(filepath.Join(root, "expediente")) }
-	handled, err := terminal([]string{"exportar", "--salida", output}, &bytes.Buffer{}, &bytes.Buffer{}, open)
+	handled, err := Run([]string{"exportar", "--salida", output}, &bytes.Buffer{}, &bytes.Buffer{}, open)
 	if !handled || err == nil {
 		t.Fatalf("exportación sobre un archivo existente: handled=%t err=%v", handled, err)
 	}
@@ -73,7 +73,7 @@ func TestTerminalEditaConHistorial(t *testing.T) {
 	call := func(args ...string) (string, error) {
 		t.Helper()
 		var stdout, stderr bytes.Buffer
-		handled, err := terminal(args, &stdout, &stderr, open)
+		handled, err := Run(args, &stdout, &stderr, open)
 		if !handled {
 			t.Fatalf("comando sin registrar: %v", args)
 		}
