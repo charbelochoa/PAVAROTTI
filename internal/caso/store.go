@@ -70,7 +70,8 @@ type Store struct {
 	expediente string
 	batchDates localBatchDates
 	pageCache  localPageCache
-	searchWork postgresSearchWorker
+	searchWork postgresPageWorker
+	httpWork   postgresPageWorker
 }
 
 const operationTimeout = 15 * time.Second
@@ -89,6 +90,7 @@ func Hash(input []byte) string { return fmt.Sprintf("%x", sha256.Sum256(input)) 
 func (s *Store) Close() error {
 	if s.db != nil {
 		s.searchWork.stop()
+		s.httpWork.stop()
 		return s.db.Close()
 	}
 	return nil

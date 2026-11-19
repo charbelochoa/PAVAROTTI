@@ -134,7 +134,7 @@ func TestBackgroundSearchAllowsReadsDuringPreparation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer blocker.Rollback()
-	store.EnableBackgroundSearchPreparation()
+	store.EnableBackgroundPagePreparation()
 	query := PageRequest{Search: "búsqueda disponible"}
 	read, cancel := context.WithTimeout(ctx, 2*time.Second)
 	initial, err := store.Page(read, query)

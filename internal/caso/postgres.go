@@ -90,6 +90,9 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	if err := migrateSearchPage(ctx, tx); err != nil {
 		return err
 	}
+	if err := migrateDeferredProjections(ctx, tx); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 

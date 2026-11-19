@@ -5,7 +5,11 @@ import (
 	"database/sql"
 )
 
-const maxHTTPBackfillBatches = 256
+const (
+	maxHTTPBackfillBatches = 256
+	httpPagePending        = `SELECT EXISTS (
+		SELECT 1 FROM pavarotti_evidence_batches WHERE expediente = $1 AND NOT http_page_indexed)`
+)
 
 func migrateHTTPPageIndex(ctx context.Context, tx *sql.Tx) error {
 	var installed bool
@@ -84,8 +88,6 @@ func migrateHTTPPageIndex(ctx context.Context, tx *sql.Tx) error {
 }
 
 func (s *Store) prepareHTTPPageIndex(ctx context.Context) (bool, error) {
-	const pendingQuery = `SELECT EXISTS (
-		SELECT 1 FROM pavarotti_evidence_batches WHERE expediente = $1 AND NOT http_page_indexed)`
 	const backfill = `
 		SELECT pavarotti_store_http_page_batch(batch.expediente, batch.batch_key, batch.payload)
 		FROM (
@@ -96,7 +98,7 @@ func (s *Store) prepareHTTPPageIndex(ctx context.Context) (bool, error) {
 			LIMIT $2
 		) batch
 	`
-	return s.preparePageProjection(ctx, pendingQuery, backfill, maxHTTPBackfillBatches)
+	return s.preparePageProjection(ctx, httpPagePending, backfill, maxHTTPBackfillBatches)
 }
 
 func (s *Store) postgresIndexedHTTPPage(ctx context.Context, request PageRequest, after pageCursor, limit int) ([]RecordRow, error) {

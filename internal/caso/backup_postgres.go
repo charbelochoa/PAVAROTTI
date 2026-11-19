@@ -147,6 +147,9 @@ func (s *Store) RestoreCase(ctx context.Context, source io.Reader) (BackupSummar
 	if occupied {
 		return BackupSummary{}, ErrBackupDestination
 	}
+	if _, err := tx.ExecContext(ctx, `SELECT set_config('pavarotti.restoring_case', $1, true)`, s.expediente); err != nil {
+		return BackupSummary{}, err
+	}
 	batch := restoreBatch{ctx: ctx, tx: tx, caseName: s.expediente}
 	summary, err := reader.readRows(ctx, batch.add)
 	if err != nil {
