@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestWatchlistsKeepConcurrentChanges(t *testing.T) {
@@ -145,6 +146,33 @@ func TestWatchlistMigrationAndBackup(t *testing.T) {
 	item, err := restored.Watchlist(ctx, list)
 	if err != nil || !reflect.DeepEqual(item.Assets, []Indicator{asset}) {
 		t.Fatalf("activos restaurados: %+v, %v", item, err)
+	}
+}
+
+func TestWatchlistArchiveRejectsInvalidState(t *testing.T) {
+	for _, state := range []string{
+		"{}",
+		`{"Guardia":null}`,
+		`{"Guardia":[{"type":"ipv4","value":"192.0.2.8"},{"type":"ipv4","value":"192.0.2.8"}]}`,
+		`{"con/barra":[]}`,
+		`{"Guardia":[{"type":"desconocido","value":"host.invalid"}]}`,
+	} {
+		var archive bytes.Buffer
+		header := BackupManifest{Format: caseBackupFormat, Version: 2, SourceCase: "guardia", CreatedAt: time.Unix(1, 0).UTC()}
+		if err := encodeBackupFrame(&archive, "header", header); err != nil {
+			t.Fatal(err)
+		}
+		if err := writeBackupFrame(&archive, backupWatchlists, []byte(`{"state":`+state+`}`)); err != nil {
+			t.Fatal(err)
+		}
+		counts := newBackupCounts(backupTables(2))
+		counts[backupWatchlists] = 1
+		if err := encodeBackupFrame(&archive, "end", backupFooter{SHA256: Hash(archive.Bytes()), Rows: counts}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := InspectCaseBackup(t.Context(), &archive); !errors.Is(err, ErrBackupIntegrity) {
+			t.Fatalf("estado %s: %v", state, err)
+		}
 	}
 }
 
