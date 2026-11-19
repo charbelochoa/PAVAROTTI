@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: pavarotti
+      POSTGRES_USER: pavarotti
+      POSTGRES_PASSWORD: ${PAVAROTTI_DB_PASSWORD:?Define PAVAROTTI_DB_PASSWORD en .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "pavarotti", "-d", "pavarotti"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+  app:
+    build: .
+    command: ["-sin-navegador", "-puerto-app", "8080", "-publicar-local", "${PAVAROTTI_WEB_PORT:-8080}"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PAVAROTTI_POSTGRES: "postgres://pavarotti@postgres/pavarotti?sslmode=disable"
+      PAVAROTTI_DB_PASSWORD: ${PAVAROTTI_DB_PASSWORD:?Define PAVAROTTI_DB_PASSWORD en .env}
+    ports:
+      - "127.0.0.1:${PAVAROTTI_WEB_PORT:-8080}:8080"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--header", "Host: 127.0.0.1:${PAVAROTTI_WEB_PORT:-8080}", "-O", "/dev/null", "http://127.0.0.1:8080/api/app"]
+      interval: 4s
+      timeout: 3s
+      retries: 15
+volumes:
+  postgres-data:
