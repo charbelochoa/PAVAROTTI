@@ -9,21 +9,24 @@ import (
 )
 
 type exportedFinding struct {
-	ID           json.RawMessage `json:"id"`
-	FindingID    json.RawMessage `json:"finding_id"`
-	Name         string          `json:"name"`
-	Class        string          `json:"vulnclass"`
-	Severity     string          `json:"severity"`
-	Status       string          `json:"status"`
-	Verification string          `json:"verification_status"`
-	VerifyNote   string          `json:"verification_note"`
-	Reason       string          `json:"confidence_rationale"`
-	Counter      string          `json:"counterevidence"`
-	Summary      string          `json:"summary"`
-	Evidence     string          `json:"evidence"`
-	Report       string          `json:"report"`
-	Timestamp    string          `json:"ts"`
-	Assets       []struct {
+	ID                    json.RawMessage `json:"id"`
+	FindingID             json.RawMessage `json:"finding_id"`
+	Name                  string          `json:"name"`
+	Class                 string          `json:"vulnclass"`
+	Severity              string          `json:"severity"`
+	Status                string          `json:"status"`
+	Verification          string          `json:"verification_status"`
+	VerifyNote            string          `json:"verification_note"`
+	Reason                string          `json:"confidence_rationale"`
+	Counter               string          `json:"counterevidence"`
+	Summary               string          `json:"summary"`
+	Evidence              string          `json:"evidence"`
+	Report                string          `json:"report"`
+	EvidenceVersion       *int64          `json:"evidence_version"`
+	ReportEvidenceVersion *int64          `json:"report_evidence_version"`
+	ReportStale           bool            `json:"report_stale"`
+	Timestamp             string          `json:"ts"`
+	Assets                []struct {
 		Label string `json:"label"`
 	} `json:"assets"`
 }
@@ -58,11 +61,16 @@ func Findings(data []byte) ([]Record, error) {
 			}
 		}
 		var details []string
+		reportLabel := "Informe"
+		if item.ReportStale || (item.EvidenceVersion != nil && item.ReportEvidenceVersion != nil &&
+			*item.EvidenceVersion != *item.ReportEvidenceVersion) {
+			reportLabel = "Informe anterior a la versión de evidencia"
+		}
 		for _, field := range []struct{ title, value string }{
 			{"Severidad", item.Severity}, {"Estado", item.Status}, {"Verificación declarada", item.Verification},
 			{"Fecha de origen", item.Timestamp}, {"Activos", strings.Join(assets, ", ")},
 			{"Resumen", item.Summary}, {"Evidencia", item.Evidence}, {"Nota de verificación", item.VerifyNote},
-			{"Fundamento", item.Reason}, {"Contraevidencia", item.Counter}, {"Informe", item.Report},
+			{"Fundamento", item.Reason}, {"Contraevidencia", item.Counter}, {reportLabel, item.Report},
 		} {
 			if value := strings.TrimSpace(field.value); value != "" {
 				details = append(details, field.title+"\n"+value)

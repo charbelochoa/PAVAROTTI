@@ -15,12 +15,18 @@ type Binary struct {
 	Architecture string    `json:"architecture,omitempty"`
 	Size         int       `json:"size"`
 	Sections     []Section `json:"sections"`
+	Strings      []TextHit `json:"strings,omitempty"`
 }
 
 type Section struct {
 	Name    string `json:"name"`
 	Address string `json:"address"`
 	Size    uint64 `json:"size"`
+}
+
+type TextHit struct {
+	Offset string `json:"offset"`
+	Text   string `json:"text"`
 }
 
 func Inspect(data []byte) Binary {
@@ -50,7 +56,34 @@ func Inspect(data []byte) Binary {
 			}
 		}
 	}
+	result.Strings = printableStrings(data)
 	return result
+}
+
+func printableStrings(data []byte) []TextHit {
+	const minimum = 8
+	const limit = 128
+	const preview = 160
+	var hits []TextHit
+	for offset := 0; offset < len(data) && len(hits) < limit; {
+		if !ascii(data[offset]) {
+			offset++
+			continue
+		}
+		start := offset
+		for offset < len(data) && ascii(data[offset]) {
+			offset++
+		}
+		if offset-start >= minimum {
+			hits = append(hits, TextHit{Offset: fmt.Sprintf("0x%x", start),
+				Text: string(data[start:min(offset, start+preview)])})
+		}
+	}
+	return hits
+}
+
+func ascii(value byte) bool {
+	return value >= ' ' && value <= '~' || value == '\r' || value == '\n' || value == '\t'
 }
 
 func (b *Binary) add(name string, address, size uint64) {

@@ -2,12 +2,12 @@
   {
     "name": "Ghidra",
     "url": "https://github.com/NationalSecurityAgency/ghidra",
-    "detail": "Referencia de triaje de binarios. Proyecto de la National Security Agency."
+    "detail": "Reconocimiento ASCII adaptado de AsciiCharSetRecognizer.java, National Security Agency, Apache-2.0."
   },
   {
     "name": "ARTEX",
     "url": "https://github.com/BaaRai/ARTEX",
-    "detail": "Referencia del formato de intercambio de hallazgos. Autumn-27 y BaaRai."
+    "detail": "Compatibilidad con el formato de intercambio y versión de evidencia. Autumn-27 y BaaRai."
   },
   {
     "name": "ZAP",

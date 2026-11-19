@@ -4,3 +4,9 @@ StatsPassiveScanner.java under Apache License 2.0. It records a bounded latency
 bucket and drops every MIME parameter before retaining the content type.
 
 https://github.com/zaproxy/zaproxy/blob/3c8eac30cda790ba5ec6644c70c2c4225d0fb94d/zap/src/main/java/org/zaproxy/zap/extension/pscan/scanner/StatsPassiveScanner.java
+
+Ghidra, National Security Agency, Apache License 2.0.
+internal/triaje/binary.go ports the ASCII character predicate in
+AsciiCharSetRecognizer.java and applies it to bounded previews of local files.
+
+https://github.com/NationalSecurityAgency/ghidra/blob/8ca9077040cc43cd790babcfccf19475622a3e9a/Ghidra/Features/Base/src/main/java/ghidra/util/ascii/AsciiCharSetRecognizer.java
