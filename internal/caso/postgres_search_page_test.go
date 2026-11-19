@@ -115,15 +115,19 @@ func TestPostgresSearchCompletesLargeBatchInParts(t *testing.T) {
 	}
 }
 
-func TestBackgroundSearchAllowsReadsDuringPreparation(t *testing.T) {
+func TestBackgroundPagesAllowReadsDuringPreparation(t *testing.T) {
 	store := openAuditTest(t)
 	ctx := t.Context()
-	if err := store.Save([]Record{{Kind: "nota", Title: "Búsqueda disponible", Details: "Versión inicial", Time: Now()}}); err != nil {
+	if err := store.Save([]Record{
+		{Kind: "nota", Title: "Búsqueda disponible", Details: "Versión inicial", Time: Now()},
+		{Kind: "archivo HAR", Title: "HTTP disponible", Traffic: &Traffic{Status: 204}, Time: Now()},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	for _, statement := range []string{
 		"DELETE FROM pavarotti_search_page WHERE expediente = $1",
-		"UPDATE pavarotti_evidence_batches SET search_page_indexed = false, search_page_position = 1 WHERE expediente = $1",
+		"DELETE FROM pavarotti_http_page WHERE expediente = $1",
+		"UPDATE pavarotti_evidence_batches SET search_page_indexed = false, search_page_position = 1, http_page_indexed = false WHERE expediente = $1",
 	} {
 		if _, err := store.db.ExecContext(ctx, statement, store.expediente); err != nil {
 			t.Fatal(err)
@@ -138,9 +142,14 @@ func TestBackgroundSearchAllowsReadsDuringPreparation(t *testing.T) {
 	query := PageRequest{Search: "búsqueda disponible"}
 	read, cancel := context.WithTimeout(ctx, 2*time.Second)
 	initial, err := store.Page(read, query)
-	cancel()
+	defer cancel()
 	if err != nil || len(initial.Rows) != 1 {
 		t.Fatalf("búsqueda con la preparación bloqueada: %+v, %v", initial, err)
+	}
+	historyQuery := PageRequest{Kind: "http"}
+	history, err := store.Page(read, historyQuery)
+	if err != nil || len(history.Rows) != 1 {
+		t.Fatalf("historial con la preparación bloqueada: %+v, %v", history, err)
 	}
 	if err := blocker.Rollback(); err != nil {
 		t.Fatal(err)
@@ -151,7 +160,9 @@ func TestBackgroundSearchAllowsReadsDuringPreparation(t *testing.T) {
 	defer ticker.Stop()
 	for {
 		var pending bool
-		if err := store.db.QueryRowContext(wait, searchPagePending, store.expediente).Scan(&pending); err != nil {
+		if err := store.db.QueryRowContext(wait, `SELECT EXISTS (
+			SELECT 1 FROM pavarotti_evidence_batches WHERE expediente = $1 AND (NOT http_page_indexed OR NOT search_page_indexed))`,
+			store.expediente).Scan(&pending); err != nil {
 			t.Fatal(err)
 		}
 		if !pending {
@@ -166,5 +177,9 @@ func TestBackgroundSearchAllowsReadsDuringPreparation(t *testing.T) {
 	indexed, err := store.Page(ctx, query)
 	if err != nil || !reflect.DeepEqual(indexed, initial) {
 		t.Fatalf("búsqueda al terminar la preparación: %+v, %v", indexed, err)
+	}
+	indexed, err = store.Page(ctx, historyQuery)
+	if err != nil || !reflect.DeepEqual(indexed, history) {
+		t.Fatalf("historial al terminar la preparación: %+v, %v", indexed, err)
 	}
 }
