@@ -33,12 +33,17 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 		)
 		SELECT id, kind, time, left(COALESCE(current_record->>'title', ''), 240),
 		       left(COALESCE(current_record->>'source', ''), 360),
+		       CASE WHEN kind = 'binario' THEN left(COALESCE(current_record->>'source_id', ''), 160) ELSE '' END,
 		       CASE WHEN $2 = 'http' THEN current_record->'traffic' END,
 		       CASE WHEN $2 = 'http' AND jsonb_typeof(current_record->'signals') = 'array'
 		            THEN jsonb_array_length(current_record->'signals') ELSE 0 END
 		FROM evidence
 		WHERE ($3 = '' OR (stamp, id COLLATE "C") < ($4::text COLLATE "C", $3::text COLLATE "C"))
 		  AND ($7::integer = 0 OR left(current_record->'traffic'->>'status', 1) = $7::integer::text)
+		  AND ($8 = '' OR kind = $8)
+		  AND ($9 = '' OR current_record->'traffic'->>'method' = $9)
+		  AND ($10 = '' OR left(time, 10) COLLATE "C" >= $10)
+		  AND ($11 = '' OR (length(time) >= 10 AND left(time, 10) COLLATE "C" <= $11))
 		  AND ($5 = '' OR strpos(translate(lower(concat_ws(chr(31),
 		       id, kind, time, current_record->>'title', current_record->>'source',
 		       current_record->>'source_id', current_record->>'sha256', current_record->>'details',
@@ -55,7 +60,8 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 			      strpos(lower(COALESCE(item->'replacement'->>'version', '')), $5) > 0
 		  ))
 		ORDER BY stamp DESC, id COLLATE "C" DESC LIMIT $6
-	`, s.expediente, request.Kind, after.ID, after.Stamp, strings.ToLower(request.Search), limit, request.HTTPClass)
+	`, s.expediente, request.Kind, after.ID, after.Stamp, strings.ToLower(request.Search), limit,
+		request.HTTPClass, request.HTTPSource, request.HTTPMethod, request.HTTPFrom, request.HTTPTo)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +70,7 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 	for result.Next() {
 		var row RecordRow
 		var traffic []byte
-		if err := result.Scan(&row.ID, &row.Kind, &row.Time, &row.Title, &row.Source, &traffic, &row.SignalCount); err != nil {
+		if err := result.Scan(&row.ID, &row.Kind, &row.Time, &row.Title, &row.Source, &row.SourceID, &traffic, &row.SignalCount); err != nil {
 			return nil, err
 		}
 		if len(traffic) != 0 {

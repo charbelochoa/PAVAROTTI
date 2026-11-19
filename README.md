@@ -26,11 +26,11 @@ La mesa de trabajo mantiene el expediente a la izquierda, los registros al centr
 
 Usa **Anterior** y **Siguiente** para recorrer los resultados de 50 en 50. La búsqueda y el filtro se aplican al expediente completo. El inspector carga los detalles al seleccionar un registro y los mantiene visibles al cambiar de página.
 
-**Historial HTTP** reúne el proxy y los archivos HAR. Muestra método, estado, origen, tipo MIME, latencia y número de señales. Filtra por clase de respuesta y selecciona una fila para examinar sus señales sin salir de la mesa de trabajo.
+**Historial HTTP** reúne el proxy y los archivos HAR. Muestra método, estado, fecha, origen, tipo MIME, latencia y número de señales. Combina filtros por captura, método, clase de respuesta y fechas UTC. Selecciona una fila para examinar su evidencia y las señales asociadas sin salir de la mesa de trabajo.
 
 - **Tráfico.** Proxy inverso HTTP(S) de un solo destino e importación de HAR. El expediente registra origen, estado HTTP, tipo MIME, latencia y señales de configuración. Las señales sirven para priorizar la revisión manual.
 - **Evidencia.** Importación de hallazgos JSON con huella SHA-256 del archivo y búsqueda por texto, origen, ID o huella. También puedes registrar notas manuales.
-- **Binarios.** Triaje estático de cabeceras y secciones PE, ELF y Mach-O con SHA-256.
+- **Binarios.** Triaje estático de cabeceras PE, ELF y Mach-O. Consulta hasta 256 secciones y 128 vistas previas de cadenas ASCII por archivo. Examina los desplazamientos de las secciones respaldadas por el archivo y cruza la huella SHA-256 con el inventario de activos.
 - **Indicadores.** Importa dominios, direcciones IP y huellas desde un archivo de texto, un valor por línea. El informe correlaciona dominios e IP con los activos que ya constan en el expediente y cita los registros que justifican cada coincidencia.
 - **DNS.** Carga una respuesta DNS en JSON o un arreglo de respuestas con `Status`, `Question` y `Answer`. La vista **DNS** conserva valores, TTL, respuestas negativas y huella del archivo. Los destinos de A, AAAA, CNAME, NS, PTR, MX y SRV entran en el inventario de activos del expediente.
 - **RDAP.** Importa archivos JSON de dominio, resultados de búsqueda de dominios y rangos IP. El inspector conserva la posición en el archivo, su huella, servidores de nombre, estados y fechas del registro. La importación omite las fichas de contacto y los enlaces del archivo.
@@ -90,6 +90,27 @@ Usa `editar --id ID --revision N --texto "Nueva observación"` con el ID y la re
 ## PostgreSQL y Docker
 
 El ejecutable usa almacenamiento local por defecto. Para compartir un expediente entre la interfaz y el CLI, configura `PAVAROTTI_POSTGRES` con la URL de conexión o pasa `-postgres`. Ambos leen y guardan los mismos registros cuando usan la misma base de datos y el mismo nombre en `-expediente`. El usuario de PostgreSQL necesita permisos de creación de tablas para inicializar el esquema.
+
+### Acceso al expediente por HTTPS
+
+Con PostgreSQL, un operador puede crear cuentas desde la terminal. `lector` consulta evidencia, historial e informes y exporta STIX. `analista` también incorpora archivos, registra notas, clasifica señales y gestiona tareas. La cuenta pertenece al expediente indicado en `-expediente`. Cambiar el rol o la contraseña cierra las sesiones vigentes de esa cuenta.
+
+```sh
+pavarotti -expediente incidente-01 usuarios guardar --nombre investigacion --rol analista --clave-archivo /ruta/privada/clave
+pavarotti -expediente incidente-01 usuarios listar
+pavarotti -expediente incidente-01 usuarios rol --nombre investigacion --rol lector
+pavarotti -expediente incidente-01 usuarios revocar --nombre investigacion
+```
+
+Configura `PAVAROTTI_POSTGRES` con la URL de PostgreSQL. Para leer su contraseña desde un archivo, indica `PAVAROTTI_DB_PASSWORD_FILE` con la ruta y usa una URL de conexión con el nombre de usuario. Inicia el servidor con un certificado válido para el host indicado en `-origen-publico`. La escucha se queda en `127.0.0.1` salvo que inicies con `-escuchar` y una dirección IPv4 explícita.
+
+```sh
+pavarotti servir -expediente incidente-01 -compartido -sin-navegador \
+  -puerto-app 8443 -origen-publico https://127.0.0.1:8443 \
+  -tls-certificado /ruta/certificado.pem -tls-clave /ruta/privada/tls.key
+```
+
+Ejecuta el proxy inverso en una instancia local. El acceso directo a PostgreSQL y los comandos de administración quedan a cargo del operador.
 
 Con la conexión configurada, usa `pavarotti -expediente guardia migrar-local ./expediente` para copiar los registros y el historial local a PostgreSQL con los mismos IDs. Repetir la operación evita duplicados. Si el destino tiene una versión distinta del mismo registro, la transacción se cancela.
 

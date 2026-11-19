@@ -21,9 +21,9 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | Configuración | Cobertura mínima |
 | --- | --- |
 | Windows x64 y Linux x86-64 con almacén local | Arranque del binario, CLI, importación, análisis, edición y persistencia después de cerrar y abrir. Ejecutar el flujo RDAP y STIX con cruces de SHA-256 y red y reimportar el paquete exportado dentro de Kali y Arch en CI. |
-| PostgreSQL | Inicio de esquema, credenciales inválidas, aislamiento por expediente, edición concurrente, migración idempotente e historial. |
+| PostgreSQL | Inicio de esquema, credenciales inválidas, aislamiento por expediente, edición concurrente, migración idempotente, historial, vencimiento y revocación de sesiones. |
 | Docker Compose | Puerto alterno en loopback, espera de salud, registro por CLI y persistencia después de reiniciar. |
-| Proxy y HAR | Destino fijo local, redirecciones, captura de metadatos, protección de datos sensibles y distinción entre fallo de conexión y señales de cabeceras. |
+| Proxy y HAR | Destino fijo local, redirecciones, filtros combinados de captura, método, fecha y clase de respuesta, y distinción entre fallo de conexión y señales de cabeceras. |
 | Navegador | Selección e inspector, búsqueda, historial, carga de informes y uso con ancho móvil. Abrir una cita de un informe guardado tras editar la evidencia y comprobar su revisión. Desde una ficha de activo, abrir fuentes DNS, HTTP, RDAP y STIX. |
 | Revisión estática y dependencias | Localizar Go por línea y columna físicas. Consultar dependencias por versión y posición. Revisar un directorio, abrir la cita y conservar dos decisiones de triaje tras reiniciar y migrar a PostgreSQL. |
 
@@ -36,7 +36,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 - El primer chequeo de persistencia de Compose falló en CI después del reinicio. La verificación ahora espera a la aplicación y compara JSON estructurado.
 - La revisión de dependencias encontró avisos para el controlador de PostgreSQL y dos módulos de Go. Se actualizó a versiones con las correcciones y se fijó Go 1.26.11 en la compilación de CI y Docker.
 - El análisis admite hasta 10,000 registros por ejecución. Desde 0.3.1, el panel consulta 50 registros por página y carga la evidencia completa al seleccionarla. PostgreSQL filtra antes de entregar resultados. El almacén local recorre los lotes y mantiene en memoria la página candidata. Ambos almacenes aún recorren los datos para responder búsquedas amplias.
-- La aplicación aún funciona como estación local. Para uso compartido quedan pendientes los controles de acceso y la auditoría descritos en el hito 6.
+- La configuración compartida de 0.4.0 usa PostgreSQL y HTTPS. Añade cuentas de lectura y análisis por expediente. Quedan pendientes la auditoría operativa, la retención y la restauración descritas en el hito 6.
 
 ## Orden de implementación
 
@@ -49,8 +49,9 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 7. **Intercambio STIX.** 0.3.7 exporta observaciones, huellas, indicadores y relaciones compatibles con citas al ID, revisión y huella del expediente de origen. La prueba reimporta el paquete en otro expediente y vuelve a cargar el mismo archivo para comprobar la deduplicación. La exportación admite hasta 5,000 objetos y 32 MiB. La terminal puede acotar por tipo o búsqueda.
 8. **Revisión estática e inventario.** 0.3.8 amplía la revisión Go y lee `go.mod` y `package-lock.json` v2 y v3. Guarda reglas, líneas, columnas, versiones declaradas, reemplazos y huellas. Los informes del agente 3 abren la señal o dependencia citada. La prueba comprueba la recuperación de tareas pendientes del agente 2 y los límites de 250 señales guardadas y 5,000 entradas de manifiesto.
 9. **Flujo de revisión humana.** 0.3.9 revisa directorios desde la mesa y el CLI, conserva las rutas relativas y presenta el resultado de cada archivo. Guarda el estado, fecha y justificación de cada señal con revisiones de triaje. Las pruebas verifican la recuperación tras reiniciar, la migración a PostgreSQL y el rechazo de escrituras con una revisión obsoleta.
-10. **Operación compartida.** Añadir autenticación, permisos, auditoría y restauración antes de abrir el acceso a otros equipos.
-11. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
+10. **Mesa de investigación compartida.** 0.4.0 añade acceso HTTPS con roles por expediente, filtros combinados sobre el historial HTTP y un inspector de binarios que abre cadenas desde una sección y conecta la huella con los activos. La prueba comprueba cada flujo desde el navegador con un lector y un analista.
+11. **Auditoría y restauración.** Asociar cada cambio a un operador, aplicar la retención acordada, restaurar una copia a una base nueva y comprobar las referencias entre registros, revisiones y tareas.
+12. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
 
 ## Flujo de trabajo OSINT
 
@@ -64,8 +65,8 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | Vista | Trabajo pendiente | Criterio de cierre |
 | --- | --- | --- |
 | Activos y fuentes | Mostrar desde una red las IP que ya tienen observaciones en el expediente | Abrir la revisión exacta de una observación de IP desde la ficha de red y comprobar su procedencia. |
-| Triaje de binarios | Navegar secciones, cadenas, símbolos disponibles y metadatos con referencias a desplazamientos. Enlazar una observación del binario con indicadores del expediente | Abrir una muestra de prueba, comparar los datos con su archivo y exportar referencias reproducibles por huella y desplazamiento. |
-| Historial HTTP | Añadir filtros por origen, método y periodo. Mostrar el motivo de cada señal desde la fila y enlazarla al registro que usó el informe | Reproducir con HAR y proxy local un caso con respuestas de varias clases y confirmar que cada señal apunta a su evidencia. |
+| Triaje de binarios | Incorporar símbolos disponibles y citas exportables por huella y desplazamiento | Abrir una muestra de prueba, comparar secciones, cadenas y símbolos con su archivo y volver a los desplazamientos citados. |
+| Historial HTTP | Comparar periodos y conservar los criterios de revisión con el informe | Reproducir con HAR y proxy local un caso con varias clases de respuesta y abrir desde el informe los registros que justifican cada señal. |
 
 ## Ramas y commits
 

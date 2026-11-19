@@ -6,9 +6,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const DefaultPageSize = 50
@@ -16,11 +18,15 @@ const DefaultPageSize = 50
 var ErrInvalidPage = errors.New("paginación inválida")
 
 type PageRequest struct {
-	Limit     int
-	Kind      string
-	Search    string
-	After     string
-	HTTPClass int
+	Limit      int
+	Kind       string
+	Search     string
+	After      string
+	HTTPClass  int
+	HTTPSource string
+	HTTPMethod string
+	HTTPFrom   string
+	HTTPTo     string
 }
 
 type RecordRow struct {
@@ -29,6 +35,7 @@ type RecordRow struct {
 	Time        string   `json:"time"`
 	Title       string   `json:"title"`
 	Source      string   `json:"source,omitempty"`
+	SourceID    string   `json:"source_id,omitempty"`
 	Traffic     *Traffic `json:"traffic,omitempty"`
 	SignalCount int      `json:"signal_count,omitempty"`
 }
@@ -49,9 +56,11 @@ func (s *Store) Page(ctx context.Context, request PageRequest) (Page, error) {
 	}
 	request.Search = strings.TrimSpace(request.Search)
 	if request.Limit < 1 || request.Limit > 100 || len(request.Search) > 1024 || len(request.Kind) > 64 ||
-		strings.ContainsRune(request.Search, 0) || strings.ContainsRune(request.Kind, 0) ||
-		(request.HTTPClass != 0 && (request.Kind != "http" || request.HTTPClass < 1 || request.HTTPClass > 5)) {
+		strings.ContainsRune(request.Search, 0) || strings.ContainsRune(request.Kind, 0) {
 		return Page{}, ErrInvalidPage
+	}
+	if err := request.validateTraffic(); err != nil {
+		return Page{}, err
 	}
 	after, err := decodeCursor(request.After)
 	if err != nil {
@@ -76,6 +85,39 @@ func (s *Store) Page(ctx context.Context, request PageRequest) (Page, error) {
 		page.Next = base64.RawURLEncoding.EncodeToString(value)
 	}
 	return page, nil
+}
+
+func (request PageRequest) validateTraffic() error {
+	if request.Kind != "http" {
+		if request.HTTPClass != 0 || request.HTTPSource != "" || request.HTTPMethod != "" || request.HTTPFrom != "" || request.HTTPTo != "" {
+			return ErrInvalidPage
+		}
+		return nil
+	}
+	if request.HTTPClass < 0 || request.HTTPClass > 5 {
+		return ErrInvalidPage
+	}
+	switch request.HTTPSource {
+	case "", "tráfico", "archivo HAR":
+	default:
+		return fmt.Errorf("%w: origen de captura HTTP desconocido", ErrInvalidPage)
+	}
+	switch request.HTTPMethod {
+	case "", "GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "OTRO":
+	default:
+		return fmt.Errorf("%w: método HTTP desconocido", ErrInvalidPage)
+	}
+	for _, date := range []string{request.HTTPFrom, request.HTTPTo} {
+		if date != "" {
+			if day, err := time.Parse(time.DateOnly, date); err != nil || day.Year() < 1 || day.Format(time.DateOnly) != date {
+				return fmt.Errorf("%w: indica las fechas en formato AAAA-MM-DD", ErrInvalidPage)
+			}
+		}
+	}
+	if request.HTTPTo != "" && request.HTTPFrom > request.HTTPTo {
+		return fmt.Errorf("%w: la fecha final precede a la inicial", ErrInvalidPage)
+	}
+	return nil
 }
 
 func decodeCursor(raw string) (pageCursor, error) {
@@ -110,6 +152,9 @@ func (s *Store) localPage(ctx context.Context, request PageRequest, after pageCu
 		}
 		row := RecordRow{ID: record.ID, Kind: record.Kind, Time: record.Time,
 			Title: clipRow(record.Title, 240), Source: clipRow(record.Source, 360)}
+		if record.Kind == "binario" {
+			row.SourceID = clipRow(record.SourceID, 160)
+		}
 		if request.Kind == "http" {
 			row.Traffic, row.SignalCount = record.Traffic, len(record.Signals)
 		}
@@ -127,7 +172,14 @@ func (s *Store) localPage(ctx context.Context, request PageRequest, after pageCu
 
 func matchesView(record Record, request PageRequest) bool {
 	if request.Kind == "http" {
-		return record.Traffic != nil && (request.HTTPClass == 0 || record.Traffic.Status/100 == request.HTTPClass)
+		if record.Traffic == nil || (request.HTTPClass != 0 && record.Traffic.Status/100 != request.HTTPClass) ||
+			(request.HTTPSource != "" && record.Kind != request.HTTPSource) ||
+			(request.HTTPMethod != "" && record.Traffic.Method != request.HTTPMethod) {
+			return false
+		}
+		date := record.Time[:min(len(record.Time), len(time.DateOnly))]
+		return (request.HTTPFrom == "" || date >= request.HTTPFrom) &&
+			(request.HTTPTo == "" || (len(date) == len(time.DateOnly) && date <= request.HTTPTo))
 	}
 	return request.Kind == "" || request.Kind == record.Kind
 }

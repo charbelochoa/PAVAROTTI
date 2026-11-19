@@ -23,7 +23,7 @@ import (
 	"pavarotti/internal/trafico"
 )
 
-const version = "0.3.9"
+const version = "0.4.0"
 
 func main() {
 	directory := flag.String("datos", "", "carpeta del expediente local")
@@ -35,6 +35,11 @@ func main() {
 	uiPort := flag.Int("puerto-app", 0, "puerto local de la interfaz")
 	noBrowser := flag.Bool("sin-navegador", false, "muestra la URL local en la terminal")
 	noWorker := flag.Bool("sin-ejecutor", false, "separa el servidor web del ejecutor de análisis")
+	shared := flag.Bool("compartido", false, "habilita cuentas y permisos del expediente por HTTPS")
+	webBind := flag.String("escuchar", "", "dirección IPv4 para el modo compartido")
+	public := flag.String("origen-publico", "", "URL HTTPS externa del modo compartido")
+	certificate := flag.String("tls-certificado", "", "archivo PEM del certificado TLS")
+	certificateKey := flag.String("tls-clave", "", "archivo PEM de la clave TLS")
 	showVersion := flag.Bool("version", false, "muestra la versión")
 	args := os.Args[1:]
 	if len(args) > 0 && args[0] == "servir" {
@@ -49,7 +54,11 @@ func main() {
 	}
 	openStore := func() (*caso.Store, error) {
 		if *postgres != "" {
-			dsn, err := databaseURL(*postgres, os.Getenv("PAVAROTTI_DB_PASSWORD"))
+			password, err := databasePassword()
+			if err != nil {
+				return nil, err
+			}
+			dsn, err := databaseURL(*postgres, password)
 			if err != nil {
 				return nil, err
 			}
@@ -78,11 +87,15 @@ func main() {
 	} else if len(args) > 1 {
 		log.Fatal("coloca las opciones de servir antes del comando")
 	}
+	transport, err := prepareSharedTransport(*shared, *webBind, *public, *certificate, *certificateKey, *uiPort, *publishPort, *postgres != "", *upstream != "")
+	if err != nil {
+		log.Fatal(err)
+	}
 	store, err := openStore()
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = run(store, *upstream, *uiPort, *proxyPort, *publishPort, !*noBrowser, !*noWorker)
+	err = run(store, *upstream, *uiPort, *proxyPort, *publishPort, !*noBrowser, !*noWorker, transport)
 	if err := errors.Join(err, store.Close()); err != nil {
 		log.Fatal(err)
 	}
@@ -101,7 +114,7 @@ func databaseURL(dsn, password string) (string, error) {
 	return parsed.String(), nil
 }
 
-func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int, browser, worker bool) error {
+func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int, browser, worker bool, shared *sharedTransport) error {
 	var target *url.URL
 	if upstream != "" {
 		var err error
@@ -117,6 +130,9 @@ func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int,
 		}
 		bind = "0.0.0.0"
 	}
+	if shared != nil {
+		bind = shared.address
+	}
 	app, err := listen(bind, uiPort)
 	if err != nil {
 		return err
@@ -127,6 +143,11 @@ func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int,
 		appAddress = net.JoinHostPort("127.0.0.1", strconv.Itoa(publishPort))
 	}
 	config := settings{Version: version, AnalysisQueue: store.HasAnalysisQueue()}
+	scheme := "http://"
+	if shared != nil {
+		appAddress, scheme = shared.host, "https://"
+		config.Shared, config.Case = true, store.SharedCase()
+	}
 	servers := make(map[net.Listener]*http.Server)
 	if target != nil {
 		proxy, err := listen("127.0.0.1", proxyPort)
@@ -142,6 +163,11 @@ func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int,
 		servers[proxy] = newServer(trafico.Reverse(target, proxyAddress, store))
 	}
 	servers[app] = newServer(dashboard(appAddress, config, store))
+	if shared != nil {
+		servers[app].TLSConfig = shared.tls
+		servers[app].ReadTimeout = 2 * time.Minute
+		servers[app].WriteTimeout = 2 * time.Minute
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if worker && config.AnalysisQueue {
@@ -159,9 +185,15 @@ func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int,
 	}
 	completed := make(chan error, len(servers))
 	for listener, server := range servers {
-		go func() { completed <- server.Serve(listener) }()
+		go func() {
+			if server.TLSConfig != nil {
+				completed <- server.ServeTLS(listener, "", "")
+				return
+			}
+			completed <- server.Serve(listener)
+		}()
 	}
-	localURL := "http://" + appAddress
+	localURL := scheme + appAddress
 	fmt.Println("PAVAROTTI", localURL)
 	if config.Proxy != "" {
 		fmt.Println("Proxy", config.Proxy, "→", config.Target)

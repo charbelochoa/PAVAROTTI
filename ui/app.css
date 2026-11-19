@@ -22,13 +22,20 @@ a { color: var(--accent); }
 main { display: grid; grid-template-columns: minmax(210px, 245px) minmax(330px, 1fr) minmax(250px, .72fr); gap: .75rem; align-items: start; margin: auto; max-width: 1700px; padding: clamp(.75rem, 2vw, 1.5rem); }
 aside, .workspace { display: grid; align-content: start; gap: 1rem; min-width: 0; }
 section, .intro, #distribution, dialog { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 1rem; }
-.intro { padding-top: 0; }
+.intro { padding-top: 0; overflow-wrap: anywhere; }
 .portrait { display: block; height: 136px; width: 100%; object-fit: contain; }
 .intro > p, section > p { margin-top: .5rem; }
 .totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
 .totals strong { font-size: clamp(1.45rem, 4vw, 2.4rem); display: block; color: var(--accent); line-height: 1.2; }
 .totals span { color: var(--dim); font-size: .85rem; overflow-wrap: anywhere; }
 form { display: grid; gap: .5rem; margin-top: .8rem; }
+[hidden] { display: none !important; }
+.sign-in { min-height: 100vh; grid-template-columns: minmax(0, 28rem); align-content: center; justify-content: center; }
+.sign-in h1 { text-align: center; }
+.sign-in h2 { margin-top: .7rem; }
+.sign-in form .primary { margin-top: .5rem; }
+.sign-in .portrait { height: 112px; }
+.sign-in [role="alert"] { color: var(--accent); }
 label { font-size: .85rem; color: var(--dim); }
 input, textarea, select, button { font: inherit; color: inherit; border: 1px solid #665454; border-radius: 3px; background: #211e20; min-width: 0; padding: .5rem .7rem; }
 button, summary { cursor: pointer; }
@@ -38,6 +45,8 @@ button:disabled { opacity: .6; cursor: wait; }
 .primary { background: #552e31; border-color: #a05b5d; }
 .filters { align-items: stretch; margin: .65rem 0; flex-wrap: wrap; gap: .45rem; }
 .filters input { flex: 1; }
+.http-filters { align-items: center; }
+.http-filters input { flex: 0 1 auto; }
 .views { display: flex; flex-wrap: wrap; gap: .35rem; border-bottom: 1px solid var(--line); padding-bottom: .45rem; }
 .views button { background: transparent; }
 .views button[aria-pressed="true"] { background: #39272b; border-color: var(--accent); }
@@ -63,6 +72,13 @@ footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2re
 #record-detail { max-height: 75vh; overflow: auto; margin-top: .6rem; overflow-wrap: anywhere; }
 #record-detail h3 { margin: .4rem 0; }
 #record-detail p { margin-top: .4rem; }
+.http-details { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .25rem .7rem; }
+.http-details dd { margin: 0; color: var(--dim); }
+.binary-panel > details, .binary-panel button, .binary-panel input { margin-top: .6rem; }
+.binary-panel input { width: 100%; }
+.binary-list { display: grid; gap: .35rem; max-height: 19rem; overflow: auto; list-style: none; padding: 0; }
+.binary-list li { border: 1px solid var(--line); border-radius: 3px; padding: .45rem .55rem; }
+.binary-list pre { margin: .25rem 0 0; }
 #directory-panel, #directory-result { margin-top: .65rem; }
 #directory-items { padding-left: 1.2rem; max-height: 16rem; overflow: auto; overflow-wrap: anywhere; }
 .asset-sources { display: grid; gap: .4rem; margin-top: .8rem; }
@@ -81,7 +97,6 @@ footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2re
 #triage-entries { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 15rem; overflow: auto; padding-left: 0; list-style: none; }
 #triage-entries li + li { margin-top: .6rem; }
 .tools { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .6rem; }
-.tools[hidden] { display: none; }
 #report-panel { width: min(840px, calc(100vw - 2rem)); }
 #report-text { max-height: 62vh; overflow: auto; }
 #report-evidence { margin-top: .75rem; }
@@ -95,6 +110,10 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: #ddd
 #groups dd { margin: 0; color: var(--dim); }
 dialog { color: inherit; width: min(560px, calc(100vw - 2rem)); }
 dialog::backdrop { background: #09070ad9; }
+#references { display: grid; gap: .7rem; padding: 0; list-style: none; }
+#references li { padding-bottom: .7rem; border-bottom: 1px solid var(--line); }
+#references li > a:first-child { font-weight: 700; }
+#references li p { margin: .25rem 0; }
 .actions { justify-content: end; }
 @media (max-width: 970px) {
   main { grid-template-columns: minmax(195px, 220px) minmax(0, 1fr); }

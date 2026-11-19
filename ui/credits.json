@@ -2,16 +2,19 @@
   {
     "name": "Ghidra",
     "url": "https://github.com/NationalSecurityAgency/ghidra",
-    "detail": "Referencia para la mesa de trabajo y el inspector de binarios. Reconocimiento ASCII adaptado de AsciiCharSetRecognizer.java, National Security Agency, Apache-2.0."
+    "detail": "Mesa de trabajo e inspector de binarios. La detección de caracteres ASCII adapta AsciiCharSetRecognizer.java de la National Security Agency, Apache-2.0.",
+    "reference": "https://github.com/NationalSecurityAgency/ghidra/blob/8ca9077040cc43cd790babcfccf19475622a3e9a/Ghidra/Features/Base/src/main/java/ghidra/util/ascii/AsciiCharSetRecognizer.java"
   },
   {
     "name": "ARTEX",
     "url": "https://github.com/BaaRai/ARTEX",
-    "detail": "Referencia para expedientes y análisis por agentes. Compatibilidad con el formato de intercambio y las revisiones de evidencia. Autumn-27 y BaaRai."
+    "detail": "Referencia para expedientes y análisis por agentes. El importador reproduce el formato de hallazgos, incluidas las versiones de evidencia y la verificación declarada. Autumn-27 y BaaRai, licencia del proyecto AGPL-3.0.",
+    "reference": "https://github.com/BaaRai/ARTEX/blob/65045efae642159eeef3be5536c262f096f4c08d/server/dto.go#L318"
   },
   {
     "name": "ZAP",
     "url": "https://github.com/zaproxy/zaproxy",
-    "detail": "Referencia para la revisión del tráfico HTTP. Estadísticas pasivas adaptadas de StatsPassiveScanner.java. Copyright 2016 The ZAP Development Team, Apache-2.0."
+    "detail": "Historial HTTP y revisión de respuestas. Las estadísticas de latencia y tipo MIME adaptan StatsPassiveScanner.java. Copyright 2016 The ZAP Development Team, Apache-2.0.",
+    "reference": "https://github.com/zaproxy/zaproxy/blob/3c8eac30cda790ba5ec6644c70c2c4225d0fb94d/zap/src/main/java/org/zaproxy/zap/extension/pscan/scanner/StatsPassiveScanner.java"
   }
 ]

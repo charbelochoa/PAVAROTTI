@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Acceso · PAVAROTTI</title>
+  <link rel="icon" href="/icono.png">
+  <link rel="stylesheet" href="/app.css">
+  <script src="/acceso.js" defer></script>
+</head>
+<body>
+  <main class="sign-in">
+    <section aria-labelledby="access-title">
+      <img class="portrait" src="/mascara.svg" alt="Máscara porcina en arte ASCII">
+      <h1>PAVAROTTI</h1>
+      <h2 id="access-title">Acceso al expediente</h2>
+      <form id="sign-in">
+        <label for="account-name">Usuario</label>
+        <input id="account-name" name="name" autocomplete="username" maxlength="64" required>
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" maxlength="1024" required>
+        <button class="primary">Iniciar sesión</button>
+        <p id="access-error" role="alert"></p>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

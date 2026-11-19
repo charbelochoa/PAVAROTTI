@@ -24,11 +24,20 @@ let inspectorRequest;
 let refreshRequest;
 let searchTimer;
 let analysisQueue = false;
+let canWrite = false;
 let checkingQueue = false;
 let queueSignature = "";
 let currentView = "records";
-let assetSearch = "";
-let recordSearch = "";
+const viewSearch = new Map();
+const views = {
+  records: {filter: "filter", placeholder: "Buscar texto, origen, ID o SHA-256"},
+  assets: {filter: "filter-asset", placeholder: "Buscar dominio, IP, red o huella"},
+  binaries: {kind: "binario", placeholder: "Buscar archivo, formato, cadena o SHA-256"},
+  http: {kind: "http", placeholder: "Buscar origen, señal o tipo MIME"}
+};
+
+const httpFilters = {"filter-http": "clase_http", "filter-capture": "captura", "filter-method": "metodo", "filter-from": "desde", "filter-to": "hasta"};
+const captureLabel = (kind) => ({"tráfico": "Proxy inverso", "archivo HAR": "Archivo HAR"})[kind] || kind;
 
 const assetKinds = {dominio: "Dominio", ipv4: "IPv4", ipv6: "IPv6", red: "Red", sha256: "SHA-256", sha1: "SHA-1", md5: "MD5"};
 const assetKey = ({type, value}) => `${type}/${value}`;
@@ -37,10 +46,14 @@ const assetCount = ({count, indicators}) =>
 const triageLabels = {pendiente: "Pendiente", confirmada: "Confirmada", descartada: "Descartada"};
 const findingKey = ({rule, line, column}) => `${line}:${column}:${rule}`;
 
-async function request(path, options) {
-  const response = await fetch(path, options);
+async function requireResponse(response) {
+  if (response.status === 401) window.location.replace("/ingresar");
   if (!response.ok) throw new Error((await response.text()).trim());
-  return response.json();
+  return response;
+}
+
+async function request(path, options) {
+  return (await requireResponse(await fetch(path, options))).json();
 }
 
 function formatTime(value) {
@@ -59,7 +72,10 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
   }
   view.append(element("span", record.kind, "type"), element("h3", record.title), element("p", formatTime(record.time)));
   if (record.source) view.append(element("p", record.source));
-  if (record.source_id) view.append(element("p", (record.code_review || record.dependencies ? "Archivo · " : "ID · ") + record.source_id));
+  if (record.source_id) {
+    const label = record.code_review || record.dependencies || record.kind === "binario" ? "Archivo" : "ID";
+    view.append(element("p", `${label} · ${record.source_id}`));
+  }
   if (selectedRevision) {
     view.append(element("p", "Revisión citada " + record.revision));
   } else if (record.id && record.kind === "nota") {
@@ -83,21 +99,103 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
   if (record.kind === "stix") view.append(stixPanel(record));
   if (record.traffic) {
     const item = record.traffic;
-    view.append(element("p", `${item.type || "Tipo desconocido"} · ${item.millis} ms`));
+    const details = element("dl", "", "http-details");
+    for (const [label, value] of [["Captura", captureLabel(record.kind)], ["Método", item.method || "Sin método"],
+      ["Estado", item.status || "Sin respuesta"], ["Tipo MIME", item.type || "Sin tipo"], ["Latencia", `${item.millis} ms`]]) {
+      details.append(element("dt", label), element("dd", String(value)));
+    }
+    view.append(details);
   }
   if (record.code_review) view.append(codeReviewPanel(record.id, record.code_review, citation));
   if (record.dependencies) view.append(dependencyPanel(record.dependencies, citation));
+  const binary = record.kind === "binario" && binaryPanel(record);
+  if (binary) view.append(binary);
   if (!record.code_review && record.signals?.length) {
     const list = element("ul");
     for (const signal of record.signals) list.append(element("li", signal));
+    if (record.traffic) view.append(element("h4", "Señales HTTP"));
     view.append(list);
   }
-  if (!record.code_review && record.details) view.append(element("pre", record.details));
+  if (!record.code_review && !binary && record.details) view.append(element("pre", record.details));
   const linked = view.querySelector(".audit-cited");
   if (linked) {
     linked.focus({preventScroll: true});
     linked.scrollIntoView({block: "nearest"});
   }
+}
+
+function binaryPanel(record) {
+  let report;
+  try {
+    report = JSON.parse(record.details);
+  } catch {
+    return null;
+  }
+  if (report?.sha256 !== record.sha256 || !Number.isInteger(report?.size)) return null;
+  const panel = element("div", "", "binary-panel");
+  panel.append(element("p", `${report.format} · ${report.architecture || "Arquitectura sin identificar"} · ${report.size} bytes`));
+  const fingerprint = element("button", "Consultar coincidencias SHA-256");
+  fingerprint.onclick = () => selectAsset({type: "sha256", value: record.sha256});
+  panel.append(fingerprint);
+
+  const sections = Array.isArray(report.sections) ? report.sections : [];
+  const count = report.section_count || sections.length;
+  const names = element("details");
+  names.append(element("summary", `Secciones · ${sections.length < count ? `${sections.length} de ${count}` : count}`));
+  const textHits = element("details");
+  const hits = Array.isArray(report.strings) ? report.strings : [];
+  textHits.append(element("summary", `Cadenas ASCII registradas · ${hits.length}`));
+  const search = element("input");
+  search.type = "search";
+  search.placeholder = "Buscar texto o desplazamiento";
+  search.setAttribute("aria-label", "Buscar cadenas ASCII");
+  search.maxLength = 160;
+  const scope = element("p");
+  const reset = element("button", "Ver todas las secciones");
+  const strings = element("ol", "", "binary-list");
+  let selectedSection;
+  function paintStrings() {
+    const term = search.value.trim().toLowerCase();
+    const start = selectedSection ? Number.parseInt(selectedSection.file.offset, 16) : 0;
+    const end = selectedSection ? start + selectedSection.file.size : report.size;
+    const matching = hits.filter((hit) => {
+      const offset = Number.parseInt(hit.offset, 16);
+      return offset >= start && offset < end && (hit.offset.toLowerCase().includes(term) || hit.text.toLowerCase().includes(term));
+    });
+    scope.textContent = `${matching.length} ${matching.length === 1 ? "cadena" : "cadenas"}${selectedSection ? ` en ${selectedSection.name}` : ""}`;
+    reset.hidden = !selectedSection;
+    strings.replaceChildren(...matching.map((hit) => {
+      const row = element("li");
+      row.append(element("code", hit.offset, "type"), element("pre", hit.text));
+      return row;
+    }));
+  }
+  reset.onclick = () => { selectedSection = undefined; paintStrings(); };
+  search.oninput = paintStrings;
+  textHits.append(search, reset, scope, strings);
+  const sectionsList = element("ol", "", "binary-list");
+  for (const section of sections) {
+    const row = element("li");
+    row.append(element("strong", section.name || "Sin nombre"), element("p",
+      `${report.format === "PE" ? "RVA" : "Dirección"} ${section.address} · ${section.size} bytes`));
+    if (section.file) {
+      row.append(element("p", `Archivo ${section.file.offset} · ${section.file.size} bytes`));
+      const pivot = element("button", "Cadenas de la sección");
+      pivot.onclick = () => {
+        selectedSection = section;
+        search.value = "";
+        textHits.open = true;
+        paintStrings();
+        search.focus();
+      };
+      row.append(pivot);
+    }
+    sectionsList.append(row);
+  }
+  names.append(sections.length ? sectionsList : element("p", "No hay secciones registradas."));
+  paintStrings();
+  panel.append(names, textHits);
+  return panel;
 }
 
 function codeReviewPanel(id, review, citation) {
@@ -120,8 +218,8 @@ function codeReviewPanel(id, review, citation) {
     row.append(element("strong", `Línea ${signal.line}, columna ${signal.column}`),
       element("span", signal.rule, "type"), element("p", signal.review));
     const tools = element("div", "", "triage-controls");
-    const action = element("button", "Clasificar");
-    action.setAttribute("aria-label", `Clasificar señal ${signal.rule}, línea ${signal.line}, columna ${signal.column}`);
+    const action = element("button", canWrite ? "Clasificar" : "Ver historial");
+    action.setAttribute("aria-label", `${canWrite ? "Clasificar señal" : "Ver historial de señal"} ${signal.rule}, línea ${signal.line}, columna ${signal.column}`);
     const badge = element("span", "Pendiente", "muted");
     badges.set(findingKey(signal), badge);
     action.onclick = () => openCodeTriage(id, signal, badge);
@@ -197,7 +295,10 @@ async function openCodeTriage(id, signal, badge) {
   activeTriage = action;
   button.disabled = true;
   byId("triage-form").reset();
-  byId("triage-history").open = false;
+  byId("triage-title").textContent = canWrite ? "Clasificar señal" : "Historial de la señal";
+  byId("triage-form").hidden = !canWrite;
+  byId("triage-read-close").hidden = canWrite;
+  byId("triage-history").open = !canWrite;
   byId("triage-location").textContent = `${signal.rule} · línea ${signal.line}, columna ${signal.column}`;
   errorText.textContent = "Consultando clasificación…";
   paintTriageHistory([]);
@@ -222,7 +323,7 @@ byId("triage-close").onclick = () => byId("triage-panel").close();
 byId("triage-form").onsubmit = async (event) => {
   event.preventDefault();
   const action = activeTriage;
-  if (!Number.isInteger(action?.revision)) return;
+  if (!canWrite || !Number.isInteger(action?.revision)) return;
   const button = byId("triage-save");
   button.disabled = true;
   byId("triage-error").textContent = "";
@@ -471,14 +572,15 @@ function recordNode(record) {
   row.setAttribute("aria-controls", "record-detail");
   const traffic = record.traffic;
   if (traffic) {
-    row.append(element("span", `${traffic.method} ${traffic.status}`, "type"),
+    row.append(element("span", `${traffic.method} ${traffic.status || "Sin respuesta"}`, "type"),
       element("strong", record.source || record.title));
-    const details = [record.kind === "archivo HAR" ? "HAR" : "Proxy", traffic.type || "Sin tipo MIME", traffic.millis + " ms"];
+    const details = [captureLabel(record.kind), formatTime(record.time), traffic.type || "Sin tipo MIME", traffic.millis + " ms"];
     if (record.signal_count) details.push(`${record.signal_count} ${record.signal_count === 1 ? "señal" : "señales"}`);
     row.append(element("span", details.join(" · "), "muted"));
   } else {
     row.append(element("span", record.kind, "type"), element("strong", record.title));
-    if (record.source) row.append(element("span", record.source, "muted"));
+    const source = record.source || record.source_id;
+    if (source) row.append(element("span", source, "muted"));
   }
   row.onclick = () => selectRecord(record.id);
   return row;
@@ -526,9 +628,14 @@ function pagingBusy(busy) {
 }
 
 function filters() {
-  const type = currentView === "http" ? "http" : byId(currentView === "assets" ? "filter-asset" : "filter").value;
+  const view = views[currentView];
+  const type = view.kind ?? byId(view.filter).value;
   const params = new URLSearchParams({tipo: type, buscar: byId("query").value.trim()});
-  if (currentView === "http" && byId("filter-http").value) params.set("clase_http", byId("filter-http").value);
+  if (currentView === "http") {
+    for (const [id, name] of Object.entries(httpFilters)) {
+      if (byId(id).value) params.set(name, byId(id).value);
+    }
+  }
   return params;
 }
 
@@ -589,7 +696,7 @@ byId("query").addEventListener("input", () => {
   pagingBusy(true);
   searchTimer = setTimeout(() => loadPage(0, [""]), 230);
 });
-for (const id of ["filter", "filter-asset", "filter-http"]) {
+for (const id of ["filter", "filter-asset", ...Object.keys(httpFilters)]) {
   byId(id).addEventListener("change", () => {
     clearTimeout(searchTimer);
     loadPage(0, [""]);
@@ -598,23 +705,22 @@ for (const id of ["filter", "filter-asset", "filter-http"]) {
 function showView(view) {
   if (currentView === view) return;
   const query = byId("query");
-  if (currentView === "assets") assetSearch = query.value;
-  else recordSearch = query.value;
+  viewSearch.set(currentView, query.value);
   currentView = view;
   clearTimeout(searchTimer);
-  for (const name of ["records", "assets", "http"]) {
+  for (const name of Object.keys(views)) {
     byId("view-" + name).setAttribute("aria-pressed", String(name === view));
   }
   byId("filter").hidden = view !== "records";
   byId("filter-asset").hidden = view !== "assets";
-  byId("filter-http").hidden = view !== "http";
-  query.placeholder = view === "assets" ? "Buscar dominio, IP, red o huella" : "Buscar texto, origen, ID o SHA-256";
+  byId("http-filters").hidden = view !== "http";
+  query.placeholder = views[view].placeholder;
   query.maxLength = view === "assets" ? 253 : 256;
-  query.value = view === "assets" ? assetSearch : recordSearch;
+  query.value = viewSearch.get(view) || "";
   byId("records").replaceChildren();
   loadPage(0, [""]);
 }
-for (const view of ["records", "assets", "http"]) byId("view-" + view).onclick = () => showView(view);
+for (const view of Object.keys(views)) byId("view-" + view).onclick = () => showView(view);
 byId("refresh").addEventListener("click", () => refresh());
 
 byId("directory-form").onsubmit = async (event) => {
@@ -643,6 +749,7 @@ byId("directory-form").onsubmit = async (event) => {
   status.textContent = "Revisando directorio…";
   try {
     const response = await fetch("/api/revision/directorio", {method: "POST", body: payload});
+    if (!response.headers.get("Content-Type")?.startsWith("application/json")) await requireResponse(response);
     const result = await response.json();
     if (result.files?.length) {
       const rows = result.files.map((file) => element("li", `${file.path} · ${file.status}${file.reason ? " · " + file.reason : ""}`));
@@ -667,8 +774,7 @@ byId("export-stix").onclick = async (event) => {
   button.disabled = true;
   status.textContent = "Preparando paquete STIX…";
   try {
-    const response = await fetch("/api/exportar/stix");
-    if (!response.ok) throw new Error((await response.text()).trim());
+    const response = await requireResponse(await fetch("/api/exportar/stix"));
     const url = URL.createObjectURL(await response.blob());
     const download = element("a");
     download.href = url;
@@ -835,7 +941,7 @@ function analysisJobNode(job) {
     open.dataset.jobAction = job.id + ":open";
     open.onclick = () => showAnalysisJob(job.id);
     actions.append(open);
-  } else if (job.state === "queued" || job.state === "running") {
+  } else if (canWrite && (job.state === "queued" || job.state === "running")) {
     const cancel = element("button", "Cancelar");
     cancel.dataset.jobAction = job.id + ":cancel";
     cancel.onclick = () => cancelAnalysisJob(job.id, cancel);
@@ -906,7 +1012,26 @@ byId("analyze").onclick = async () => {
 };
 
 byId("credits").onclick = () => byId("credit-panel").showModal();
+byId("logout").onclick = async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await requireResponse(await fetch("/api/acceso/salir", {method: "POST"}));
+    window.location.replace("/ingresar");
+  } catch (error) {
+    byId("status").textContent = error.message;
+    button.disabled = false;
+  }
+};
 Promise.all([request("/api/app"), request("/credits.json")]).then(([app, credits]) => {
+  canWrite = !app.shared || app.account?.role === "analista";
+  for (const id of ["evidence-tools", "analyze", "add-note", "edit-note", "analysis-priority-label"]) byId(id).hidden = !canWrite;
+  if (app.shared) {
+    byId("case-heading").textContent = app.case;
+    byId("account").textContent = `${app.account.name} · ${app.account.role}`;
+    byId("account").hidden = false;
+    byId("logout").hidden = false;
+  }
   analysisQueue = app.analysis_queue;
   if (analysisQueue) {
     byId("analysis-queue").hidden = false;
@@ -927,8 +1052,16 @@ Promise.all([request("/api/app"), request("/credits.json")]).then(([app, credits
     link.href = credit.url;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
-    row.append(link, document.createTextNode(" · " + credit.detail));
+    const reference = element("a", "Referencia técnica");
+    reference.href = credit.reference;
+    reference.target = "_blank";
+    reference.rel = "noopener noreferrer";
+    reference.setAttribute("aria-label", `Referencia técnica de ${credit.name}`);
+    row.append(link, element("p", credit.detail), reference);
     byId("references").append(row);
   }
-}).catch(() => { byId("proxy-status").textContent = "No se pudo leer la configuración"; });
-refresh();
+  return refresh();
+}).catch((error) => {
+  byId("proxy-status").textContent = "No se pudo leer la configuración";
+  byId("status").textContent = error.message;
+});

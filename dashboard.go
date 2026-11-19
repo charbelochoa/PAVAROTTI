@@ -20,10 +20,13 @@ import (
 var resources embed.FS
 
 type settings struct {
-	Version       string `json:"version"`
-	Proxy         string `json:"proxy,omitempty"`
-	Target        string `json:"target,omitempty"`
-	AnalysisQueue bool   `json:"analysis_queue"`
+	Version       string              `json:"version"`
+	Proxy         string              `json:"proxy,omitempty"`
+	Target        string              `json:"target,omitempty"`
+	AnalysisQueue bool                `json:"analysis_queue"`
+	Shared        bool                `json:"shared,omitempty"`
+	Case          string              `json:"case,omitempty"`
+	Account       *caso.SharedAccount `json:"account,omitempty"`
 }
 
 type noteInput struct {
@@ -49,8 +52,12 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 			http.ServeFileFS(w, r, resources, "licenses/"+name)
 		})
 	}
-	mux.HandleFunc("GET /api/app", func(w http.ResponseWriter, _ *http.Request) {
-		respond(w, config)
+	mux.HandleFunc("GET /api/app", func(w http.ResponseWriter, r *http.Request) {
+		state := config
+		if account, ok := r.Context().Value(sharedAccountKey{}).(caso.SharedAccount); ok {
+			state.Account = &account
+		}
+		respond(w, state)
 	})
 	mux.HandleFunc("GET /api/registro", func(w http.ResponseWriter, _ *http.Request) {
 		records, err := store.Records()
@@ -63,7 +70,11 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 	})
 	mux.HandleFunc("GET /api/registro/pagina", func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
-		request := caso.PageRequest{Kind: query.Get("tipo"), Search: query.Get("buscar"), After: query.Get("despues")}
+		request := caso.PageRequest{
+			Kind: query.Get("tipo"), Search: query.Get("buscar"), After: query.Get("despues"),
+			HTTPSource: query.Get("captura"), HTTPMethod: query.Get("metodo"),
+			HTTPFrom: query.Get("desde"), HTTPTo: query.Get("hasta"),
+		}
 		if size := query.Get("limite"); size != "" {
 			limit, err := strconv.Atoi(size)
 			if err != nil || limit < 1 || limit > 100 {
@@ -203,18 +214,28 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 	stixRoutes(mux, store)
 	directoryRoutes(mux, store)
 	codeTriageRoutes(mux, store)
+	var handler http.Handler = mux
+	origin := "http://" + host
+	if config.Shared {
+		origin = "https://" + host
+		handler = sharedDashboard(mux, store, origin)
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Cache-Control", "no-store")
-		mutating := r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions
-		if r.Host != host || (mutating && r.Header.Get("Origin") != "http://"+host) {
+		if !strings.EqualFold(r.Host, host) || (config.Shared && r.TLS == nil) ||
+			(dashboardMutation(r.Method) && r.Header.Get("Origin") != origin) {
 			http.Error(w, "Origen incorrecto", http.StatusForbidden)
 			return
 		}
-		mux.ServeHTTP(w, r)
+		handler.ServeHTTP(w, r)
 	})
+}
+
+func dashboardMutation(method string) bool {
+	return method != http.MethodGet && method != http.MethodHead && method != http.MethodOptions
 }
 
 func editError(w http.ResponseWriter, err error) {
