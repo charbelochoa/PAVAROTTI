@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"pavarotti/internal/caso"
 	"pavarotti/internal/revision"
@@ -21,6 +23,10 @@ var (
 )
 
 func Parse(kind string, reader io.Reader) ([]caso.Record, error) {
+	return ParseNamed(kind, reader, "")
+}
+
+func ParseNamed(kind string, reader io.Reader, name string) ([]caso.Record, error) {
 	switch kind {
 	case "har", "hallazgos", "binario", "codigo", "indicadores", "dns", "rdap", "stix":
 	default:
@@ -65,7 +71,7 @@ func Parse(kind string, reader io.Reader) ([]caso.Record, error) {
 			signals = append(signals, fmt.Sprintf("Línea %d · %s", signal.Line, signal.Review))
 		}
 		return []caso.Record{{Kind: "código", Time: caso.Now(), Title: "Revisión Go · " + report.Package,
-			SHA256: caso.Hash(data), Details: string(details), Signals: signals}}, nil
+			SHA256: caso.Hash(data), SourceID: sourceName(name), Details: string(details), Signals: signals, Review: &report}}, nil
 	default:
 		result := triaje.Inspect(data)
 		details, err := json.MarshalIndent(result, "", "  ")
@@ -77,6 +83,16 @@ func Parse(kind string, reader io.Reader) ([]caso.Record, error) {
 			SHA256: result.SHA256, Details: string(details),
 		}}, nil
 	}
+}
+
+func sourceName(value string) string {
+	value = strings.TrimSpace(value[strings.LastIndexAny(value, `/\`)+1:])
+	if len(value) > 160 || !utf8.ValidString(value) || strings.ContainsFunc(value, func(char rune) bool {
+		return unicode.IsControl(char) || unicode.In(char, unicode.Cf)
+	}) || value == "." || value == ".." {
+		return ""
+	}
+	return value
 }
 
 func Nota(title, source, details string) (caso.Record, error) {

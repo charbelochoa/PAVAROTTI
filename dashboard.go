@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -120,10 +121,12 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 			http.Error(w, "No se pudo consultar el registro", http.StatusInternalServerError)
 			return
 		}
+		record.Review = record.StaticReview()
 		respond(w, record)
 	})
 	mux.HandleFunc("POST /api/archivo/{tipo}", func(w http.ResponseWriter, r *http.Request) {
-		records, err := ingesta.Parse(r.PathValue("tipo"), r.Body)
+		name, _ := url.PathUnescape(r.Header.Get("X-Pavarotti-Filename"))
+		records, err := ingesta.ParseNamed(r.PathValue("tipo"), r.Body, name)
 		if err != nil {
 			if errors.Is(err, ingesta.ErrSize) {
 				http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)

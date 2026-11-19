@@ -140,7 +140,7 @@ func terminalImport(args []string, stdout, stderr io.Writer, open openExpediente
 	}
 	defer file.Close()
 
-	records, err := ingesta.Parse(flags.Arg(0), file)
+	records, err := ingesta.ParseNamed(flags.Arg(0), file, path)
 	if err != nil {
 		return err
 	}
