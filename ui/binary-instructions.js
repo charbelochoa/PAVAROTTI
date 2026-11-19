@@ -1,6 +1,6 @@
 "use strict";
 
-function binaryInstructionPanel(report, sections, images, citation, cite) {
+function binaryInstructionPanel(report, sections, images, citation, cite, follow) {
   const details = element(cite ? "details" : "div", "", "binary-instructions");
   const title = element("summary", "Instrucciones");
   const code = Array.isArray(report.instructions) ? report.instructions : [];
@@ -103,6 +103,10 @@ function binaryInstructionPanel(report, sections, images, citation, cite) {
           const jump = element("button", `Ir a ${instruction.target}`, "instruction-target");
           jump.onclick = () => { origin = entry; reveal(destination, true); };
           mnemonic.append(jump);
+        } else if (follow) {
+          const jump = element("button", `Abrir destino ${instruction.target}`, "instruction-target");
+          jump.onclick = () => follow(index);
+          mnemonic.append(jump);
         } else {
           mnemonic.append(element("small", `Destino ${instruction.target} · fuera del listado`));
         }
@@ -162,5 +166,9 @@ function binaryInstructionPanel(report, sections, images, citation, cite) {
   }
   return {details, paintImage,
     hasSection(index) { return withCode.has(index); },
-    showSection(index) { reveal(entries.find(({instruction}) => instruction.section === index), true); }};
+    showSection(index) { reveal(entries.find(({instruction}) => instruction.section === index), true); },
+    focusIndex(index) {
+      const entry = entries.find((item) => item.index === index);
+      if (entry) reveal(entry, true);
+    }};
 }

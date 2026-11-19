@@ -254,10 +254,10 @@ function binaryPanel(record, citation, windowCitation) {
   textHits.append(search, reset, scope, strings);
   const sectionsList = element("ol", "", "binary-list");
   const noSections = element("p", "No hay secciones registradas.");
-  const instructions = binaryInstructionPanel(report, sections, images, citation,
-    (index) => binaryCitationButton(record, "instruccion", index));
   const binaryWindow = ["ELF", "PE", "Mach-O", "Mach-O universal"].includes(report.format) ?
     binaryWindowPanel(report, record, windowCitation?.sha256 === record.sha256 ? windowCitation : undefined, inspectorRequest.signal) : undefined;
+  const instructions = binaryInstructionPanel(report, sections, images, citation,
+    (index) => binaryCitationButton(record, "instruccion", index), binaryWindow?.followInstruction);
   const symbols = binarySymbolPanel(report, record, citation, images, binaryWindow?.openSymbol);
   function paintSections() {
     const rows = [];

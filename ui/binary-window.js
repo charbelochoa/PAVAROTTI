@@ -1,11 +1,15 @@
 "use strict";
 
 const binaryWindowSchema = "pavarotti.binary-window-citation.v1";
+const binaryWindowPathLimit = 32;
 
 function validBinaryWindowCitation(citation) {
   const digest = (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
   const location = (value) => typeof value === "string" && /^0x[a-f0-9]{1,16}$/.test(value);
-  return ["entrada", "simbolo"].includes(citation.kind) && Number.isSafeInteger(citation.image) && citation.image >= 0 &&
+  const steps = typeof citation.path === "string" ? citation.path.split(".") : [];
+  const validPath = citation.path === undefined || (steps.length > 0 && steps.length <= binaryWindowPathLimit &&
+    steps.every((step) => /^(0|[1-9][0-9]?)$/.test(step) && Number(step) < 64));
+  return ["entrada", "simbolo", "instruccion"].includes(citation.kind) && validPath && Number.isSafeInteger(citation.image) && citation.image >= 0 &&
     digest(citation.sha256) && digest(citation.inspection_sha256) && digest(citation.window_sha256) &&
     location(citation.address) && location(citation.offset);
 }
@@ -32,9 +36,9 @@ function binaryWindowPanel(report, record, citation, signal) {
     requestAnimationFrame(() => { if (!signal.aborted) input.focus(); });
   }
 
-  async function load() {
+  async function load({preserve = false, focus} = {}) {
     pending?.abort();
-    result.replaceChildren();
+    if (!preserve) result.replaceChildren();
     const file = input.files[0];
     if (!file) {
       status.textContent = "Selecciona el archivo binario original.";
@@ -50,6 +54,7 @@ function binaryWindowPanel(report, record, citation, signal) {
     const current = AbortSignal.any([signal, controller.signal]);
     status.textContent = "Verificando el archivo y abriendo la ventana…";
     const query = new URLSearchParams({revision: record.revision, tipo: anchor.kind, indice: anchor.index});
+    if (anchor.path) query.set("pasos", anchor.path);
     try {
       const data = await request(`/api/registro/${encodeURIComponent(record.id)}/ventana-binaria?${query}`,
         {method: "POST", body: file, signal: current});
@@ -61,35 +66,54 @@ function binaryWindowPanel(report, record, citation, signal) {
         `Archivo verificado · ${data.citation.offset}`;
       const location = report.format === "PE" ? "RVA" : "Dirección";
       const {window} = data;
+      const steps = data.citation.path?.split(".") || [];
       const title = element("p", `${data.name} · ${window.section || "Sin nombre"} · ${window.architecture}`);
       const address = element("p", `${location} ${data.citation.address} · Archivo ${data.citation.offset}`);
+      const tools = element("div", "", "tools");
       const save = element("button", "Exportar cita de ventana");
       save.onclick = () => {
         const body = JSON.stringify(data.citation, null, 2) + "\n";
         download(new Blob([body], {type: "application/json"}), "PAVAROTTI-cita-ventana.json");
       };
+      tools.append(save);
+      let origin;
+      if (window.origin && steps.length) {
+        origin = element("p", `Origen del salto ${window.origin.address} · Archivo ${window.origin.offset}`);
+        const back = element("button", `Volver a ${window.origin.address}`);
+        back.onclick = () => open({kind: data.citation.kind, index: data.citation.index, path: steps.slice(0, -1).join(".")},
+          {preserve: true, focus: Number(steps.at(-1))});
+        tools.append(back);
+      }
+      const follow = steps.length < binaryWindowPathLimit ? (index) => {
+        open({kind: data.citation.kind, index: data.citation.index, path: [...steps, index].join(".")}, {preserve: true, focus: 0});
+      } : undefined;
       const listing = binaryInstructionPanel({format: report.format, instructions: window.instructions,
-        instructions_limited: window.limited}, [{name: window.section}], []);
+        instructions_limited: window.limited}, [{name: window.section}], [], undefined, undefined, follow);
       listing.paintImage(0);
-      result.append(title, address, save, listing.details);
+      result.replaceChildren(title, address);
+      if (origin) result.append(origin);
+      if (steps.length === binaryWindowPathLimit) result.append(element("p", "Se alcanzó el límite de 32 saltos en el recorrido."));
+      result.append(tools, listing.details);
+      if (focus !== undefined) listing.focusIndex(focus);
     } catch (error) {
       if (!current.aborted) status.textContent = error.message;
     }
   }
 
-  function open(kind, index) {
+  function open(location, options) {
     expected = undefined;
-    anchor = {kind, index};
+    anchor = location;
     details.open = true;
     details.scrollIntoView({block: "nearest"});
-    load();
+    load(options);
   }
   input.onchange = () => {
     if (anchor) load();
     else status.textContent = "Elige un símbolo o abre el punto de entrada.";
   };
-  entry.onclick = () => open("entrada", image);
-  return {details, openSymbol(index) { open("simbolo", index); }, paintImage(index) {
+  entry.onclick = () => open({kind: "entrada", index: image});
+  return {details, openSymbol(index) { open({kind: "simbolo", index}); },
+    followInstruction(index) { open({kind: "instruccion", index, path: "0"}, {focus: 0}); }, paintImage(index) {
     if (image !== undefined && image !== index) {
       pending?.abort();
       anchor = undefined;
