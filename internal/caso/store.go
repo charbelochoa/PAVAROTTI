@@ -19,21 +19,22 @@ import (
 )
 
 type Record struct {
-	ID        string      `json:"id,omitempty"`
-	Revision  int         `json:"revision,omitempty"`
-	UpdatedAt string      `json:"updated_at,omitempty"`
-	Kind      string      `json:"kind"`
-	Time      string      `json:"time"`
-	Title     string      `json:"title"`
-	Source    string      `json:"source,omitempty"`
-	SourceID  string      `json:"source_id,omitempty"`
-	SHA256    string      `json:"sha256,omitempty"`
-	Details   string      `json:"details,omitempty"`
-	Network   string      `json:"network,omitempty"`
-	Signals   []string    `json:"signals,omitempty"`
-	Traffic   *Traffic    `json:"traffic,omitempty"`
-	Indicator *Indicator  `json:"indicator,omitempty"`
-	STIX      *STIXObject `json:"stix,omitempty"`
+	ID         string      `json:"id,omitempty"`
+	Revision   int         `json:"revision,omitempty"`
+	UpdatedAt  string      `json:"updated_at,omitempty"`
+	Kind       string      `json:"kind"`
+	Time       string      `json:"time"`
+	Title      string      `json:"title"`
+	Source     string      `json:"source,omitempty"`
+	SourceID   string      `json:"source_id,omitempty"`
+	SHA256     string      `json:"sha256,omitempty"`
+	Details    string      `json:"details,omitempty"`
+	Network    string      `json:"network,omitempty"`
+	Signals    []string    `json:"signals,omitempty"`
+	Traffic    *Traffic    `json:"traffic,omitempty"`
+	Indicator  *Indicator  `json:"indicator,omitempty"`
+	FileHashes []Indicator `json:"file_hashes,omitempty"`
+	STIX       *STIXObject `json:"stix,omitempty"`
 }
 
 type Indicator struct {

@@ -197,6 +197,13 @@ func recordAssets(record caso.Record, network assetNetwork, visit func(AssetKey,
 	if network.value != "" {
 		visit(AssetKey{Type: "red", Value: network.value}, role)
 	}
+	if record.Kind == "stix" {
+		for _, item := range record.FileHashes {
+			if key, valid := normalizeAsset(AssetKey(item)); valid {
+				visit(key, "huella declarada")
+			}
+		}
+	}
 	for _, host := range sourceHosts(record.Source, record.Kind == "rdap") {
 		visit(hostAsset(host), role)
 	}
