@@ -402,6 +402,30 @@ function showView(view) {
 for (const view of ["records", "assets", "http"]) byId("view-" + view).onclick = () => showView(view);
 byId("refresh").addEventListener("click", () => refresh());
 
+byId("export-stix").onclick = async (event) => {
+  const button = event.currentTarget;
+  const status = byId("status");
+  button.disabled = true;
+  status.textContent = "Preparando paquete STIX…";
+  try {
+    const response = await fetch("/api/exportar/stix");
+    if (!response.ok) throw new Error((await response.text()).trim());
+    const url = URL.createObjectURL(await response.blob());
+    const download = element("a");
+    download.href = url;
+    download.download = "PAVAROTTI-STIX.json";
+    download.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    status.textContent = `STIX · ${response.headers.get("X-Pavarotti-Objects")} objetos · ` +
+      `${response.headers.get("X-Pavarotti-Exported")} registros representados · ` +
+      `${response.headers.get("X-Pavarotti-Excluded")} fuera del formato`;
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+
 byId("upload").addEventListener("submit", async (event) => {
   event.preventDefault();
   const button = event.submitter;

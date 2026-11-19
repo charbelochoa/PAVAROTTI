@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode"
 
+	"pavarotti/internal/analisis"
 	"pavarotti/internal/caso"
 	"pavarotti/internal/ingesta"
 )
@@ -36,7 +37,7 @@ Uso: pavarotti [opciones globales] <comando> [argumentos]
   informe   Abre el informe de una tarea terminada.
   cancelar  Cancela una tarea de análisis pendiente o activa.
   ejecutor  Ejecuta la cola de análisis para este expediente.
-  exportar  Exporta el expediente como JSON o CSV.
+  exportar  Exporta el expediente como STIX 2.1, JSON o CSV.
   migrar-local Copia un expediente local y su historial a PostgreSQL.
   ayuda     Muestra esta ayuda.
 
@@ -192,7 +193,7 @@ func terminalRecords(command string, args []string, stdout, stderr io.Writer, op
 	var limit int
 	var asJSON bool
 	if command == "exportar" {
-		flags.StringVar(&format, "formato", "json", "formato de exportación: json o csv")
+		flags.StringVar(&format, "formato", "json", "formato de exportación: json, csv o stix")
 		flags.StringVar(&output, "salida", "", "archivo nuevo para la exportación")
 	}
 	if command == "listar" {
@@ -205,8 +206,8 @@ func terminalRecords(command string, args []string, stdout, stderr io.Writer, op
 	if flags.NArg() != 0 || limit < 0 {
 		return fmt.Errorf("usa pavarotti %s --help", command)
 	}
-	if command == "exportar" && format != "json" && format != "csv" {
-		return errors.New("elige un formato de exportación json o csv")
+	if command == "exportar" && format != "json" && format != "csv" && format != "stix" {
+		return errors.New("elige un formato de exportación json, csv o stix")
 	}
 	if asJSON {
 		format = "json"
@@ -220,6 +221,23 @@ func terminalRecords(command string, args []string, stdout, stderr io.Writer, op
 		return err
 	}
 	defer store.Close()
+	if format == "stix" {
+		search := strings.ToLower(strings.TrimSpace(*query))
+		data, stats, err := analisis.ExportSTIX(context.Background(), store, func(record caso.Record) bool {
+			return matchesExportFilter(record, normalizedKind, search)
+		})
+		if err != nil {
+			return err
+		}
+		if err := writeExport(stdout, output, func(writer io.Writer) error {
+			_, err := writer.Write(data)
+			return err
+		}); err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(stderr, stats.Message())
+		return err
+	}
 	records, err := store.Records()
 	if err != nil {
 		return err
@@ -252,12 +270,7 @@ func filterRecords(records []caso.Record, kind string, query string) []caso.Reco
 	results := make([]caso.Record, 0, len(records))
 	query = strings.ToLower(strings.TrimSpace(query))
 	for _, record := range records {
-		if kind != "" && record.Kind != kind {
-			continue
-		}
-		text := strings.Join([]string{record.ID, record.Title, record.Source, record.SourceID, record.SHA256,
-			record.Details, strings.Join(record.Signals, "\n")}, "\n")
-		if query == "" || strings.Contains(strings.ToLower(text), query) {
+		if matchesExportFilter(record, kind, query) {
 			results = append(results, record)
 		}
 	}
@@ -269,15 +282,31 @@ func filterRecords(records []caso.Record, kind string, query string) []caso.Reco
 	return results
 }
 
+func matchesExportFilter(record caso.Record, kind, query string) bool {
+	if kind != "" && record.Kind != kind {
+		return false
+	}
+	if query == "" {
+		return true
+	}
+	text := strings.Join([]string{record.ID, record.Title, record.Source, record.SourceID, record.SHA256,
+		record.Details, strings.Join(record.Signals, "\n")}, "\n")
+	return strings.Contains(strings.ToLower(text), query)
+}
+
 func writeRecords(stdout io.Writer, output, format string, records []caso.Record) error {
+	return writeExport(stdout, output, func(writer io.Writer) error { return encodeRecords(writer, format, records) })
+}
+
+func writeExport(stdout io.Writer, output string, encode func(io.Writer) error) error {
 	if output == "" {
-		return encodeRecords(stdout, format, records)
+		return encode(stdout)
 	}
 	file, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return err
 	}
-	err = errors.Join(encodeRecords(file, format, records), file.Close())
+	err = errors.Join(encode(file), file.Close())
 	if err != nil {
 		return errors.Join(err, os.Remove(output))
 	}

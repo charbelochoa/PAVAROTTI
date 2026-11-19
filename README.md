@@ -37,6 +37,7 @@ Usa **Anterior** y **Siguiente** para recorrer los resultados de 50 en 50. La b�
 - **STIX 2.1.** Importa paquetes JSON con dominios, direcciones, prefijos IP, relaciones y periodos de observación. Reconoce indicadores por igualdad simple de dominio, IP o huella. El informe cruza dominios y direcciones exactas con el expediente. Los patrones complejos se conservan por ID para revisión en el archivo de origen.
 - **Activos.** Busca dominios, direcciones, redes y huellas. Cada ficha muestra las fechas y distingue observaciones de tráfico o DNS, registros RDAP, declaraciones STIX, indicadores y referencias manuales. Las fichas de IP muestran los rangos RDAP y prefijos STIX que las cubren. Abre desde la ficha la revisión de evidencia que sustenta cada fuente.
 - **Relaciones STIX.** El inspector recorre enlaces entrantes y salientes de relaciones, observaciones y observables importados. La referencia indica si procede del mismo paquete, de otro paquete del expediente o si falta importar el objeto.
+- **Intercambio STIX 2.1.** Usa **Exportar STIX** para descargar observaciones DNS y HTTP, dominios, IP, prefijos, huellas, indicadores literales y relaciones compatibles con citas de origen. El resultado indica cuántos registros representa. La importación muestra cuántos registros guardó y cuántos pertenecían a un archivo ya registrado.
 - **Análisis.** Los agentes de inventario, señales HTTP, cronología y correlación trabajan en paralelo sobre la evidencia del expediente. El revisor de código Go añade señales con línea y columna sin compilar ni ejecutar la fuente.
 - **Cruces en el informe.** Los informes incluyen coincidencias SHA-256 entre muestras e indicadores y cobertura de IP observadas por DNS o HTTP dentro de rangos RDAP y prefijos STIX. Cada cruce lleva citas a las revisiones del expediente.
 - **Trazabilidad.** Cada análisis identifica la versión de sus agentes y la huella de su instantánea. En **Referencias de evidencia**, elige una sección y abre en el inspector la revisión citada. Puedes consultar esa revisión después de editar una nota y saltar de nuevo a la versión vigente.
@@ -72,6 +73,8 @@ pavarotti -datos ./expediente activos --tipo dominio --buscar example.invalid
 pavarotti -datos ./expediente activos --tipo ipv4 --valor 192.0.2.17 --json
 pavarotti -datos ./expediente analizar --json
 pavarotti -datos ./expediente exportar --formato csv --salida expediente.csv
+pavarotti -datos ./expediente exportar --formato stix --salida expediente-stix.json
+pavarotti -datos ./expediente-destino importar stix expediente-stix.json
 ```
 
 Usa `editar --id ID --revision N --texto "Nueva observación"` con el ID y la revisión de `listar`. Consulta versiones previas con `historial --id ID`.
