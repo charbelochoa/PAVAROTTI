@@ -57,7 +57,7 @@ func lockCodeBatch(ctx context.Context, tx *sql.Tx, expediente, batch string) er
 func (s *Store) classifyCodePostgres(ctx context.Context, batch string, ordinal int, next CodeDisposition) (CodeDisposition, error) {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginCaseWrite(ctx, false)
 	if err != nil {
 		return CodeDisposition{}, err
 	}

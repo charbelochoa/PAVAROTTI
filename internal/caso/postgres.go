@@ -14,6 +14,7 @@ import (
 )
 
 const migrationLock int64 = 6953370548850278928
+const caseWriteLockSeed int64 = 2781632215710108871
 
 func OpenPostgres(ctx context.Context, dsn, expediente string) (*Store, error) {
 	expediente = strings.TrimSpace(expediente)
@@ -84,6 +85,22 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+func (s *Store) beginCaseWrite(ctx context.Context, exclusive bool) (*sql.Tx, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	lock := `SELECT pg_advisory_xact_lock_shared(hashtextextended($1, $2))`
+	if exclusive {
+		lock = `SELECT pg_advisory_xact_lock(hashtextextended($1, $2))`
+	}
+	if _, err := tx.ExecContext(ctx, lock, s.expediente, caseWriteLockSeed); err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	return tx, nil
 }
 
 func (s *Store) postgresWalk(ctx context.Context, visit func(Record) error) error {
