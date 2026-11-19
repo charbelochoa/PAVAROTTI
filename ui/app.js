@@ -45,7 +45,7 @@ function formatTime(value) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
-function inspect(record, message = "Selecciona un registro para examinarlo.") {
+function inspect(record, message = "Selecciona un registro para examinarlo.", citation) {
   selectedRecord = record;
   byId("note-tools").hidden = record?.kind !== "nota" || !record.id || selectedRevision > 0;
   const view = byId("record-detail");
@@ -66,7 +66,7 @@ function inspect(record, message = "Selecciona un registro para examinarlo.") {
     const tools = element("div", "", "tools");
     if (selectedRevision) {
       const current = element("button", "Abrir revisión vigente");
-      current.onclick = () => selectRecord(record.id, 0, returnToEvidence, selectedSTIXPage);
+      current.onclick = () => selectRecord(record.id, 0, returnToEvidence, selectedSTIXPage, citation);
       tools.append(current);
     }
     if (returnToEvidence) {
@@ -82,17 +82,22 @@ function inspect(record, message = "Selecciona un registro para examinarlo.") {
     const item = record.traffic;
     view.append(element("p", `${item.type || "Tipo desconocido"} · ${item.millis} ms`));
   }
-  if (record.code_review) view.append(codeReviewPanel(record.code_review));
-  if (record.dependencies) view.append(dependencyPanel(record.dependencies));
+  if (record.code_review) view.append(codeReviewPanel(record.code_review, citation));
+  if (record.dependencies) view.append(dependencyPanel(record.dependencies, citation));
   if (!record.code_review && record.signals?.length) {
     const list = element("ul");
     for (const signal of record.signals) list.append(element("li", signal));
     view.append(list);
   }
   if (!record.code_review && record.details) view.append(element("pre", record.details));
+  const linked = view.querySelector(".audit-cited");
+  if (linked) {
+    linked.focus({preventScroll: true});
+    linked.scrollIntoView({block: "nearest"});
+  }
 }
 
-function codeReviewPanel(review) {
+function codeReviewPanel(review, citation) {
   const view = element("div", "", "audit-panel");
   const signals = review.signals || [];
   const count = review.total || signals.length;
@@ -105,6 +110,9 @@ function codeReviewPanel(review) {
     row.dataset.line = signal.line;
     row.dataset.column = signal.column;
     row.tabIndex = -1;
+    if (citation?.line === signal.line && citation.column === signal.column && citation.name === signal.rule) {
+      row.classList.add("audit-cited");
+    }
     row.append(element("strong", `Línea ${signal.line}, columna ${signal.column}`),
       element("span", signal.rule, "type"), element("p", signal.review));
     list.append(row);
@@ -129,7 +137,7 @@ function codeReviewPanel(review) {
   return view;
 }
 
-function dependencyPanel(inventory) {
+function dependencyPanel(inventory, citation) {
   const view = element("div", "", "audit-panel");
   const entries = inventory.entries || [];
   view.append(element("h4", "Inventario de dependencias"), element("p", `${entries.length} ${entries.length === 1 ? "entrada" : "entradas"}`));
@@ -141,7 +149,11 @@ function dependencyPanel(inventory) {
   search.setAttribute("aria-label", "Buscar dependencia en el manifiesto");
   const list = element("div", "", "audit-items");
   const more = element("button", "Mostrar más dependencias");
-  let results = entries;
+  const all = element("button", "Ver todas las dependencias");
+  let linked = citation && entries.find((entry) => entry.name === citation.name &&
+    (citation.location ? entry.location === citation.location : entry.line === citation.line));
+  let results = linked ? [linked] : entries;
+  all.hidden = !linked;
   let offset = 0;
   const next = () => {
     for (const entry of results.slice(offset, offset + 50)) {
@@ -150,6 +162,7 @@ function dependencyPanel(inventory) {
       row.dataset.name = entry.name;
       row.dataset.line = entry.line || "";
       row.dataset.location = entry.location || "";
+      if (entry === linked) row.classList.add("audit-cited");
       row.append(element("strong", entry.version ? `${entry.name} · ${entry.version}` : entry.name), element("span", entry.scope, "type"));
       if (entry.line) row.append(element("p", "Línea " + entry.line));
       if (entry.location) row.append(element("p", entry.location));
@@ -165,8 +178,9 @@ function dependencyPanel(inventory) {
     offset += 50;
     more.hidden = offset >= results.length;
   };
-  more.onclick = next;
   search.oninput = () => {
+    linked = undefined;
+    all.hidden = true;
     const query = search.value.trim().toLowerCase();
     results = entries.filter((entry) => [entry.name, entry.version, entry.installed_as, entry.replacement?.name,
       entry.replacement?.version].some((value) => value?.toLowerCase().includes(query)));
@@ -175,12 +189,18 @@ function dependencyPanel(inventory) {
     if (!results.length) list.append(element("p", "Sin dependencias para mostrar."));
     next();
   };
+  more.onclick = next;
+  all.onclick = () => {
+    search.value = "";
+    search.oninput();
+    search.focus();
+  };
   next();
-  view.append(search, list, more);
+  view.append(search, list, more, all);
   return view;
 }
 
-function selectRecord(id, revision = 0, back, stixPage) {
+function selectRecord(id, revision = 0, back, stixPage, citation) {
   selectedAsset = undefined;
   selectedSTIXPage = stixPage;
   returnToEvidence = back;
@@ -188,7 +208,7 @@ function selectRecord(id, revision = 0, back, stixPage) {
   selectedRevision = revision;
   paintSelection();
   if (revision || back) byId("inspector-heading").focus({preventScroll: true});
-  return loadRecord(id, true);
+  return loadRecord(id, true, citation);
 }
 
 function stixPanel(record) {
@@ -260,7 +280,7 @@ function beginInspection(message) {
   return controller;
 }
 
-async function loadRecord(id, scroll = false) {
+async function loadRecord(id, scroll = false, citation) {
   const controller = beginInspection("Consultando evidencia…");
   if (scroll && (selectedRevision || window.matchMedia("(max-width: 970px)").matches)) {
     byId("inspector").scrollIntoView({block: "nearest"});
@@ -268,7 +288,7 @@ async function loadRecord(id, scroll = false) {
   try {
     const query = selectedRevision ? "?revision=" + selectedRevision : "";
     const record = await request("/api/registro/" + encodeURIComponent(id) + query, {signal: controller.signal});
-    if (!controller.signal.aborted) inspect(record);
+    if (!controller.signal.aborted) inspect(record, undefined, citation);
   } catch (error) {
     if (!controller.signal.aborted) inspect(undefined, error.message);
   }
@@ -574,6 +594,7 @@ byId("note-form").addEventListener("submit", async (event) => {
 
 const reportSections = [
   ["matches", "Coincidencias"], ["hash_matches", "Coincidencias SHA-256"], ["network_matches", "Cobertura de red"],
+  ["code_findings", "Revisión estática"], ["dependencies", "Dependencias"],
   ["assets", "Activos"], ["signals", "Señales HTTP"],
   ["responses", "Respuestas HTTP"], ["indicators", "Indicadores"], ["hashes", "Huellas"], ["timeline", "Cronología"]
 ];
@@ -603,13 +624,14 @@ function reportDialog(title, text, report) {
       if (value) group.append(element("strong", scope ? `${value} · ${scope}` : value));
       if (samples?.length) group.append(element("span", "IP citadas · " + samples.join(", "), "muted"));
       for (const item of evidence) {
-        const action = element("button", `${item.title || item.kind} · rev. ${item.revision}`);
+        const position = item.line ? ` · línea ${item.line}${item.column ? `, columna ${item.column}` : ""}` : item.location ? ` · ${item.location}` : "";
+        const action = element("button", `${item.title || item.kind} · rev. ${item.revision}${position}`);
         action.title = `${item.id} · revisión ${item.revision}`;
         action.onclick = () => {
           byId("report-panel").close();
           selectRecord(item.id, item.revision, {
             label: "Volver al informe", open: () => byId("report-panel").showModal()
-          });
+          }, undefined, position ? {...item, name: value} : undefined);
         };
         group.append(action);
       }

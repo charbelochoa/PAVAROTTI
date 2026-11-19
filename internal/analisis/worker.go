@@ -35,7 +35,7 @@ func RunQueue(ctx context.Context, store *caso.Store) error {
 	poll := time.NewTicker(time.Second)
 	defer poll.Stop()
 	for ctx.Err() == nil {
-		claim, found, err := store.ClaimAnalysis(ctx, AgentVersion, legacyAgent)
+		claim, found, err := store.ClaimAnalysis(ctx, AgentVersion, networkAgent, legacyAgent)
 		switch {
 		case ctx.Err() != nil:
 			return nil

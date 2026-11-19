@@ -29,6 +29,8 @@ type Report struct {
 	Matches        []Group       `json:"matches"`
 	HashMatches    []Group       `json:"hash_matches,omitempty"`
 	NetworkMatches []Group       `json:"network_matches,omitempty"`
+	CodeFindings   []Group       `json:"code_findings,omitempty"`
+	Dependencies   []Group       `json:"dependencies,omitempty"`
 	Hashes         []Group       `json:"hashes"`
 	Signals        []Group       `json:"signals"`
 	Responses      []Group       `json:"responses"`
@@ -52,6 +54,9 @@ type Evidence struct {
 	Title    string `json:"title"`
 	SourceID string `json:"source_id,omitempty"`
 	SHA256   string `json:"sha256,omitempty"`
+	Line     int    `json:"line,omitempty"`
+	Column   int    `json:"column,omitempty"`
+	Location string `json:"location,omitempty"`
 }
 
 type AgentResult struct {
@@ -73,10 +78,10 @@ type result struct {
 }
 
 func Analyze(ctx context.Context, records []caso.Record) (Report, error) {
-	return analyze(ctx, records, true)
+	return analyze(ctx, records, AgentVersion)
 }
 
-func analyze(ctx context.Context, records []caso.Record, extended bool) (Report, error) {
+func analyze(ctx context.Context, records []caso.Record, version string) (Report, error) {
 	if err := ctx.Err(); err != nil {
 		return Report{}, err
 	}
@@ -95,8 +100,11 @@ func analyze(ctx context.Context, records []caso.Record, extended bool) (Report,
 		return b.date.Compare(a.date)
 	})
 	agents := []func(context.Context, []observation) result{inventory, httpSignals, chronology}
-	if extended {
+	if version == AgentVersion || version == networkAgent {
 		agents = append(agents, correlateEvidence)
+	}
+	if version == AgentVersion {
+		agents = append(agents, summarizeAudit)
 	}
 	tasks := make([]chan result, len(agents))
 	for index, agent := range agents {
@@ -141,6 +149,7 @@ func (r Report) Text() string {
 		groups []Group
 	}{{"Activos registrados", r.Assets}, {"Indicadores aportados", r.Indicators}, {"Indicadores coincidentes", r.Matches},
 		{"Coincidencias SHA-256 de muestras", r.HashMatches}, {"Cobertura de red de IP observadas", r.NetworkMatches},
+		{"Señales de revisión estática", r.CodeFindings}, {"Dependencias inventariadas", r.Dependencies},
 		{"Huellas de evidencia", r.Hashes}, {"Respuestas HTTP", r.Responses}, {"Señales HTTP", r.Signals}} {
 		if len(section.groups) == 0 {
 			continue
@@ -178,6 +187,16 @@ func (e Evidence) text() string {
 	}
 	if e.Revision > 0 {
 		fields = append(fields, fmt.Sprintf("rev. %d", e.Revision))
+	}
+	if e.Line > 0 {
+		position := fmt.Sprintf("línea %d", e.Line)
+		if e.Column > 0 {
+			position += fmt.Sprintf(", columna %d", e.Column)
+		}
+		fields = append(fields, position)
+	}
+	if e.Location != "" {
+		fields = append(fields, e.Location)
 	}
 	return strings.Join(fields, " · ")
 }
