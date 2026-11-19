@@ -23,7 +23,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | Windows x64 y Linux x86-64 con almacén local | Arranque del binario, CLI, importación, análisis, edición y persistencia después de cerrar y abrir. Ejecutar el flujo RDAP y STIX con cruces de SHA-256 y red y reimportar el paquete exportado dentro de Kali y Arch en CI. |
 | PostgreSQL | Inicio de esquema, credenciales inválidas, aislamiento por expediente, edición concurrente, migración idempotente, historial, vencimiento y revocación de sesiones. |
 | Docker Compose | Puerto alterno en loopback, espera de salud, registro por CLI y persistencia después de reiniciar. En HTTPS se ejercitan el certificado, la sesión, los roles y el origen de las escrituras. |
-| Proxy y HAR | Destino fijo local, redirecciones, filtros combinados de captura, método, fecha y clase de respuesta, y distinción entre fallo de conexión y señales de cabeceras. |
+| Proxy y HAR | Destino fijo local, redirecciones, filtros combinados de captura, método, fecha, clase de respuesta y regla, y distinción entre fallo de conexión y señales de cabeceras. Verificar las citas de reglas sin guardar valores de cookies ni URLs completas. |
 | Navegador | Selección e inspector, búsqueda, historial, carga de informes y uso con ancho móvil. Abrir una cita de un informe guardado tras editar la evidencia y comprobar su revisión. Desde una ficha de activo, abrir fuentes DNS, HTTP, RDAP y STIX. |
 | Revisión estática y dependencias | Localizar Go por línea y columna físicas. Consultar dependencias por versión y posición. Revisar un directorio, abrir la cita y conservar dos decisiones de triaje tras reiniciar y migrar a PostgreSQL. |
 
@@ -46,7 +46,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | --- | --- | --- |
 | Expedientes, terminal y agentes | Evidencia con procedencia, inventario de activos, cola persistente, revisión de código Go y exportación STIX. | Guardar un informe de cobertura por activo y periodo. Exportarlo, abrir sus citas y confirmar los cruces al restaurar el expediente. |
 | Inspección estática de binarios | PE, ELF y Mach-O con secciones, cadenas, símbolos y citas por desplazamiento. | Mostrar exportaciones PE y símbolos Mach-O universales. Navegar instrucciones y referencias en secciones de muestras locales y comprobar sus desplazamientos con archivos de referencia. |
-| Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros y señales de cabeceras. | Ampliar las reglas pasivas y comparar capturas por origen y periodo. Verificar cada señal con respuestas de prueba y citas reproducibles. |
+| Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros y reglas pasivas con citas a la respuesta y a la revisión exactas. | Comparar capturas por origen y periodo y conservar sus criterios en el informe. |
 | Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, actividad por expediente, respaldo, restauración y retención verificada. | Medir el costo de respaldo, restauración y retención en expedientes grandes y verificar sus referencias después de operar. |
 
 ## Hallazgos de la revisión de 0.3
@@ -74,7 +74,8 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 12. **Auditoría de operaciones.** La 0.4.2 registra incorporaciones, ediciones, triaje, migraciones y cambios de la cola en la misma transacción. La mesa abre la revisión de evidencia o tarea del evento. Las pruebas cubren conflictos concurrentes, retroceso cuando falla la auditoría y separación de expedientes.
 13. **Respaldo y restauración.** La 0.4.3 guarda evidencia, revisiones, triaje, tareas y actividad en una copia verificable por SHA-256. Restaura en un expediente vacío con sus referencias. Las pruebas cubren la edición concurrente al respaldar, la exclusión de otras escrituras al restaurar, las copias truncadas y las referencias inválidas.
 14. **Retención y despliegue compartido.** La 0.4.4 permite previsualizar la retención por fecha y aplicarla cuando la copia contiene los eventos seleccionados. La prueba restaura la actividad archivada y abre las revisiones conservadas. CI prueba HTTPS con Docker Compose, roles y persistencia tras reiniciar. El archivo queda bajo custodia del operador.
-15. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
+15. **Reglas pasivas HTTP.** La 0.4.5 añade reglas de cabeceras, filtros por código en la mesa y la terminal, y citas en el informe de agentes 4. Las instantáneas anteriores siguen siendo legibles por sus respectivas versiones. El criterio de cierre comprueba que la regla abre la respuesta guardada y resalta su motivo.
+16. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
 
 ## Flujo de trabajo OSINT
 

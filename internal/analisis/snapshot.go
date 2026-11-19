@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	AgentVersion      = "3"
+	AgentVersion      = "4"
 	legacyAgent       = "1"
 	networkAgent      = "2"
+	auditAgent        = "3"
 	SnapshotByteLimit = 32 << 20
 )
 
@@ -91,6 +92,11 @@ func analysisRecord(base caso.Record) caso.Record {
 	hosts := observedHosts(base.Source)
 	if base.Traffic != nil {
 		record.Traffic = &caso.Traffic{Status: base.Traffic.Status}
+		for _, finding := range base.HTTPFindings[:min(len(base.HTTPFindings), 32)] {
+			if label := clip(finding.Label, 160); label != "" && caso.ValidHTTPRule(finding.Rule) {
+				record.HTTPFindings = append(record.HTTPFindings, caso.HTTPFinding{Rule: finding.Rule, Label: label})
+			}
+		}
 		if host := networkHost(base.Source); host != "" {
 			hosts = []string{host}
 		}
@@ -126,5 +132,5 @@ func (snapshot Snapshot) Analyze(ctx context.Context) (Report, error) {
 }
 
 func supportedAgent(version string) bool {
-	return version == AgentVersion || version == networkAgent || version == legacyAgent
+	return version == AgentVersion || version == auditAgent || version == networkAgent || version == legacyAgent
 }

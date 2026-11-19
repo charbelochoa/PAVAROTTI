@@ -26,9 +26,9 @@ La mesa de trabajo mantiene el expediente a la izquierda, los registros al centr
 
 Usa **Anterior** y **Siguiente** para recorrer los resultados de 50 en 50. La búsqueda y el filtro se aplican al expediente completo. El inspector carga los detalles al seleccionar un registro y los mantiene visibles al cambiar de página.
 
-**Historial HTTP** reúne el proxy y los archivos HAR. Muestra método, estado, fecha, origen, tipo MIME, latencia y número de señales. Combina filtros por captura, método, clase de respuesta y fechas UTC. Selecciona una fila para examinar su evidencia y las señales asociadas sin salir de la mesa de trabajo.
+**Historial HTTP** reúne el proxy y los archivos HAR. Muestra método, estado, fecha, origen, tipo MIME, latencia y número de señales. Combina filtros por captura, método, clase de respuesta, fechas UTC y regla pasiva. El inspector muestra la cabecera observada y el motivo de cada señal. Desde un informe puedes abrir la respuesta citada y ver resaltada su regla.
 
-- **Tráfico.** Proxy inverso HTTP(S) de un solo destino e importación de HAR. El expediente registra origen, estado HTTP, tipo MIME, latencia y señales de configuración. Las señales sirven para priorizar la revisión manual.
+- **Tráfico.** Proxy inverso HTTP(S) de un solo destino e importación de HAR. Las reglas pasivas comprueban tipo MIME, `nosniff`, controles de marcos, `Referrer-Policy`, `max-age` de HSTS, redirecciones a HTTP y atributos de cookies. El expediente guarda los recuentos de cookies, el origen y el motivo de cada señal.
 - **Evidencia.** Importación de hallazgos JSON con huella SHA-256 del archivo y búsqueda por texto, origen, ID o huella. También puedes registrar notas manuales.
 - **Binarios.** Triaje estático de cabeceras PE, ELF y Mach-O. Consulta hasta 256 secciones, 128 vistas previas de cadenas ASCII y 2,048 símbolos definidos por archivo. El inspector busca símbolos en las tablas ELF, COFF y Mach-O y muestra su desplazamiento cuando la sección tiene respaldo físico. La huella SHA-256 abre la ficha del activo.
 - **Citas de binarios.** Usa **Exportar cita** desde una sección, cadena o símbolo con desplazamiento. En **Binarios → Abrir cita JSON**, la mesa verifica la huella del archivo, la huella del análisis guardado y la revisión, y señala la ubicación exacta. Una cita incluye referencias y desplazamientos.
@@ -72,6 +72,7 @@ pavarotti -datos ./expediente importar indicadores indicadores.txt
 pavarotti -datos ./expediente importar dns observaciones.json
 pavarotti -datos ./expediente importar rdap registro-dominio.json
 pavarotti -datos ./expediente importar stix indicadores-stix.json
+pavarotti -datos ./expediente listar --tipo har --regla-http hsts-ausente --json
 pavarotti -datos ./expediente importar codigo revision.go
 pavarotti -datos ./expediente citar-binario --id ID --revision 1 --tipo cadena --indice 0 --salida cita.json
 pavarotti -datos ./expediente importar gomod go.mod

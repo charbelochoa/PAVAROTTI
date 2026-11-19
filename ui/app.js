@@ -1031,7 +1031,8 @@ function reportDialog(title, text, report) {
       if (value) group.append(element("strong", scope ? `${value} · ${scope}` : value));
       if (samples?.length) group.append(element("span", "IP citadas · " + samples.join(", "), "muted"));
       for (const item of evidence) {
-        const position = item.line ? ` · línea ${item.line}${item.column ? `, columna ${item.column}` : ""}` : item.location ? ` · ${item.location}` : "";
+        const location = item.location || item.http_rule;
+        const position = item.line ? ` · línea ${item.line}${item.column ? `, columna ${item.column}` : ""}` : location ? ` · ${location}` : "";
         const label = (item.kind === "código" || item.kind === "dependencias") && item.source_id ? item.source_id : (item.title || item.kind);
         const action = element("button", `${label} · rev. ${item.revision}${position}`);
         action.title = `${item.id} · revisión ${item.revision}`;
