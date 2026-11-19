@@ -105,7 +105,7 @@ func TestAssetNetworkCoverageKeepsObservedAddressesDistinct(t *testing.T) {
 func TestAssetInventoryPaginatesLargeCases(t *testing.T) {
 	for _, backend := range []string{"local", "postgres"} {
 		t.Run(backend, func(t *testing.T) {
-			store := openAssetScaleStore(t, backend)
+			store := openScaleStore(t, backend)
 			const observations = RecordLimit + 12
 			saveAssetScaleFixture(t, store, observations)
 			if err := store.Save([]caso.Record{
@@ -151,7 +151,7 @@ func TestAssetInventoryPaginatesLargeCases(t *testing.T) {
 func TestAssetSourceCursorUsesUTCAndCurrentEvidence(t *testing.T) {
 	for _, backend := range []string{"local", "postgres"} {
 		t.Run(backend, func(t *testing.T) {
-			store := openAssetScaleStore(t, backend)
+			store := openScaleStore(t, backend)
 			const ip = "192.0.2.42"
 			if err := store.Save([]caso.Record{
 				{Kind: "stix", Title: "Prefijo STIX", Network: "192.0.2.32/27", Time: "2026-06-01T10:00:00Z"},

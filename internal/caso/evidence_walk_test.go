@@ -22,6 +22,51 @@ func TestPostgresEvidencePeriodsUseRecordedInstants(t *testing.T) {
 	testEvidencePeriods(t, openAuditTest(t))
 }
 
+func TestHTTPWindowReadsPendingAndLegacyBatches(t *testing.T) {
+	store := openAuditTest(t)
+	ctx := t.Context()
+	times := map[string]string{
+		"En el índice": "2026-11-05T00:00:00Z",
+		"Con desfase":  "2026-11-06T00:10:00+02:00",
+		"Por indexar":  "2026-11-05T12:00:00Z",
+		"Otro día":     "2026-11-10T00:00:00Z",
+	}
+	for title, stamp := range times {
+		record := Record{Kind: "archivo HAR", Title: title, Time: stamp, Traffic: &Traffic{Status: 200}}
+		if err := store.Save([]Record{record}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	records, err := store.Records()
+	if err != nil || len(records) != len(times) {
+		t.Fatalf("lotes: %d, %v", len(records), err)
+	}
+	for _, record := range records {
+		if record.Title == "Por indexar" {
+			batch, _, _ := recordPosition(record.ID)
+			if _, err := store.db.ExecContext(ctx, "DELETE FROM pavarotti_http_page WHERE expediente=$1 AND batch_key=$2", store.expediente, batch); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := store.db.ExecContext(ctx, "UPDATE pavarotti_evidence_batches SET http_page_indexed=false WHERE expediente=$1 AND batch_key=$2", store.expediente, batch); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	start := time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC)
+	filter := EvidenceFilter{HTTP: true, Periods: []EvidencePeriod{{Start: start, End: start.AddDate(0, 0, 1)}}}
+	var titles []string
+	if err := store.WalkFiltered(ctx, filter, func(record Record) error {
+		titles = append(titles, record.Title)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(titles)
+	if !slices.Equal(titles, []string{"Con desfase", "En el índice", "Por indexar"}) {
+		t.Fatalf("ventana acotada: %v", titles)
+	}
+}
+
 func testEvidencePeriods(t *testing.T, store *Store) {
 	t.Helper()
 	traffic := &Traffic{Status: 204}

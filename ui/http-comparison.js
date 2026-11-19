@@ -8,7 +8,7 @@
   const result = byId("http-compare-result");
   const run = byId("http-compare-run");
   const saved = byId("http-compare-export");
-  const schema = "pavarotti.http-comparison.v1";
+  const limits = new Map([["pavarotti.http-comparison.v1", 10000], ["pavarotti.http-comparison.v2", 50000]]);
   const captures = ["", "archivo HAR", "tráfico"];
   const metrics = {
     observations: "Observaciones",
@@ -21,7 +21,7 @@
   let comparison;
   let initialized = false;
 
-  const count = (value) => Number.isSafeInteger(value) && value >= 0 && value <= 10000;
+  const count = (value, maximum) => Number.isSafeInteger(value) && value >= 0 && value <= maximum;
   const bounded = (value, length) => typeof value === "string" && value.length <= length;
   const isoDate = (value) => {
     if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000")) return false;
@@ -30,14 +30,14 @@
   };
   const validWindow = (value) => value && bounded(value.origin, 768) && captures.includes(value.capture) &&
     isoDate(value.from) && isoDate(value.to) && value.from <= value.to;
-  const validStats = (stats) => stats && Object.keys(metrics).every((metric) => count(stats[metric])) &&
+  const validStats = (stats, maximum) => stats && Object.keys(metrics).every((metric) => count(stats[metric], maximum)) &&
     stats.responses + stats.transport_failures <= stats.observations && stats.assessed <= stats.responses;
   const validRef = (ref, row) => ref && typeof ref.id === "string" && /^[a-f0-9]{64}-[1-9][0-9]*$/.test(ref.id) &&
     Number.isSafeInteger(ref.revision) && ref.revision >= 1 && bounded(ref.title, 160) &&
     bounded(ref.kind, 64) && bounded(ref.time, 48) && bounded(ref.origin ?? "", 768) &&
     (row.kind === "rule" ? ref.http_rule === row.code : ref.http_rule === undefined);
   const validTally = (tally, row, maximum) => {
-    if (!tally || !count(tally.count) || tally.count > maximum) return false;
+    if (!tally || !count(tally.count, maximum)) return false;
     const refs = tally.evidence ?? [];
     return Array.isArray(refs) && refs.length === Math.min(5, tally.count) && refs.every((ref) => validRef(ref, row));
   };
@@ -45,10 +45,13 @@
     bounded(row.label, 180) && bounded(row.code, 180) &&
     (row.kind !== "rule" || ruleCode.test(row.code)) &&
     validTally(row.baseline, row, report.baseline.observations) && validTally(row.current, row, report.current.observations);
-  const validReport = (report) => report?.schema === schema && typeof report.input_sha256 === "string" &&
-    /^[a-f0-9]{64}$/.test(report.input_sha256) && validWindow(report.criteria?.baseline) && validWindow(report.criteria?.current) &&
-    validStats(report.baseline) && validStats(report.current) && Array.isArray(report.rows) && report.rows.length <= 100 &&
-    Number.isSafeInteger(report.omitted_rows) && report.omitted_rows >= 0 && report.rows.every((row) => validRow(row, report));
+  const validReport = (report) => {
+    const maximum = limits.get(report?.schema);
+    return maximum && typeof report.input_sha256 === "string" && /^[a-f0-9]{64}$/.test(report.input_sha256) &&
+      validWindow(report.criteria?.baseline) && validWindow(report.criteria?.current) &&
+      validStats(report.baseline, maximum) && validStats(report.current, maximum) && Array.isArray(report.rows) && report.rows.length <= 100 &&
+      Number.isSafeInteger(report.omitted_rows) && report.omitted_rows >= 0 && report.rows.every((row) => validRow(row, report));
+  };
 
   function fill(side, window) {
     const values = {origen: window.origin, captura: window.capture, desde: window.from, hasta: window.to};

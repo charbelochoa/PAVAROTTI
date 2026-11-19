@@ -104,3 +104,38 @@ func TestHTTPComparisonRejectsInvalidCriteria(t *testing.T) {
 		}
 	}
 }
+
+func TestHTTPComparisonCountsOverlappingLargeWindows(t *testing.T) {
+	store, err := caso.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	first, last := seedHTTPComparison(t, store, HTTPComparisonRecordLimit)
+	window := HTTPWindow{From: first, To: last}
+	criteria := HTTPCompareCriteria{Baseline: window, Current: window}
+	report, err := CompareHTTP(t.Context(), store, criteria)
+	if err != nil || report.Schema != HTTPComparisonWideSchema || report.Baseline.Observations != HTTPComparisonRecordLimit ||
+		report.Baseline != report.Current || report.Baseline.Assessed != HTTPComparisonRecordLimit {
+		t.Fatalf("periodos coincidentes: %+v, %v", report.Baseline, err)
+	}
+	for _, row := range report.Rows {
+		if row.Baseline.Count != row.Current.Count || !reflect.DeepEqual(row.Baseline.Evidence, row.Current.Evidence) ||
+			len(row.Baseline.Evidence) != referenceLimit {
+			t.Fatalf("recuento y citas coincidentes: %+v", row)
+		}
+		for _, ref := range row.Baseline.Evidence {
+			record, err := store.RecordRevision(t.Context(), ref.ID, ref.Revision)
+			if err != nil || record.Title != ref.Title || record.Time != ref.Time || record.Source != ref.Origin {
+				t.Fatalf("cita original: %+v, %v", ref, err)
+			}
+		}
+	}
+	if err := store.Save([]caso.Record{{Kind: "archivo HAR", Time: last + "T23:59:59Z", Title: "Captura adicional",
+		Source: "https://control.invalid", Traffic: &caso.Traffic{Status: 204}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CompareHTTP(t.Context(), store, criteria); !errors.Is(err, ErrHTTPComparisonLimit) {
+		t.Fatalf("límite de observaciones únicas: %v", err)
+	}
+}

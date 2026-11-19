@@ -51,7 +51,7 @@ func BenchmarkAssetScale(b *testing.B) {
 		b.Run(backend, func(b *testing.B) {
 			for _, size := range []int{1000, 50000} {
 				b.Run(fmt.Sprint(size), func(b *testing.B) {
-					store := openAssetScaleStore(b, backend)
+					store := openScaleStore(b, backend)
 					saveAssetScaleFixture(b, store, size)
 					b.Run("inventario", func(b *testing.B) {
 						query := AssetQuery{Limit: 50}
@@ -97,7 +97,7 @@ func BenchmarkAssetScale(b *testing.B) {
 	}
 }
 
-func openAssetScaleStore(tb testing.TB, backend string) *caso.Store {
+func openScaleStore(tb testing.TB, backend string) *caso.Store {
 	tb.Helper()
 	var store *caso.Store
 	var err error
@@ -108,7 +108,7 @@ func openAssetScaleStore(tb testing.TB, backend string) *caso.Store {
 		if dsn == "" {
 			tb.Skip("PAVAROTTI_TEST_POSTGRES no configurado")
 		}
-		store, err = caso.OpenPostgres(tb.Context(), dsn, fmt.Sprintf("activos-%d", time.Now().UnixNano()))
+		store, err = caso.OpenPostgres(tb.Context(), dsn, fmt.Sprintf("escala-%d", time.Now().UnixNano()))
 	}
 	if err != nil {
 		tb.Fatal(err)
