@@ -1,4 +1,4 @@
-package main
+package terminal
 
 import (
 	"context"
@@ -50,7 +50,7 @@ Sin comando se abre la interfaz web. Usa <comando> --help para ver sus opciones.
 
 type openExpediente func() (*caso.Store, error)
 
-func terminal(args []string, stdout, stderr io.Writer, open func() (*caso.Store, error)) (bool, error) {
+func Run(args []string, stdout, stderr io.Writer, open func() (*caso.Store, error)) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
 	}

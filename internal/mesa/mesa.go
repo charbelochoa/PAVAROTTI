@@ -1,10 +1,10 @@
-package main
+package mesa
 
 import (
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"slices"
@@ -16,10 +16,7 @@ import (
 	"pavarotti/internal/ingesta"
 )
 
-//go:embed ui/* licenses/*
-var resources embed.FS
-
-type settings struct {
+type Settings struct {
 	Version       string              `json:"version"`
 	Proxy         string              `json:"proxy,omitempty"`
 	Target        string              `json:"target,omitempty"`
@@ -36,7 +33,7 @@ type noteInput struct {
 	Revision int    `json:"revision"`
 }
 
-func dashboard(host string, config settings, store *caso.Store) http.Handler {
+func Handler(host string, config Settings, store *caso.Store, resources fs.FS) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFileFS(w, r, resources, "ui/index.html")
@@ -219,7 +216,7 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 	origin := "http://" + host
 	if config.Shared {
 		origin = "https://" + host
-		handler = sharedDashboard(mux, store, origin)
+		handler = sharedDashboard(mux, store, origin, resources)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")

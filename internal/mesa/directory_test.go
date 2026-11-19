@@ -1,4 +1,4 @@
-package main
+package mesa
 
 import (
 	"bytes"
@@ -36,7 +36,7 @@ func TestDirectoryUploadRejectsInvalidPathsBeforeSaving(t *testing.T) {
 	r.Header.Set("Content-Type", parts.FormDataContentType())
 	r.Header.Set("Origin", "http://"+host)
 	w := httptest.NewRecorder()
-	dashboard(host, settings{}, store).ServeHTTP(w, r)
+	Handler(host, Settings{}, store, testResources).ServeHTTP(w, r)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("respuesta: %d, %s", w.Code, w.Body.String())
 	}

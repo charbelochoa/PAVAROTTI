@@ -1,4 +1,4 @@
-package main
+package mesa
 
 import (
 	"encoding/json"

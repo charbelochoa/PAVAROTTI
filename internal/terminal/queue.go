@@ -1,4 +1,4 @@
-package main
+package terminal
 
 import (
 	"context"
@@ -72,7 +72,7 @@ func terminalQueue(command string, args []string, stdout, stderr io.Writer, open
 		if reportJSON {
 			return output.Encode(job.Result)
 		}
-		text, err := analysisJobText(job)
+		text, err := analisis.JobText(job)
 		if err != nil {
 			return err
 		}

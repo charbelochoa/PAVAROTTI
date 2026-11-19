@@ -29,6 +29,26 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 
 `go test -count=1 ./...` ejecuta la suite local. Para incluir PostgreSQL, configura `PAVAROTTI_TEST_POSTGRES` con un servidor de pruebas separado. `go vet ./...` completa la revisión estática. CI construye y prueba las configuraciones de la matriz y comprueba avisos de dependencias con `govulncheck`.
 
+## Arquitectura del repositorio
+
+| Ruta | Responsabilidad |
+| --- | --- |
+| `main.go` | Opciones de arranque, selección del almacén, empaquetado de recursos y ciclo de vida del servidor. |
+| `internal/mesa` y `ui` | Servidor HTTP, sesiones y permisos en `internal/mesa`. HTML, estilos y comportamiento de la interfaz en `ui`. |
+| `internal/terminal` | Comandos, argumentos y formatos de salida. Usa los mismos servicios que la mesa. |
+| `internal/caso` y `internal/config` | Evidencia, revisiones, autenticación, cola y auditoría en `internal/caso`. Lectura de secretos en `internal/config`. |
+| `internal/analisis` | Preparación de instantáneas, correlación, agentes e informes. |
+| `internal/ingesta`, `internal/trafico`, `internal/triaje` y `internal/revision` | Importación de artefactos, observación HTTP, inspección de binarios y revisión de código y dependencias, respectivamente. |
+
+## Cobertura defensiva de la mesa
+
+| Flujo | Disponible | Trabajo pendiente y prueba de cierre |
+| --- | --- | --- |
+| Expedientes, terminal y agentes | Evidencia con procedencia, inventario de activos, cola persistente, revisión de código Go y exportación STIX. | Guardar un informe de cobertura por activo y periodo. Exportarlo, abrir sus citas y confirmar los cruces al restaurar el expediente. |
+| Inspección estática de binarios | PE, ELF y Mach-O con secciones, cadenas, símbolos y citas por desplazamiento. | Mostrar exportaciones PE y símbolos Mach-O universales. Navegar instrucciones y referencias en secciones de muestras locales y comprobar sus desplazamientos con archivos de referencia. |
+| Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros y señales de cabeceras. | Ampliar las reglas pasivas y comparar capturas por origen y periodo. Verificar cada señal con respuestas de prueba y citas reproducibles. |
+| Operación compartida | Instalación nativa, Docker Compose local, HTTPS con roles y PostgreSQL. | Probar el respaldo y la restauración, la retención y el arranque HTTPS con Compose. |
+
 ## Hallazgos de la revisión de 0.3
 
 - Una conexión fallida del proxy generaba un aviso de HSTS aun cuando no se había recibido ninguna cabecera. Una prueba de regresión comprueba que el incidente queda registrado como fallo de conexión.
@@ -71,4 +91,4 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 
 ## Ramas y commits
 
-Usa ramas `blue-team/<capacidad>` para cambios que puedan revisarse por separado. Integra a `main` con la matriz verde. Los mensajes siguen `commit #N` y el número avanza para cada cambio comprobable. Una funcionalidad, una regresión, una mejora de configuración y su documentación pueden merecer commits separados cuando cada uno tiene un motivo propio. La meta de 1,000 commits se mide con `git rev-list --count main`.
+Usa ramas `blue-team/<capacidad>` para cambios que puedan revisarse por separado. Integra a `main` con la matriz verde. Escribe cada título en inglés sencillo, en cuatro o cinco palabras que describan el cambio. La meta de 1,000 commits se mide con `git rev-list --count main`.

@@ -1,4 +1,4 @@
-package main
+package mesa
 
 import (
 	"context"
@@ -72,7 +72,7 @@ func TestSharedDashboard(t *testing.T) {
 	}
 	const host = "127.0.0.1:8443"
 	const origin = "https://" + host
-	handler := dashboard(host, settings{Version: version, Shared: true, Case: name}, store)
+	handler := Handler(host, Settings{Version: "version-de-prueba", Shared: true, Case: name}, store, testResources)
 	call := func(method, target, requestOrigin, body string, cookie *http.Cookie, status int) *httptest.ResponseRecorder {
 		t.Helper()
 		if strings.HasPrefix(target, "/") {
@@ -124,7 +124,7 @@ func TestSharedDashboard(t *testing.T) {
 	}
 	reader := login(caso.SharedReader)
 	state := call("GET", "/api/app", "", "", reader, 200)
-	var config settings
+	var config Settings
 	if err := json.Unmarshal(state.Body.Bytes(), &config); err != nil || config.Case != name ||
 		config.Account == nil || config.Account.Role != caso.SharedReader {
 		t.Fatalf("perfil del lector: %+v, %v", config, err)
