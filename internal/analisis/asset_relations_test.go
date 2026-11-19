@@ -114,3 +114,28 @@ func TestAssetRelationsPreserveDirectionAndEvidence(t *testing.T) {
 		})
 	}
 }
+
+func TestAssetRelationsKeepsMostSupportedRows(t *testing.T) {
+	store, err := caso.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	const host = "origen.invalid"
+	records := make([]caso.Record, 0, 103)
+	for index := range 102 {
+		records = append(records, caso.Record{Kind: "dns", Title: "A " + host, SourceID: "1/respuesta/1",
+			Source: fmt.Sprintf("%s, 192.0.2.%d", host, index), Time: "2026-06-02T12:00:00Z"})
+	}
+	records = append(records, records[101])
+	if err := store.Save(records); err != nil {
+		t.Fatal(err)
+	}
+	report, err := RelateAsset(t.Context(), store, AssetRelationCriteria{AssetKey: AssetKey{Type: "dominio", Value: host}})
+	if err != nil || len(report.Rows) != 100 || report.OmittedRows != 2 || report.Records != 103 ||
+		report.Rows[0].Value != "192.0.2.101" || report.Rows[0].Count != 2 ||
+		len(report.Rows[0].Sources) != 2 || report.Rows[0].Sources[0].ID == report.Rows[0].Sources[1].ID {
+		t.Fatalf("relaciones con más fuentes: %d visibles, %d omitidas, %d registros, %v",
+			len(report.Rows), report.OmittedRows, report.Records, err)
+	}
+}

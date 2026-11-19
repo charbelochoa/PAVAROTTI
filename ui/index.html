@@ -13,6 +13,7 @@
   <script src="/app.js" defer></script>
   <script src="/http-comparison.js" defer></script>
   <script src="/asset-coverage.js" defer></script>
+  <script src="/asset-relations.js" defer></script>
   <script src="/watchlists.js" defer></script>
   <script src="/binary-reference-comparison.js" defer></script>
 </head>
@@ -297,6 +298,25 @@
     <input type="file" id="asset-coverage-file" accept=".json,application/json" aria-label="Informe de cobertura de activos" hidden>
     <p id="asset-coverage-status" role="status"></p>
     <div id="asset-coverage-result" hidden></div>
+  </dialog>
+  <dialog id="asset-relations" aria-labelledby="asset-relations-title">
+    <div class="comparison-heading">
+      <h2 id="asset-relations-title">Relaciones del activo</h2>
+      <form method="dialog"><button>Cerrar</button></form>
+    </div>
+    <p id="asset-relations-anchor"></p>
+    <form id="asset-relations-form">
+      <div class="coverage-fields">
+        <label>Desde (UTC)<input name="desde" type="date"></label>
+        <label>Hasta (UTC)<input name="hasta" type="date"></label>
+      </div>
+      <div class="tools">
+        <button type="submit" class="primary">Consultar</button>
+        <button type="button" id="asset-relations-export" hidden>Exportar JSON</button>
+      </div>
+    </form>
+    <p id="asset-relations-status" role="status"></p>
+    <ul id="asset-relations-rows" class="binary-list"></ul>
   </dialog>
   <dialog id="watchlists" aria-labelledby="watchlists-title">
     <div class="comparison-heading">
