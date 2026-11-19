@@ -41,6 +41,27 @@ test("reports conflicting physical offsets for the same address in an image", ()
   }
 });
 
+test("keeps the verified origin of a replayed jump before the parent window opens", () => {
+  const sections = [{image: 1}];
+  const index = indexReferences([]);
+  const original = entries([jump("0x1000", "0x300", "0x1100")], sections)[0];
+  const destination = entries([target("0x1100", "0x400")], sections)[0];
+  const anchor = {kind: "entrada", index: 1, path: ""};
+  const child = {image: 1, address: "0x1100", offset: "0x400", path: "0"};
+  const observation = [destination, {...original, anchor}];
+  index.observe(child, observation);
+  const replayed = index.incoming(1, "0x1100", "0x400").rows;
+  assert.equal(replayed.length, 1);
+  assert.equal(replayed[0].anchor, anchor);
+  assert.equal(replayed[0].citation, undefined);
+  const parent = {image: 1, address: "0x1000", offset: "0x300"};
+  index.observe(parent, [original]);
+  index.observe(child, observation);
+  const reopened = index.incoming(1, "0x1100", "0x400").rows;
+  assert.equal(reopened.length, 1);
+  assert.equal(reopened[0].citation, parent);
+});
+
 test("retains saved references and evicts the oldest of the observed windows", () => {
   const sections = [{}];
   const location = "0xf000";

@@ -1,16 +1,8 @@
 "use strict";
 
-function binaryInstructionPanel(report, sections, images, citation, cite, follow) {
+function binaryInstructionPanel(report, sections, images, {entries, citation, cite, follow, incoming, openReference}) {
   const details = element(cite ? "details" : "div", "", "binary-instructions");
   const title = element("summary", "Instrucciones");
-  const code = Array.isArray(report.instructions) ? report.instructions : [];
-  const entries = [];
-  for (const [index, instruction] of code.entries()) {
-    const section = Number.isInteger(instruction?.section) && sections[instruction.section];
-    if (!section || ![instruction.address, instruction.offset, instruction.bytes, instruction.text].every((value) => typeof value === "string") ||
-      (instruction.target !== undefined && typeof instruction.target !== "string")) continue;
-    entries.push({instruction, index, section, bytes: instruction.bytes.match(/.{1,2}/g)?.join(" ")});
-  }
   if (cite) details.append(title);
   if (!entries.length) {
     details.append(element("p", "Este análisis no contiene instrucciones guardadas."));
@@ -37,6 +29,8 @@ function binaryInstructionPanel(report, sections, images, citation, cite, follow
   search.setAttribute("aria-label", "Buscar instrucciones");
   search.maxLength = 128;
   const actions = element("div", "", "tools instruction-actions");
+  const references = element("details", "", "instruction-references");
+  references.hidden = true;
   const wrapper = element("div", "", "instruction-table");
   const table = element("table");
   table.setAttribute("aria-label", "Listado de instrucciones");
@@ -58,12 +52,14 @@ function binaryInstructionPanel(report, sections, images, citation, cite, follow
   count.setAttribute("aria-live", "polite");
   pager.append(previous, count, next);
   if (cite) details.append(label);
-  details.append(search, actions, wrapper, pager);
+  details.append(search, actions, references, wrapper, pager);
 
   const pageSize = 20;
   let image = 0;
   let page = 0;
   let selected = -1;
+  let selectedEntry;
+  let referencedEntry;
   let origin;
   function matching() {
     const query = search.value.trim().toLowerCase();
@@ -86,6 +82,7 @@ function binaryInstructionPanel(report, sections, images, citation, cite, follow
     const start = page * pageSize;
     const visible = rows.slice(start, start + pageSize);
     let focusButton;
+    selectedEntry = undefined;
     body.replaceChildren(...visible.map((entry) => {
       const {instruction, index, section} = entry;
       const row = element("tr");
@@ -113,7 +110,10 @@ function binaryInstructionPanel(report, sections, images, citation, cite, follow
       }
       row.append(location, bytes, mnemonic);
       markBinaryCitation(row, citation, "instruccion", index);
-      if (index === selected) focusButton = pick;
+      if (index === selected) {
+        focusButton = pick;
+        selectedEntry = entry;
+      }
       return row;
     }));
     const controls = [];
@@ -133,7 +133,41 @@ function binaryInstructionPanel(report, sections, images, citation, cite, follow
     count.textContent = visible.length ? `${start + 1}–${start + visible.length} de ${rows.length}` : "Sin coincidencias";
     previous.disabled = start === 0;
     next.disabled = start + pageSize >= rows.length;
+    refreshIncoming();
     if (focus && focusButton) focusButton.focus();
+  }
+  function refreshIncoming() {
+    references.hidden = !incoming || !selectedEntry;
+    if (references.hidden) return;
+    if (referencedEntry !== selectedEntry) references.open = false;
+    referencedEntry = selectedEntry;
+    const {rows, ambiguous} = incoming(selectedEntry);
+    const summary = element("summary", ambiguous ? "Referencias entrantes" : `Referencias entrantes · ${rows.length}`);
+    references.replaceChildren(summary);
+    if (!rows.length) {
+      references.append(element("p", ambiguous ? "La dirección tiene varias ubicaciones en esta imagen." :
+        "Sin saltos directos en el listado guardado y las ventanas verificadas."));
+      return;
+    }
+    const list = element("ol", "", "binary-list");
+    const more = element("button", "Mostrar más referencias");
+    let shown = 0;
+    function appendPage() {
+      for (const ref of rows.slice(shown, shown + 25)) {
+        const row = element("li");
+        const button = element("button", `Abrir origen ${ref.instruction.address}`);
+        button.setAttribute("aria-label", `Abrir origen ${ref.instruction.address}, archivo ${ref.instruction.offset}`);
+        button.onclick = () => openReference(ref);
+        const source = ref.citation || ref.anchor ? "Ventana verificada" : "Listado guardado";
+        row.append(button, element("p", `Archivo ${ref.instruction.offset} · ${source}`), element("code", ref.instruction.text));
+        list.append(row);
+      }
+      shown += 25;
+      more.hidden = shown >= rows.length;
+    }
+    more.onclick = appendPage;
+    references.append(list, more);
+    appendPage();
   }
   function resetList() {
     page = 0;
@@ -164,7 +198,7 @@ function binaryInstructionPanel(report, sections, images, citation, cite, follow
     if (initial) reveal(initial, false);
     else resetList();
   }
-  return {details, paintImage,
+  return {details, paintImage, refreshIncoming,
     hasSection(index) { return withCode.has(index); },
     showSection(index) { reveal(entries.find(({instruction}) => instruction.section === index), true); },
     focusIndex(index) {

@@ -23,7 +23,7 @@ function binaryReferenceIndex(saved) {
   function group(entries, citation) {
     const locations = new Map();
     const targets = new Map();
-    for (const {instruction, section, index} of entries) {
+    for (const {instruction, section, index, anchor} of entries) {
       const image = section.image || 0;
       const address = byAddress(image, instruction.address);
       const offsets = locations.get(address) || new Set();
@@ -32,7 +32,7 @@ function binaryReferenceIndex(saved) {
       if (!instruction.target || !instruction.text) continue;
       const target = byAddress(image, instruction.target);
       const refs = targets.get(target) || [];
-      refs.push({instruction, image, index, citation});
+      refs.push({instruction, image, index, citation: anchor ? undefined : citation, anchor});
       targets.set(target, refs);
     }
     return {locations, targets};
@@ -55,7 +55,8 @@ function binaryReferenceIndex(saved) {
           if (location !== offset) return {ambiguous: true, rows: []};
         }
         for (const ref of source.targets.get(target) || []) {
-          refs.set(`${ref.instruction.address}:${ref.instruction.offset}`, ref);
+          const key = `${ref.instruction.address}:${ref.instruction.offset}`;
+          if (!refs.get(key)?.citation || ref.citation) refs.set(key, ref);
         }
       }
       return {ambiguous: false, rows: Array.from(refs.values()).sort((a, b) =>
