@@ -189,6 +189,7 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 	})
 	analysisQueueRoutes(mux, store)
 	assetRoutes(mux, store)
+	stixRoutes(mux, store)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")

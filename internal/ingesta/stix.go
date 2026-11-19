@@ -33,9 +33,10 @@ type stixObject struct {
 	Relationship   string   `json:"relationship_type"`
 	SourceRef      string   `json:"source_ref"`
 	TargetRef      string   `json:"target_ref"`
+	ResolvesToRefs []string `json:"resolves_to_refs"`
+	BelongsToRefs  []string `json:"belongs_to_refs"`
 }
 
-var stixID = regexp.MustCompile(`^[a-z][a-z0-9-]{0,249}--[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$`)
 var stixEquality = regexp.MustCompile(`^\[\s*(domain-name:value|ipv4-addr:value|ipv6-addr:value|file:hashes\.'(?:MD5|SHA-1|SHA-256)')\s*=\s*'([^'\\\r\n]{1,253})'\s*\]$`)
 
 var stixValueType = map[string]string{"domain-name": "dominio", "ipv4-addr": "ipv4", "ipv6-addr": "ipv6"}
@@ -75,7 +76,7 @@ func parseSTIX(data []byte) ([]caso.Record, error) {
 func (header stixHeader) valid() bool {
 	prefix := header.Type + "--"
 	return (header.SpecVersion == "" || header.SpecVersion == "2.1") &&
-		len(header.ID) == len(prefix)+36 && strings.HasPrefix(header.ID, prefix) && stixID.MatchString(header.ID)
+		len(header.ID) == len(prefix)+36 && strings.HasPrefix(header.ID, prefix) && caso.ValidSTIXID(header.ID)
 }
 
 func (object stixObject) record(path, hash, stamp string) (caso.Record, error) {
@@ -83,9 +84,14 @@ func (object stixObject) record(path, hash, stamp string) (caso.Record, error) {
 		return caso.Record{}, errors.New("tipo, ID o versión STIX inválidos")
 	}
 	record := caso.Record{Kind: "stix", Title: "STIX · " + object.Type, SourceID: path,
-		Time: stamp, SHA256: hash, Details: "Objeto STIX · " + object.ID}
+		Time: stamp, SHA256: hash, Details: "Objeto STIX · " + object.ID, STIX: &caso.STIXObject{ID: object.ID}}
 	switch object.Type {
 	case "domain-name", "ipv4-addr", "ipv6-addr":
+		if len(object.ResolvesToRefs)+len(object.BelongsToRefs) > 256 ||
+			!addSTIXRefs(record.STIX, "resuelve a", object.ResolvesToRefs) ||
+			!addSTIXRefs(record.STIX, "pertenece a", object.BelongsToRefs) {
+			return caso.Record{}, errors.New("referencias de observable STIX inválidas")
+		}
 		value, valid := stixValue(object.Value, stixValueType[object.Type])
 		if !valid {
 			prefix, err := netip.ParsePrefix(object.Value)
@@ -118,26 +124,35 @@ func (object stixObject) record(path, hash, stamp string) (caso.Record, error) {
 			object.NumberObserved > 999999999 || len(object.ObjectRefs) < 1 || len(object.ObjectRefs) > 256 {
 			return caso.Record{}, errors.New("periodo, recuento o referencias de observación STIX inválidos")
 		}
-		for _, ref := range object.ObjectRefs {
-			if !stixID.MatchString(ref) {
-				return caso.Record{}, errors.New("referencia de observación STIX inválida")
-			}
+		if !addSTIXRefs(record.STIX, "observado", object.ObjectRefs) {
+			return caso.Record{}, errors.New("referencia de observación STIX inválida")
 		}
 		record.Title = "Observaciones STIX"
 		record.Time = last.UTC().Format(time.RFC3339Nano)
 		record.Details += fmt.Sprintf("\nPrimera observación · %s\nÚltima observación · %s\nObservaciones · %d\nReferencias\n%s",
 			first.UTC().Format(time.RFC3339Nano), record.Time, object.NumberObserved, strings.Join(object.ObjectRefs, "\n"))
 	case "relationship":
-		if !stixID.MatchString(object.SourceRef) || !stixID.MatchString(object.TargetRef) ||
+		if !caso.ValidSTIXID(object.SourceRef) || !caso.ValidSTIXID(object.TargetRef) ||
 			strings.TrimSpace(object.Relationship) == "" || !boundedText(object.Relationship, 80) {
 			return caso.Record{}, errors.New("tipo o referencias de relación STIX inválidos")
 		}
 		record.Title = "Relación · " + object.Relationship
 		record.Details += "\nOrigen · " + object.SourceRef + "\nDestino · " + object.TargetRef
+		record.STIX.Refs = []caso.STIXRef{{Role: "origen", ID: object.SourceRef}, {Role: "destino", ID: object.TargetRef}}
 	default:
 		record.Details += "\nObjeto conservado por tipo e identificador de origen."
 	}
 	return record, nil
+}
+
+func addSTIXRefs(object *caso.STIXObject, role string, ids []string) bool {
+	for _, id := range ids {
+		if !caso.ValidSTIXID(id) {
+			return false
+		}
+		object.Refs = append(object.Refs, caso.STIXRef{Role: role, ID: id})
+	}
+	return true
 }
 
 func (object stixObject) indicator() (caso.Indicator, bool) {

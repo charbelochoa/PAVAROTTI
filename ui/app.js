@@ -11,6 +11,7 @@ let selectedKey = "";
 let selectedRevision = 0;
 let selectedRecord;
 let selectedAsset;
+let selectedSTIXPage;
 let returnToEvidence;
 let editing;
 let pageStarts = [""];
@@ -65,7 +66,7 @@ function inspect(record, message = "Selecciona un registro para examinarlo.") {
     const tools = element("div", "", "tools");
     if (selectedRevision) {
       const current = element("button", "Abrir revisión vigente");
-      current.onclick = () => selectRecord(record.id, 0, returnToEvidence);
+      current.onclick = () => selectRecord(record.id, 0, returnToEvidence, selectedSTIXPage);
       tools.append(current);
     }
     if (returnToEvidence) {
@@ -76,6 +77,7 @@ function inspect(record, message = "Selecciona un registro para examinarlo.") {
     view.append(tools);
   }
   if (record.sha256) view.append(element("p", "SHA-256 · " + record.sha256));
+  if (record.kind === "stix") view.append(stixPanel(record));
   if (record.traffic) {
     const item = record.traffic;
     view.append(element("p", `${item.type || "Tipo desconocido"} · ${item.millis} ms`));
@@ -88,14 +90,76 @@ function inspect(record, message = "Selecciona un registro para examinarlo.") {
   if (record.details) view.append(element("pre", record.details));
 }
 
-function selectRecord(id, revision = 0, back) {
+function selectRecord(id, revision = 0, back, stixPage) {
   selectedAsset = undefined;
+  selectedSTIXPage = stixPage;
   returnToEvidence = back;
   selectedKey = id;
   selectedRevision = revision;
   paintSelection();
   if (revision || back) byId("inspector-heading").focus({preventScroll: true});
   return loadRecord(id, true);
+}
+
+function stixPanel(record) {
+  const panel = element("details", "", "stix-links");
+  panel.append(element("summary", "Relaciones STIX"));
+  const list = element("div", "", "asset-sources");
+  panel.append(list);
+  let loaded = false;
+  const prior = returnToEvidence;
+  const revision = selectedRevision;
+  const signal = inspectorRequest.signal;
+  const load = async (offset = 0) => {
+    loaded = true;
+    selectedSTIXPage = offset;
+    list.replaceChildren(element("p", "Consultando relaciones…"));
+    try {
+      const page = await request(`/api/registro/${encodeURIComponent(record.id)}/stix?despues=${offset}`, {signal});
+      if (signal.aborted) return;
+      list.replaceChildren();
+      for (const link of page.rows) {
+        const direction = link.incoming ? "Entrante" : "Saliente";
+        const label = `${direction} · ${link.role}`;
+        if (!link.evidence) {
+          list.append(element("p", `${label} · Objeto por importar · ${link.id}`));
+          continue;
+        }
+        const evidence = link.evidence;
+        const button = element("button");
+        button.append(element("strong", evidence.title),
+          element("span", `${label} · ${link.same_package ? "Mismo paquete" : "Otro paquete"} · rev. ${evidence.revision}`, "type"));
+        if (evidence.source_id) button.append(element("span", evidence.source_id, "muted"));
+        button.onclick = () => selectRecord(evidence.id, evidence.revision, {
+          label: "Volver al objeto STIX", open: () => selectRecord(record.id, revision, prior, offset)
+        });
+        list.append(button);
+      }
+      if (!page.rows.length) list.append(element("p", "Sin relaciones en el expediente."));
+      const tools = element("div", "", "tools");
+      if (offset) {
+        const previous = element("button", "Relaciones anteriores");
+        previous.onclick = () => load(page.previous);
+        tools.append(previous);
+      }
+      if (page.next) {
+        const next = element("button", "Más relaciones");
+        next.onclick = () => load(page.next);
+        tools.append(next);
+      }
+      list.append(tools);
+    } catch (error) {
+      if (!signal.aborted) {
+        list.replaceChildren(element("p", error.message));
+        loaded = false;
+      }
+    }
+  };
+  panel.ontoggle = () => {
+    if (panel.open && !loaded) load(selectedSTIXPage);
+  };
+  panel.open = selectedSTIXPage !== undefined;
+  return panel;
 }
 
 function beginInspection(message) {
