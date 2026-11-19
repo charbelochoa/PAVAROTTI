@@ -15,7 +15,7 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 	var indexed func(context.Context, PageRequest, pageCursor, int) ([]RecordRow, error)
 	switch {
 	case request.Search != "" && !strings.ContainsRune(request.Search, 31):
-		prepare, indexed = s.prepareSearchPage, s.postgresSearchPage
+		prepare, indexed = s.searchPageForRequest, s.postgresSearchPage
 	case request.Kind == "http" && request.Search == "":
 		prepare, indexed = s.prepareHTTPPageIndex, s.postgresIndexedHTTPPage
 	}

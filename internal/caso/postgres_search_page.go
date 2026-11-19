@@ -5,13 +5,15 @@ import (
 	"strings"
 )
 
-const maxSearchBackfillBatches = 8
+const (
+	maxSearchBackfillBatches = 8
+	searchPagePending        = `SELECT EXISTS (
+		SELECT 1 FROM pavarotti_evidence_batches WHERE expediente = $1 AND NOT search_page_indexed)`
+)
 
 var escapeSearchPattern = strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`)
 
 func (s *Store) prepareSearchPage(ctx context.Context) (bool, error) {
-	const pendingQuery = `SELECT EXISTS (
-		SELECT 1 FROM pavarotti_evidence_batches WHERE expediente = $1 AND NOT search_page_indexed)`
 	const backfill = `
 		SELECT pavarotti_store_search_batch(batch.expediente, batch.batch_key, batch.payload, batch.search_page_position)
 		FROM (
@@ -22,7 +24,7 @@ func (s *Store) prepareSearchPage(ctx context.Context) (bool, error) {
 			LIMIT $2
 		) batch
 	`
-	return s.preparePageProjection(ctx, pendingQuery, backfill, maxSearchBackfillBatches)
+	return s.preparePageProjection(ctx, searchPagePending, backfill, maxSearchBackfillBatches)
 }
 
 func (s *Store) postgresSearchPage(ctx context.Context, request PageRequest, after pageCursor, limit int) ([]RecordRow, error) {

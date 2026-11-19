@@ -36,6 +36,7 @@ type noteInput struct {
 }
 
 func Handler(host string, config Settings, store *caso.Store, resources fs.FS) http.Handler {
+	store.EnableBackgroundSearchPreparation()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFileFS(w, r, resources, "ui/index.html")

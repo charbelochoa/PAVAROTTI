@@ -2,9 +2,11 @@ package caso
 
 import (
 	"bytes"
+	"context"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestPostgresSearchProjectionKeepsLegacyMatches(t *testing.T) {
@@ -110,5 +112,59 @@ func TestPostgresSearchCompletesLargeBatchInParts(t *testing.T) {
 	if err := store.db.QueryRowContext(ctx, "SELECT count(*) FROM pavarotti_search_page WHERE expediente = $1",
 		store.expediente).Scan(&projected); err != nil || projected != len(batch) {
 		t.Fatalf("proyección final: %d, %v", projected, err)
+	}
+}
+
+func TestBackgroundSearchAllowsReadsDuringPreparation(t *testing.T) {
+	store := openAuditTest(t)
+	ctx := t.Context()
+	if err := store.Save([]Record{{Kind: "nota", Title: "Búsqueda disponible", Details: "Versión inicial", Time: Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		"DELETE FROM pavarotti_search_page WHERE expediente = $1",
+		"UPDATE pavarotti_evidence_batches SET search_page_indexed = false, search_page_position = 1 WHERE expediente = $1",
+	} {
+		if _, err := store.db.ExecContext(ctx, statement, store.expediente); err != nil {
+			t.Fatal(err)
+		}
+	}
+	blocker, err := store.beginCaseWrite(ctx, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blocker.Rollback()
+	store.EnableBackgroundSearchPreparation()
+	query := PageRequest{Search: "búsqueda disponible"}
+	read, cancel := context.WithTimeout(ctx, 2*time.Second)
+	initial, err := store.Page(read, query)
+	cancel()
+	if err != nil || len(initial.Rows) != 1 {
+		t.Fatalf("búsqueda con la preparación bloqueada: %+v, %v", initial, err)
+	}
+	if err := blocker.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	wait, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		var pending bool
+		if err := store.db.QueryRowContext(wait, searchPagePending, store.expediente).Scan(&pending); err != nil {
+			t.Fatal(err)
+		}
+		if !pending {
+			break
+		}
+		select {
+		case <-ticker.C:
+		case <-wait.Done():
+			t.Fatal("la preparación en segundo plano no completó el lote")
+		}
+	}
+	indexed, err := store.Page(ctx, query)
+	if err != nil || !reflect.DeepEqual(indexed, initial) {
+		t.Fatalf("búsqueda al terminar la preparación: %+v, %v", indexed, err)
 	}
 }
