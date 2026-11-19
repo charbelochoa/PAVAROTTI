@@ -91,6 +91,27 @@ Usa `editar --id ID --revision N --texto "Nueva observación"` con el ID y la re
 
 El ejecutable usa almacenamiento local por defecto. Para compartir un expediente entre la interfaz y el CLI, configura `PAVAROTTI_POSTGRES` con la URL de conexión o pasa `-postgres`. Ambos leen y guardan los mismos registros cuando usan la misma base de datos y el mismo nombre en `-expediente`. El usuario de PostgreSQL necesita permisos de creación de tablas para inicializar el esquema.
 
+### Acceso al expediente por HTTPS
+
+Con PostgreSQL, un operador puede crear cuentas desde la terminal. `lector` consulta evidencia, historial e informes y exporta STIX. `analista` también incorpora archivos, registra notas, clasifica señales y gestiona tareas. La cuenta pertenece al expediente indicado en `-expediente`. Cambiar el rol o la contraseña cierra las sesiones vigentes de esa cuenta.
+
+```sh
+pavarotti -expediente incidente-01 usuarios guardar --nombre investigacion --rol analista --clave-archivo /ruta/privada/clave
+pavarotti -expediente incidente-01 usuarios listar
+pavarotti -expediente incidente-01 usuarios rol --nombre investigacion --rol lector
+pavarotti -expediente incidente-01 usuarios revocar --nombre investigacion
+```
+
+Configura `PAVAROTTI_POSTGRES` con la URL de PostgreSQL. Para leer su contraseña desde un archivo, indica `PAVAROTTI_DB_PASSWORD_FILE` con la ruta y usa una URL de conexión con el nombre de usuario. Inicia el servidor con un certificado válido para el host indicado en `-origen-publico`. La escucha se queda en `127.0.0.1` salvo que inicies con `-escuchar` y una dirección IPv4 explícita.
+
+```sh
+pavarotti servir -expediente incidente-01 -compartido -sin-navegador \
+  -puerto-app 8443 -origen-publico https://127.0.0.1:8443 \
+  -tls-certificado /ruta/certificado.pem -tls-clave /ruta/privada/tls.key
+```
+
+Ejecuta el proxy inverso en una instancia local. El acceso directo a PostgreSQL y los comandos de administración quedan a cargo del operador.
+
 Con la conexión configurada, usa `pavarotti -expediente guardia migrar-local ./expediente` para copiar los registros y el historial local a PostgreSQL con los mismos IDs. Repetir la operación evita duplicados. Si el destino tiene una versión distinta del mismo registro, la transacción se cancela.
 
 Con Docker Compose, define `PAVAROTTI_DB_PASSWORD` con una contraseña propia en `.env` y ejecuta:

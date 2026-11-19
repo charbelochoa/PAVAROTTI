@@ -24,6 +24,7 @@ let inspectorRequest;
 let refreshRequest;
 let searchTimer;
 let analysisQueue = false;
+let canWrite = false;
 let checkingQueue = false;
 let queueSignature = "";
 let currentView = "records";
@@ -37,10 +38,14 @@ const assetCount = ({count, indicators}) =>
 const triageLabels = {pendiente: "Pendiente", confirmada: "Confirmada", descartada: "Descartada"};
 const findingKey = ({rule, line, column}) => `${line}:${column}:${rule}`;
 
-async function request(path, options) {
-  const response = await fetch(path, options);
+async function requireResponse(response) {
+  if (response.status === 401) window.location.replace("/ingresar");
   if (!response.ok) throw new Error((await response.text()).trim());
-  return response.json();
+  return response;
+}
+
+async function request(path, options) {
+  return (await requireResponse(await fetch(path, options))).json();
 }
 
 function formatTime(value) {
@@ -120,8 +125,8 @@ function codeReviewPanel(id, review, citation) {
     row.append(element("strong", `Línea ${signal.line}, columna ${signal.column}`),
       element("span", signal.rule, "type"), element("p", signal.review));
     const tools = element("div", "", "triage-controls");
-    const action = element("button", "Clasificar");
-    action.setAttribute("aria-label", `Clasificar señal ${signal.rule}, línea ${signal.line}, columna ${signal.column}`);
+    const action = element("button", canWrite ? "Clasificar" : "Ver historial");
+    action.setAttribute("aria-label", `${canWrite ? "Clasificar señal" : "Ver historial de señal"} ${signal.rule}, línea ${signal.line}, columna ${signal.column}`);
     const badge = element("span", "Pendiente", "muted");
     badges.set(findingKey(signal), badge);
     action.onclick = () => openCodeTriage(id, signal, badge);
@@ -197,7 +202,10 @@ async function openCodeTriage(id, signal, badge) {
   activeTriage = action;
   button.disabled = true;
   byId("triage-form").reset();
-  byId("triage-history").open = false;
+  byId("triage-title").textContent = canWrite ? "Clasificar señal" : "Historial de la señal";
+  byId("triage-form").hidden = !canWrite;
+  byId("triage-read-close").hidden = canWrite;
+  byId("triage-history").open = !canWrite;
   byId("triage-location").textContent = `${signal.rule} · línea ${signal.line}, columna ${signal.column}`;
   errorText.textContent = "Consultando clasificación…";
   paintTriageHistory([]);
@@ -222,7 +230,7 @@ byId("triage-close").onclick = () => byId("triage-panel").close();
 byId("triage-form").onsubmit = async (event) => {
   event.preventDefault();
   const action = activeTriage;
-  if (!Number.isInteger(action?.revision)) return;
+  if (!canWrite || !Number.isInteger(action?.revision)) return;
   const button = byId("triage-save");
   button.disabled = true;
   byId("triage-error").textContent = "";
@@ -643,6 +651,7 @@ byId("directory-form").onsubmit = async (event) => {
   status.textContent = "Revisando directorio…";
   try {
     const response = await fetch("/api/revision/directorio", {method: "POST", body: payload});
+    if (!response.headers.get("Content-Type")?.startsWith("application/json")) await requireResponse(response);
     const result = await response.json();
     if (result.files?.length) {
       const rows = result.files.map((file) => element("li", `${file.path} · ${file.status}${file.reason ? " · " + file.reason : ""}`));
@@ -667,8 +676,7 @@ byId("export-stix").onclick = async (event) => {
   button.disabled = true;
   status.textContent = "Preparando paquete STIX…";
   try {
-    const response = await fetch("/api/exportar/stix");
-    if (!response.ok) throw new Error((await response.text()).trim());
+    const response = await requireResponse(await fetch("/api/exportar/stix"));
     const url = URL.createObjectURL(await response.blob());
     const download = element("a");
     download.href = url;
@@ -835,7 +843,7 @@ function analysisJobNode(job) {
     open.dataset.jobAction = job.id + ":open";
     open.onclick = () => showAnalysisJob(job.id);
     actions.append(open);
-  } else if (job.state === "queued" || job.state === "running") {
+  } else if (canWrite && (job.state === "queued" || job.state === "running")) {
     const cancel = element("button", "Cancelar");
     cancel.dataset.jobAction = job.id + ":cancel";
     cancel.onclick = () => cancelAnalysisJob(job.id, cancel);
@@ -906,7 +914,26 @@ byId("analyze").onclick = async () => {
 };
 
 byId("credits").onclick = () => byId("credit-panel").showModal();
+byId("logout").onclick = async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await requireResponse(await fetch("/api/acceso/salir", {method: "POST"}));
+    window.location.replace("/ingresar");
+  } catch (error) {
+    byId("status").textContent = error.message;
+    button.disabled = false;
+  }
+};
 Promise.all([request("/api/app"), request("/credits.json")]).then(([app, credits]) => {
+  canWrite = !app.shared || app.account?.role === "analista";
+  for (const id of ["evidence-tools", "analyze", "add-note", "edit-note", "analysis-priority-label"]) byId(id).hidden = !canWrite;
+  if (app.shared) {
+    byId("case-heading").textContent = app.case;
+    byId("account").textContent = `${app.account.name} · ${app.account.role}`;
+    byId("account").hidden = false;
+    byId("logout").hidden = false;
+  }
   analysisQueue = app.analysis_queue;
   if (analysisQueue) {
     byId("analysis-queue").hidden = false;
@@ -930,5 +957,8 @@ Promise.all([request("/api/app"), request("/credits.json")]).then(([app, credits
     row.append(link, document.createTextNode(" · " + credit.detail));
     byId("references").append(row);
   }
-}).catch(() => { byId("proxy-status").textContent = "No se pudo leer la configuración"; });
-refresh();
+  return refresh();
+}).catch((error) => {
+  byId("proxy-status").textContent = "No se pudo leer la configuración";
+  byId("status").textContent = error.message;
+});

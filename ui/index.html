@@ -14,17 +14,19 @@
     <div class="brand"><img src="/icono.png" alt="" width="40" height="40"><h1>PAVAROTTI</h1></div>
     <nav aria-label="Herramientas del expediente">
       <button id="refresh">Actualizar</button>
-      <button id="analyze">Analizar expediente</button>
+      <button id="analyze" hidden>Analizar expediente</button>
       <button id="export-stix">Exportar STIX</button>
-      <button id="add-note">Registrar nota</button>
+      <button id="add-note" hidden>Registrar nota</button>
       <button id="credits">Créditos</button>
+      <button id="logout" hidden>Cerrar sesión</button>
     </nav>
   </header>
   <main>
     <aside>
       <div class="intro">
         <img class="portrait" src="/mascara.svg" alt="Máscara porcina en arte ASCII">
-        <h2>Expediente local</h2>
+        <h2 id="case-heading">Expediente local</h2>
+        <p id="account" hidden></p>
         <p>Reúne evidencia y revisa señales para investigaciones de Blue Team.</p>
       </div>
       <section>
@@ -32,7 +34,7 @@
         <p id="proxy-status">Consultando…</p>
         <a id="proxy-link" target="_blank" rel="noopener" hidden>Abrir el destino mediante el proxy</a>
       </section>
-      <section>
+      <section id="evidence-tools" hidden>
         <h2>Incorporar evidencia</h2>
         <form id="upload">
           <label for="file-kind">Tipo de archivo</label>
@@ -127,7 +129,7 @@
       <section id="analysis-queue" hidden>
         <div class="queue-header">
           <h2>Tareas de análisis</h2>
-          <label>Prioridad
+          <label id="analysis-priority-label">Prioridad
             <select id="analysis-priority">
               <option value="0">Baja</option>
               <option value="1" selected>Normal</option>
@@ -142,7 +144,7 @@
     <section aria-label="Detalle de la selección" id="inspector">
       <h2 id="inspector-heading" tabindex="-1">Inspector de evidencia</h2>
       <div class="tools" id="note-tools" hidden>
-        <button id="edit-note">Editar nota</button>
+        <button id="edit-note" hidden>Editar nota</button>
         <button id="history">Historial</button>
       </div>
       <div id="record-detail"><p>Selecciona un registro para examinarlo.</p></div>
@@ -189,14 +191,15 @@
       </select>
       <label for="triage-reason">Justificación</label>
       <textarea id="triage-reason" maxlength="2000" rows="3" required></textarea>
-      <p id="triage-error" role="alert"></p>
       <div class="actions"><button id="triage-close" type="button">Cerrar</button><button id="triage-save" class="primary">Guardar clasificación</button></div>
     </form>
+    <p id="triage-error" role="alert"></p>
     <details id="triage-history">
       <summary>Historial de clasificación</summary>
       <ol id="triage-entries"></ol>
       <button id="triage-more" hidden>Mostrar más revisiones</button>
     </details>
+    <form id="triage-read-close" method="dialog" hidden><button>Cerrar</button></form>
   </dialog>
 </body>
 </html>

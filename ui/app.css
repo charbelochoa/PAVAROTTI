@@ -29,6 +29,13 @@ section, .intro, #distribution, dialog { background: var(--panel); border: 1px s
 .totals strong { font-size: clamp(1.45rem, 4vw, 2.4rem); display: block; color: var(--accent); line-height: 1.2; }
 .totals span { color: var(--dim); font-size: .85rem; overflow-wrap: anywhere; }
 form { display: grid; gap: .5rem; margin-top: .8rem; }
+[hidden] { display: none !important; }
+.sign-in { min-height: 100vh; grid-template-columns: minmax(0, 28rem); align-content: center; justify-content: center; }
+.sign-in h1 { text-align: center; }
+.sign-in h2 { margin-top: .7rem; }
+.sign-in form .primary { margin-top: .5rem; }
+.sign-in .portrait { height: 112px; }
+.sign-in [role="alert"] { color: var(--accent); }
 label { font-size: .85rem; color: var(--dim); }
 input, textarea, select, button { font: inherit; color: inherit; border: 1px solid #665454; border-radius: 3px; background: #211e20; min-width: 0; padding: .5rem .7rem; }
 button, summary { cursor: pointer; }
@@ -81,7 +88,6 @@ footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2re
 #triage-entries { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 15rem; overflow: auto; padding-left: 0; list-style: none; }
 #triage-entries li + li { margin-top: .6rem; }
 .tools { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .6rem; }
-.tools[hidden] { display: none; }
 #report-panel { width: min(840px, calc(100vw - 2rem)); }
 #report-text { max-height: 62vh; overflow: auto; }
 #report-evidence { margin-top: .75rem; }
