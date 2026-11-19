@@ -71,6 +71,14 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 			}
 			request.Limit = limit
 		}
+		if raw := query.Get("clase_http"); raw != "" {
+			class, err := strconv.Atoi(raw)
+			if err != nil || class < 1 || class > 5 {
+				http.Error(w, "La clase HTTP debe estar entre 1 y 5", http.StatusBadRequest)
+				return
+			}
+			request.HTTPClass = class
+		}
 		page, err := store.Page(r.Context(), request)
 		if errors.Is(err, caso.ErrInvalidPage) {
 			http.Error(w, err.Error(), http.StatusBadRequest)

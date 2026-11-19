@@ -60,7 +60,10 @@
         <dl id="groups"></dl>
       </details>
       <section class="record-list">
-        <h2>Registros</h2>
+        <div class="views" role="group" aria-label="Vistas del expediente">
+          <button id="view-records" aria-pressed="true">Registros</button>
+          <button id="view-http" aria-pressed="false">Historial HTTP</button>
+        </div>
         <div class="filters">
           <input type="search" id="query" aria-label="Buscar en el expediente" placeholder="Buscar texto, origen, ID o SHA-256" maxlength="256">
           <select id="filter" aria-label="Filtrar por tipo">
@@ -73,6 +76,14 @@
             <option value="indicador">Indicadores</option>
             <option value="dns">DNS</option>
             <option value="nota">Notas</option>
+          </select>
+          <select id="filter-http" aria-label="Clase de respuesta HTTP" hidden>
+            <option value="">Todos los estados</option>
+            <option value="1">1xx · Información</option>
+            <option value="2">2xx · Éxito</option>
+            <option value="3">3xx · Redirección</option>
+            <option value="4">4xx · Error del cliente</option>
+            <option value="5">5xx · Error del servidor</option>
           </select>
         </div>
         <div id="records"></div>

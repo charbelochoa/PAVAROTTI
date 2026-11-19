@@ -27,12 +27,18 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 				  AND entry.original->>'kind' = 'nota'
 				ORDER BY revision DESC LIMIT 1
 			) edited ON true
-			WHERE b.expediente = $1 AND ($2 = '' OR entry.original->>'kind' = $2)
+			WHERE b.expediente = $1 AND ($2 = '' OR
+				($2 <> 'http' AND entry.original->>'kind' = $2) OR
+				($2 = 'http' AND jsonb_typeof(entry.original->'traffic') = 'object'))
 		)
 		SELECT id, kind, time, left(COALESCE(current_record->>'title', ''), 240),
-		       left(COALESCE(current_record->>'source', ''), 360)
+		       left(COALESCE(current_record->>'source', ''), 360),
+		       CASE WHEN $2 = 'http' THEN current_record->'traffic' END,
+		       CASE WHEN $2 = 'http' AND jsonb_typeof(current_record->'signals') = 'array'
+		            THEN jsonb_array_length(current_record->'signals') ELSE 0 END
 		FROM evidence
 		WHERE ($3 = '' OR (stamp, id COLLATE "C") < ($4::text COLLATE "C", $3::text COLLATE "C"))
+		  AND ($7::integer = 0 OR left(current_record->'traffic'->>'status', 1) = $7::integer::text)
 		  AND ($5 = '' OR strpos(translate(lower(concat_ws(chr(31),
 		       id, kind, time, current_record->>'title', current_record->>'source',
 		       current_record->>'source_id', current_record->>'sha256', current_record->>'details',
@@ -41,7 +47,7 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 		       current_record->'traffic'->>'millis', current_record->'traffic'->>'bucket')),
 		       'ÁÉÍÓÚÜÑ', 'áéíóúüñ'), $5) > 0)
 		ORDER BY stamp DESC, id COLLATE "C" DESC LIMIT $6
-	`, s.expediente, request.Kind, after.ID, after.Stamp, strings.ToLower(request.Search), limit)
+	`, s.expediente, request.Kind, after.ID, after.Stamp, strings.ToLower(request.Search), limit, request.HTTPClass)
 	if err != nil {
 		return nil, err
 	}
@@ -49,8 +55,14 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 	rows := make([]RecordRow, 0, limit)
 	for result.Next() {
 		var row RecordRow
-		if err := result.Scan(&row.ID, &row.Kind, &row.Time, &row.Title, &row.Source); err != nil {
+		var traffic []byte
+		if err := result.Scan(&row.ID, &row.Kind, &row.Time, &row.Title, &row.Source, &traffic, &row.SignalCount); err != nil {
 			return nil, err
+		}
+		if len(traffic) != 0 {
+			if err := json.Unmarshal(traffic, &row.Traffic); err != nil {
+				return nil, err
+			}
 		}
 		rows = append(rows, row)
 	}
