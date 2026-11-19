@@ -65,6 +65,7 @@ En **Binarios → Comparar informes**, adjunta el JSON base, el actual y el arch
 - **RDAP.** Importa archivos JSON de dominio, resultados de búsqueda de dominios y rangos IP. El inspector conserva la posición en el archivo, su huella, servidores de nombre, estados y fechas del registro. La importación omite las fichas de contacto y los enlaces del archivo.
 - **STIX 2.1.** Importa paquetes JSON con dominios, direcciones, prefijos IP, relaciones y periodos de observación. Reconoce indicadores por igualdad simple de dominio, IP o huella. El informe cruza dominios y direcciones exactas con el expediente. Los patrones complejos se conservan por ID para revisión en el archivo de origen.
 - **Activos.** Busca dominios, direcciones, redes y huellas. Cada ficha muestra las fechas y distingue observaciones de tráfico o DNS, registros RDAP, declaraciones STIX, indicadores y referencias manuales. Las fichas de IP muestran los rangos RDAP y prefijos STIX que las cubren. El inventario y las fichas calculan los recuentos en todo el expediente y muestran los resultados por página. Abre desde la ficha la revisión de evidencia que sustenta cada fuente.
+- **Seguimiento.** En **Activos → Seguimiento**, crea una lista y agrega dominios, IP, redes o huellas. También puedes añadir un activo desde su ficha. Al actualizar la lista, la mesa cruza sus activos con la evidencia guardada, muestra los recuentos y abre la última revisión citada. Los activos pendientes de observar se pueden agregar de antemano. Cada expediente admite 24 listas y 200 activos por lista. En el modo compartido, los lectores pueden consultarlas y los analistas administrarlas.
 - **Cobertura por periodo.** Desde una ficha de red, abre **IP observadas** para navegar las direcciones registradas en respuestas DNS o HTTP, en orden numérico y con sus citas. **Cobertura por periodo** usa las fechas guardadas en el expediente y guarda las fuentes, las coincidencias y la huella de entrada en un informe JSON. Las fechas UTC son inclusivas. Puedes reabrir el informe en el expediente original o en su restauración. El informe muestra hasta 100 fuentes, 100 direcciones y cinco citas por dirección e indica cuántas filas adicionales existen.
 - **Relaciones STIX.** El inspector recorre enlaces entrantes y salientes de relaciones, observaciones y observables importados. La referencia indica si procede del mismo paquete, de otro paquete del expediente o si falta importar el objeto.
 - **Intercambio STIX 2.1.** Usa **Exportar STIX** para descargar observaciones DNS y HTTP, dominios, IP, prefijos, huellas, indicadores literales y relaciones compatibles con citas de origen. El resultado indica cuántos registros representa. La importación muestra cuántos registros guardó y cuántos pertenecían a un archivo ya registrado.
@@ -80,6 +81,14 @@ En **Binarios → Comparar informes**, adjunta el JSON base, el actual y el arch
 - **Edición.** Las notas conservan su historial. Una edición requiere la revisión vigente para evitar sobrescribir cambios. Los hallazgos importados conservan su huella y procedencia.
 
 ## Uso
+
+Puedes administrar las mismas listas desde la terminal.
+
+```bash
+pavarotti seguimiento crear --lista "Guardia"
+pavarotti seguimiento agregar --lista "Guardia" --tipo ipv4 --valor 192.0.2.42
+pavarotti seguimiento listar --lista "Guardia" --json
+```
 
 En Windows abre `PAVAROTTI.exe`. En Kali o Arch, copia el ejecutable a un volumen con permisos de ejecución y ábrelo con `./PAVAROTTI-Kali-x64`. Si la copia perdió el permiso, usa `chmod +x PAVAROTTI-Kali-x64`. El programa abre el navegador en una dirección de tu equipo y muestra esa misma URL en la terminal. Elige **Créditos** para consultar la atribución.
 
@@ -131,7 +140,7 @@ La actividad empieza al instalar la 0.4.2. Las operaciones del modo HTTPS se atr
 
 ### Respaldar y restaurar un expediente
 
-La terminal guarda una instantánea de PostgreSQL con los lotes de evidencia, las revisiones de notas y triaje, las tareas con sus informes y la actividad. Los comandos muestran el expediente de origen, la fecha, la huella SHA-256 del contenido y el recuento por tipo de fila. `verificar-respaldo` comprueba el formato y la huella registrada al final de la copia. Funciona sin conexión a PostgreSQL.
+La terminal guarda una instantánea de PostgreSQL con los lotes de evidencia, las revisiones de notas y triaje, las tareas con sus informes, las listas de seguimiento y la actividad. Los comandos muestran el expediente de origen, la fecha, la huella SHA-256 del contenido y el recuento por tipo de fila. `verificar-respaldo` comprueba el formato y la huella registrada al final de la copia. Funciona sin conexión a PostgreSQL. Las copias con listas usan el formato 2, disponible a partir de la 0.4.22. Esta versión lee y restaura los formatos 1 y 2.
 
 ```sh
 PAVAROTTI_POSTGRES="$PG_ORIGEN" pavarotti -expediente incidente respaldar --salida incidente.jsonl
@@ -181,7 +190,7 @@ pavarotti servir -expediente incidente-01 -compartido -sin-navegador \
 
 Ejecuta el proxy inverso en una instancia local. El acceso directo a PostgreSQL y los comandos de administración quedan a cargo del operador.
 
-Con la conexión configurada, usa `pavarotti -expediente guardia migrar-local ./expediente` para copiar los registros y el historial local a PostgreSQL con los mismos IDs. Repetir la operación evita duplicados. Si el destino tiene una versión distinta del mismo registro, la transacción se cancela.
+Con la conexión configurada, usa `pavarotti -expediente guardia migrar-local ./expediente` para copiar los registros, el historial local y las listas de seguimiento a PostgreSQL con los mismos IDs de evidencia. Repetir la operación evita duplicados. Si el destino tiene una versión distinta del mismo registro o una lista del mismo nombre con otros activos, la transacción se cancela.
 
 Con Docker Compose, define `PAVAROTTI_DB_PASSWORD` con una contraseña propia en `.env` y ejecuta:
 
