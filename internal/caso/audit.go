@@ -18,6 +18,7 @@ const (
 	AuditNote     = "nota.creada"
 	AuditEdit     = "nota.editada"
 	AuditTriage   = "senal.clasificada"
+	AuditImport   = "expediente.migrado"
 	AuditQueue    = "tarea.encolada"
 	AuditPriority = "tarea.priorizada"
 	AuditStart    = "tarea.iniciada"
@@ -26,12 +27,14 @@ const (
 )
 
 type AuditDetails struct {
-	Count    int         `json:"count,omitempty"`
-	Revision int         `json:"revision,omitempty"`
-	Finding  *FindingKey `json:"finding,omitempty"`
-	Status   string      `json:"status,omitempty"`
-	Priority *int        `json:"priority,omitempty"`
-	Attempt  int         `json:"attempt,omitempty"`
+	Count           int         `json:"count,omitempty"`
+	Revision        int         `json:"revision,omitempty"`
+	Finding         *FindingKey `json:"finding,omitempty"`
+	Status          string      `json:"status,omitempty"`
+	Priority        *int        `json:"priority,omitempty"`
+	Attempt         int         `json:"attempt,omitempty"`
+	NoteRevisions   int         `json:"note_revisions,omitempty"`
+	TriageRevisions int         `json:"triage_revisions,omitempty"`
 }
 
 type AuditEvent struct {
@@ -55,6 +58,8 @@ type auditAccount struct {
 }
 
 type auditAccountKey struct{}
+
+func (s *Store) HasAuditLog() bool { return s.db != nil }
 
 func (s *Store) AuditContext(ctx context.Context, account SharedAccount) context.Context {
 	return context.WithValue(ctx, auditAccountKey{}, auditAccount{caseName: s.expediente, name: account.Name})
@@ -103,7 +108,7 @@ func (s *Store) appendAudit(ctx context.Context, tx *sql.Tx, action, target stri
 }
 
 func (s *Store) AuditPage(ctx context.Context, before int64, limit int) (AuditPage, error) {
-	if s.db == nil {
+	if !s.HasAuditLog() {
 		return AuditPage{}, ErrAuditUnavailable
 	}
 	if before < 0 || limit < 1 || limit > 100 {

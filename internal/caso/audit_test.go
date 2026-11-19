@@ -207,3 +207,40 @@ func TestAuditTracksActualQueueTransitions(t *testing.T) {
 		t.Fatalf("metadatos de cola: %+v", page.Events)
 	}
 }
+
+func TestAuditTracksOnlyNewMigrationData(t *testing.T) {
+	destination := openAuditTest(t)
+	ctx := t.Context()
+	local, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := fixtureCode(t, local)
+	note := Record{Kind: "nota", Time: Now(), Title: "Nota de migración", Details: "Texto de prueba"}
+	if result, err := local.SaveEvidence(ctx, []Record{note}); err != nil || result.Imported != 1 {
+		t.Fatalf("nota de origen: %+v, %v", result, err)
+	}
+	listed, err := local.Page(ctx, PageRequest{Kind: "nota"})
+	if err != nil || len(listed.Rows) != 1 {
+		t.Fatalf("lectura de origen: %+v, %v", listed, err)
+	}
+	if count, err := destination.ImportLocal(local.path); err != nil || count != 2 {
+		t.Fatalf("primera migración: %d, %v", count, err)
+	}
+	if _, err := local.Edit(listed.Rows[0].ID, 1, "Nota actualizada", "", "Texto revisado"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := local.ClassifyCode(ctx, code.ID, fixtureSignal, 0, "confirmada", "Prueba local"); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if count, err := destination.ImportLocal(local.path); err != nil || count != 0 {
+			t.Fatalf("migración adicional: %d, %v", count, err)
+		}
+	}
+	page, err := destination.AuditPage(ctx, 0, 50)
+	if err != nil || len(page.Events) != 2 || page.Events[0].Action != AuditImport || page.Events[0].Details.NoteRevisions != 1 ||
+		page.Events[0].Details.TriageRevisions != 1 || page.Events[1].Details.Count != 2 {
+		t.Fatalf("actividad de migración: %+v, %v", page, err)
+	}
+}
