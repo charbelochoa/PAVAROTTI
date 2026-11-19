@@ -74,6 +74,9 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	if err := migrateAnalysisQueue(ctx, tx); err != nil {
 		return err
 	}
+	if err := migrateCodeTriage(ctx, tx); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 

@@ -62,11 +62,12 @@ jobs:
           cat > "$samples/dns.json" <<'JSON'
           {"Status":0,"Answer":[{"name":"dns.example.invalid","type":1,"data":"192.0.2.17"}]}
           JSON
-          cat > "$samples/fixture.mod" <<'MOD'
+          mkdir -p "$samples/revision/src"
+          cat > "$samples/revision/go.mod" <<'MOD'
           module sample.invalid/service
           require sample.invalid/catalog v1.2.3
           MOD
-          cat > "$samples/fixture.go" <<'GO'
+          cat > "$samples/revision/src/fixture.go" <<'GO'
           package fixture
           import "net/http"
           var _ = http.Client{}
@@ -78,8 +79,7 @@ jobs:
               /opt/pavarotti -datos /tmp/expediente importar stix /samples/stix.json >&2
               /opt/pavarotti -datos /tmp/expediente importar dns /samples/dns.json >&2
               /opt/pavarotti -datos /tmp/expediente importar binario /samples/muestra.bin >&2
-              /opt/pavarotti -datos /tmp/expediente importar codigo /samples/fixture.go >&2
-              /opt/pavarotti -datos /tmp/expediente importar gomod /samples/fixture.mod >&2
+              /opt/pavarotti -datos /tmp/expediente revisar --json /samples/revision
               /opt/pavarotti -datos /tmp/expediente activos --tipo dominio --valor evidencia.example.invalid --json
               /opt/pavarotti -datos /tmp/expediente analizar --json
               /opt/pavarotti -datos /tmp/expediente exportar --formato stix --salida /tmp/intercambio.json
@@ -92,10 +92,14 @@ jobs:
           from pathlib import Path
           payload = Path(sys.argv[1]).read_text(encoding="utf-8")
           decoder = json.JSONDecoder()
-          asset, offset = decoder.raw_decode(payload)
+          review, offset = decoder.raw_decode(payload)
           remaining = payload[offset:].lstrip()
+          asset, offset = decoder.raw_decode(remaining)
+          remaining = remaining[offset:].lstrip()
           report, offset = decoder.raw_decode(remaining)
           exchange = json.loads(remaining[offset:])
+          assert review["imported"] == 2 and review["rejected"] == 0
+          assert {item["path"] for item in review["files"]} == {"go.mod", "src/fixture.go"}
           assert asset["value"] == "evidencia.example.invalid"
           assert asset["count"] == 2 and asset["indicators"] == 1
           assert {row["role"] for row in asset["rows"]} == {"registro", "indicador"}
@@ -115,6 +119,7 @@ jobs:
           assert any(origin["external_id"].endswith("@1") for row in exchange for origin in row.get("stix", {}).get("origins", []))
           code, = report["code_findings"]
           assert code["value"] == "http-cliente-timeout" and code["evidence"][0]["line"] == 3
+          assert code["evidence"][0]["source_id"] == "src/fixture.go"
           dependency, = report["dependencies"]
           assert dependency["value"] == "sample.invalid/catalog" and dependency["evidence"][0]["line"] == 2
           PY
