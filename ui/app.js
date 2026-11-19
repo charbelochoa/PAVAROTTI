@@ -194,8 +194,53 @@ function binaryPanel(record) {
   }
   names.append(sections.length ? sectionsList : element("p", "No hay secciones registradas."));
   paintStrings();
-  panel.append(names, textHits);
+  panel.append(names, textHits, binarySymbolPanel(report));
   return panel;
+}
+
+function binarySymbolPanel(report) {
+  const symbols = Array.isArray(report.symbols) ? report.symbols : [];
+  const details = element("details");
+  details.append(element("summary", `Símbolos · ${symbols.length}`));
+  if (report.symbols_limited) details.append(element("p", "La inspección alcanzó su límite de símbolos."));
+  if (!symbols.length) {
+    details.append(element("p", "Este registro no contiene símbolos guardados."));
+    return details;
+  }
+  const search = element("input");
+  search.type = "search";
+  search.placeholder = "Buscar nombre, sección o dirección";
+  search.setAttribute("aria-label", "Buscar símbolos");
+  search.maxLength = 256;
+  const count = element("p");
+  const list = element("ol", "", "binary-list");
+  const more = element("button", "Mostrar más símbolos");
+  let matching = [];
+  let shown = 0;
+  function appendRows() {
+    const batch = matching.slice(shown, shown + 50);
+    for (const symbol of batch) {
+      const row = element("li");
+      row.append(element("strong", symbol.name), element("p", [symbol.kind, symbol.section, symbol.address].filter(Boolean).join(" · ")));
+      if (symbol.offset) row.append(element("p", `Archivo ${symbol.offset}`));
+      list.append(row);
+    }
+    shown += batch.length;
+    more.hidden = shown >= matching.length;
+    count.textContent = `${shown} de ${matching.length} símbolos`;
+  }
+  search.oninput = () => {
+    const term = search.value.trim().toLowerCase();
+    matching = symbols.filter((symbol) => [symbol.name, symbol.section, symbol.address, symbol.offset]
+      .some((field) => field?.toLowerCase().includes(term)));
+    shown = 0;
+    list.replaceChildren();
+    appendRows();
+  };
+  more.onclick = appendRows;
+  details.append(search, count, list, more);
+  search.oninput();
+  return details;
 }
 
 function codeReviewPanel(id, review, citation) {
