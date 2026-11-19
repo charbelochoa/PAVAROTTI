@@ -18,6 +18,9 @@ let pageRequest;
 let inspectorRequest;
 let refreshRequest;
 let searchTimer;
+let analysisQueue = false;
+let checkingQueue = false;
+let queueSignature = "";
 
 async function request(path, options) {
   const response = await fetch(path, options);
@@ -233,6 +236,79 @@ function reportDialog(title, text) {
   byId("report-panel").showModal();
 }
 
+const jobLabels = {queued: "En cola", running: "En ejecución", succeeded: "Informe listo", canceled: "Cancelada", failed: "Falló"};
+const priorityLabels = ["baja", "normal", "alta"];
+
+async function showAnalysisJob(id) {
+  try {
+    const result = await request("/api/analisis/tareas/" + encodeURIComponent(id));
+    const job = result.job;
+    const text = result.text || job.error || jobLabels[job.state];
+    reportDialog("Análisis " + job.id.slice(0, 8), text);
+  } catch (error) {
+    byId("status").textContent = error.message;
+  }
+}
+
+async function cancelAnalysisJob(id, button) {
+  button.disabled = true;
+  try {
+    await request("/api/analisis/tareas/" + encodeURIComponent(id) + "/cancelar", {method: "POST"});
+    byId("status").textContent = "Tarea cancelada";
+  } catch (error) {
+    byId("status").textContent = error.message;
+  } finally {
+    button.disabled = false;
+    await refreshQueue();
+  }
+}
+
+function analysisJobNode(job) {
+  const row = element("div", "", "analysis-job");
+  const details = element("div");
+  details.append(element("strong", jobLabels[job.state], "job-state"),
+    element("p", `${job.id.slice(0, 8)} · prioridad ${priorityLabels[job.priority]} · ${formatTime(job.created_at)}`));
+  if (job.attempts) details.append(element("p", `Intento ${job.attempts}`));
+  if (job.error) details.append(element("p", job.error));
+  const actions = element("div", "", "job-actions");
+  if (job.state === "succeeded") {
+    const open = element("button", "Abrir informe");
+    open.dataset.jobAction = job.id + ":open";
+    open.onclick = () => showAnalysisJob(job.id);
+    actions.append(open);
+  } else if (job.state === "queued" || job.state === "running") {
+    const cancel = element("button", "Cancelar");
+    cancel.dataset.jobAction = job.id + ":cancel";
+    cancel.onclick = () => cancelAnalysisJob(job.id, cancel);
+    actions.append(cancel);
+  }
+  row.append(details, actions);
+  return row;
+}
+
+async function refreshQueue() {
+  if (!analysisQueue || checkingQueue || document.hidden) return;
+  checkingQueue = true;
+  try {
+    const jobs = await request("/api/analisis/tareas");
+    const active = jobs.filter((job) => job.state === "queued" || job.state === "running").length;
+    const status = jobs.length ? `${active} activas · ${jobs.length} recientes` : "Sin tareas de análisis.";
+    if (byId("queue-status").textContent !== status) byId("queue-status").textContent = status;
+    const signature = JSON.stringify(jobs);
+    if (signature !== queueSignature) {
+      queueSignature = signature;
+      const listing = byId("analysis-jobs");
+      const action = listing.contains(document.activeElement) ? document.activeElement.dataset.jobAction : "";
+      listing.replaceChildren(...jobs.map(analysisJobNode));
+      if (action) [...listing.querySelectorAll("[data-job-action]")].find((button) => button.dataset.jobAction === action)?.focus();
+    }
+  } catch (error) {
+    byId("queue-status").textContent = error.message;
+  } finally {
+    checkingQueue = false;
+  }
+}
+
 byId("history").onclick = async () => {
   try {
     const record = selectedRecord;
@@ -250,6 +326,16 @@ byId("analyze").onclick = async () => {
   const button = byId("analyze");
   button.disabled = true;
   try {
+    if (analysisQueue) {
+      const job = await request("/api/analisis/tareas", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({priority: Number(byId("analysis-priority").value)})
+      });
+      byId("status").textContent = `Tarea ${job.id.slice(0, 8)} · ${jobLabels[job.state]}`;
+      await refreshQueue();
+      if (job.state === "succeeded") await showAnalysisJob(job.id);
+      return;
+    }
     const result = await request("/api/analisis", {method: "POST"});
     reportDialog("Análisis del expediente", result.text);
   } catch (error) {
@@ -261,6 +347,14 @@ byId("analyze").onclick = async () => {
 
 byId("credits").onclick = () => byId("credit-panel").showModal();
 Promise.all([request("/api/app"), request("/credits.json")]).then(([app, credits]) => {
+  analysisQueue = app.analysis_queue;
+  if (analysisQueue) {
+    byId("analysis-queue").hidden = false;
+    byId("analyze").textContent = "Encolar análisis";
+    refreshQueue();
+    setInterval(refreshQueue, 2500);
+    document.addEventListener("visibilitychange", refreshQueue);
+  }
   byId("version").textContent = "PAVAROTTI " + app.version;
   byId("proxy-status").textContent = app.proxy ? "Escucha local · " + app.target : "Desactivado";
   if (app.proxy) {

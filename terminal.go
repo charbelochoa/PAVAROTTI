@@ -29,6 +29,11 @@ Uso: pavarotti [opciones globales] <comando> [argumentos]
   editar    Actualiza una nota con su revisión actual.
   historial Consulta las versiones previas de una nota.
   analizar  Correlaciona la evidencia del expediente.
+  encolar   Programa un análisis persistente en PostgreSQL.
+  tareas    Lista las tareas de análisis en JSON.
+  informe   Abre el informe de una tarea terminada.
+  cancelar  Cancela una tarea de análisis pendiente o activa.
+  ejecutor  Ejecuta la cola de análisis para este expediente.
   exportar  Exporta el expediente como JSON o CSV.
   migrar-local Copia un expediente local y su historial a PostgreSQL.
   ayuda     Muestra esta ayuda.
@@ -62,6 +67,8 @@ func terminal(args []string, stdout, stderr io.Writer, open func() (*caso.Store,
 		err = terminalHistory(args[1:], stdout, stderr, open)
 	case "analizar":
 		err = terminalAnalyze(args[1:], stdout, stderr, open)
+	case "encolar", "tareas", "informe", "cancelar", "ejecutor":
+		err = terminalQueue(args[0], args[1:], stdout, stderr, open)
 	case "exportar":
 		err = terminalRecords("exportar", args[1:], stdout, stderr, open)
 	case "migrar-local":

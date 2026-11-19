@@ -32,6 +32,7 @@ Usa **Anterior** y **Siguiente** para recorrer los resultados de 50 en 50. La b�
 - **Indicadores.** Importa dominios, direcciones IP y huellas desde un archivo de texto, un valor por línea. El informe correlaciona dominios e IP con los activos que ya constan en el expediente y cita los registros que justifican cada coincidencia.
 - **Análisis.** Tres agentes locales de inventario, señales HTTP y cronología trabajan en paralelo sobre la evidencia del expediente. El revisor de código Go añade señales con línea y columna sin compilar ni ejecutar la fuente.
 - **Trazabilidad.** Cada análisis identifica la versión de sus agentes y la huella de su instantánea de entrada. Las referencias del informe incluyen el ID y la revisión de cada registro.
+- **Tareas de análisis.** Con PostgreSQL puedes encolar informes por prioridad, cancelar tareas y abrir los resultados incluso después de reiniciar la aplicación.
 - **Edición.** Las notas conservan su historial. Una edición requiere la revisión vigente para evitar sobrescribir cambios. Los hallazgos importados conservan su huella y procedencia.
 
 ## Uso
@@ -77,6 +78,17 @@ docker compose exec app pavarotti analizar --json
 ```
 
 La interfaz queda en `http://127.0.0.1:8080`. Define `PAVAROTTI_WEB_PORT` si ocupas otro puerto. PostgreSQL guarda el expediente en un volumen. Puedes parar los servicios con `docker compose down` y volver a abrirlos con el mismo expediente.
+
+Con PostgreSQL, **Encolar análisis** guarda una instantánea del expediente. La sección **Tareas de análisis** muestra el estado, los intentos y el enlace al informe terminado. Una asignación abandonada vence a los 15 segundos desde la última renovación y puede recuperarse hasta completar tres intentos. La misma huella y versión reutilizan la tarea activa o el informe que ya existe. Si trabajas con un expediente en archivos locales, **Analizar expediente** sigue ejecutando el informe directamente.
+
+```sh
+pavarotti encolar --prioridad 2
+pavarotti tareas
+pavarotti informe ID
+pavarotti cancelar ID
+```
+
+Conecta ambos procesos al mismo nombre de expediente si deseas separarlos. Inicia la aplicación con `-sin-ejecutor` y usa `pavarotti ejecutor` en el otro proceso. El analizador consume instantáneas preparadas con su misma versión de agentes.
 
 ## Compilar
 

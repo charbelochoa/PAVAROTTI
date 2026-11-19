@@ -19,9 +19,10 @@ import (
 var resources embed.FS
 
 type settings struct {
-	Version string `json:"version"`
-	Proxy   string `json:"proxy,omitempty"`
-	Target  string `json:"target,omitempty"`
+	Version       string `json:"version"`
+	Proxy         string `json:"proxy,omitempty"`
+	Target        string `json:"target,omitempty"`
+	AnalysisQueue bool   `json:"analysis_queue"`
 }
 
 type noteInput struct {
@@ -166,6 +167,7 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 		}
 		respond(w, map[string]any{"report": report, "text": report.Text()})
 	})
+	analysisQueueRoutes(mux, store)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -196,8 +198,7 @@ func editError(w http.ResponseWriter, err error) {
 }
 
 func respond(w http.ResponseWriter, data any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(data)
+	replyJSON(w, http.StatusOK, data)
 }
 
 func save(w http.ResponseWriter, store *caso.Store, records []caso.Record) {
