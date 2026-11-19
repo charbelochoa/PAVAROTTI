@@ -80,7 +80,7 @@ func (object rdapObject) record(path, hash, stamp string) (caso.Record, error) {
 	var title string
 	var sources, details []string
 	if len(object.Nameservers) > 31 || len(object.Status) > 32 || len(object.Events) > 64 ||
-		!validRDAPText(object.Handle, 253) {
+		!boundedText(object.Handle, 253) {
 		return caso.Record{}, errors.New("los metadatos RDAP exceden los límites de importación")
 	}
 	switch object.Class {
@@ -108,7 +108,7 @@ func (object rdapObject) record(path, hash, stamp string) (caso.Record, error) {
 			return caso.Record{}, errors.New("rango o versión IP RDAP inválidos")
 		}
 		title = "Red · " + start.String() + " – " + end.String()
-		if !validRDAPText(object.Name, 253) || !validRDAPText(object.Country, 2) {
+		if !boundedText(object.Name, 253) || !boundedText(object.Country, 2) {
 			return caso.Record{}, errors.New("nombre o país de red RDAP inválido")
 		}
 		if object.Name != "" {
@@ -127,14 +127,14 @@ func (object rdapObject) record(path, hash, stamp string) (caso.Record, error) {
 		details = append(details, "Identificador RDAP · "+object.Handle)
 	}
 	for _, status := range object.Status {
-		if strings.TrimSpace(status) == "" || !validRDAPText(status, 80) {
+		if strings.TrimSpace(status) == "" || !boundedText(status, 80) {
 			return caso.Record{}, errors.New("estado RDAP inválido")
 		}
 		details = append(details, "Estado · "+status)
 	}
 	for _, event := range object.Events {
 		date, err := time.Parse(time.RFC3339, event.Date)
-		if err != nil || strings.TrimSpace(event.Action) == "" || !validRDAPText(event.Action, 80) {
+		if err != nil || strings.TrimSpace(event.Action) == "" || !boundedText(event.Action, 80) {
 			return caso.Record{}, errors.New("evento o fecha RDAP inválidos")
 		}
 		details = append(details, event.Action+" · "+date.UTC().Format(time.RFC3339Nano))
@@ -143,7 +143,7 @@ func (object rdapObject) record(path, hash, stamp string) (caso.Record, error) {
 		SourceID: path, SHA256: hash, Details: strings.Join(details, "\n")}, nil
 }
 
-func validRDAPText(value string, maximum int) bool {
+func boundedText(value string, maximum int) bool {
 	return len(value) <= maximum && strings.IndexFunc(value, unicode.IsControl) == -1 &&
 		strings.IndexFunc(value, func(char rune) bool { return unicode.In(char, unicode.Cf) }) == -1
 }
