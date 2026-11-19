@@ -1052,7 +1052,12 @@ Promise.all([request("/api/app"), request("/credits.json")]).then(([app, credits
     link.href = credit.url;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
-    row.append(link, document.createTextNode(" · " + credit.detail));
+    const reference = element("a", "Referencia técnica");
+    reference.href = credit.reference;
+    reference.target = "_blank";
+    reference.rel = "noopener noreferrer";
+    reference.setAttribute("aria-label", `Referencia técnica de ${credit.name}`);
+    row.append(link, element("p", credit.detail), reference);
     byId("references").append(row);
   }
   return refresh();

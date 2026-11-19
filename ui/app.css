@@ -110,6 +110,10 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: #ddd
 #groups dd { margin: 0; color: var(--dim); }
 dialog { color: inherit; width: min(560px, calc(100vw - 2rem)); }
 dialog::backdrop { background: #09070ad9; }
+#references { display: grid; gap: .7rem; padding: 0; list-style: none; }
+#references li { padding-bottom: .7rem; border-bottom: 1px solid var(--line); }
+#references li > a:first-child { font-weight: 700; }
+#references li p { margin: .25rem 0; }
 .actions { justify-content: end; }
 @media (max-width: 970px) {
   main { grid-template-columns: minmax(195px, 220px) minmax(0, 1fr); }
