@@ -18,9 +18,16 @@ import (
 	"pavarotti/internal/caso"
 )
 
-const HTTPComparisonSchema = "pavarotti.http-comparison.v1"
+const (
+	HTTPComparisonSchema      = "pavarotti.http-comparison.v1"
+	HTTPComparisonWideSchema  = "pavarotti.http-comparison.v2"
+	HTTPComparisonRecordLimit = 50_000
+)
 
-var ErrHTTPComparisonCriteria = errors.New("criterios de comparación HTTP inválidos")
+var (
+	ErrHTTPComparisonCriteria = errors.New("criterios de comparación HTTP inválidos")
+	ErrHTTPComparisonLimit    = errors.New("la comparación HTTP admite hasta 50000 observaciones distintas entre ambos periodos")
+)
 
 type HTTPCompareCriteria struct {
 	Baseline HTTPWindow `json:"baseline"`
@@ -85,13 +92,18 @@ type httpMetric struct {
 }
 
 type httpComparisonInput struct {
-	Ref       HTTPComparisonEvidence `json:"ref"`
-	Baseline  bool                   `json:"baseline"`
-	Current   bool                   `json:"current"`
-	Assessed  bool                   `json:"assessed"`
-	Category  httpMetric             `json:"category"`
-	Signals   []httpMetric           `json:"signals,omitempty"`
+	Ref      HTTPComparisonEvidence `json:"ref"`
+	Baseline bool                   `json:"baseline"`
+	Current  bool                   `json:"current"`
+	Assessed bool                   `json:"assessed"`
+	Category httpMetric             `json:"category"`
+	Signals  []httpMetric           `json:"signals,omitempty"`
+}
+
+type httpComparisonSource struct {
 	timestamp time.Time
+	input     httpComparisonInput
+	data      []byte
 }
 
 func CompareHTTP(ctx context.Context, store *caso.Store, criteria HTTPCompareCriteria) (HTTPComparison, error) {
@@ -104,7 +116,7 @@ func CompareHTTP(ctx context.Context, store *caso.Store, criteria HTTPCompareCri
 		return HTTPComparison{}, fmt.Errorf("%w en el periodo B: %w", ErrHTTPComparisonCriteria, err)
 	}
 	criteria = HTTPCompareCriteria{Baseline: a.HTTPWindow, Current: b.HTTPWindow}
-	var inputs []httpComparisonInput
+	var inputs []httpComparisonSource
 	bytes := 0
 	filter := caso.EvidenceFilter{HTTP: true, Periods: []caso.EvidencePeriod{a.EvidencePeriod, b.EvidencePeriod}}
 	err = store.WalkFiltered(ctx, filter, func(record caso.Record) error {
@@ -117,29 +129,29 @@ func CompareHTTP(ctx context.Context, store *caso.Store, criteria HTTPCompareCri
 		if !inA && !inB {
 			return nil
 		}
-		if len(inputs) == RecordLimit {
-			return ErrLimit
+		if len(inputs) == HTTPComparisonRecordLimit {
+			return ErrHTTPComparisonLimit
 		}
-		input := compareHTTPInput(record, origin, stamp, inA, inB)
-		size, err := json.Marshal(input)
+		input := compareHTTPInput(record, origin, inA, inB)
+		data, err := json.Marshal(input)
 		if err != nil {
 			return err
 		}
-		bytes += len(size) + 1
+		bytes += len(data) + 1
 		if bytes > SnapshotByteLimit {
 			return ErrSnapshotBytes
 		}
-		inputs = append(inputs, input)
+		inputs = append(inputs, httpComparisonSource{timestamp: stamp, input: input, data: data})
 		return nil
 	})
 	if err != nil {
 		return HTTPComparison{}, err
 	}
-	slices.SortFunc(inputs, func(x, y httpComparisonInput) int {
+	slices.SortFunc(inputs, func(x, y httpComparisonSource) int {
 		if cmp := y.timestamp.Compare(x.timestamp); cmp != 0 {
 			return cmp
 		}
-		return strings.Compare(x.Ref.ID, y.Ref.ID)
+		return strings.Compare(x.input.Ref.ID, y.input.Ref.ID)
 	})
 	return compileHTTPComparison(ctx, criteria, inputs)
 }
@@ -213,9 +225,9 @@ func normalizeHTTPOrigin(raw string) string {
 	return (&url.URL{Scheme: u.Scheme, Host: host}).String()
 }
 
-func compareHTTPInput(record caso.Record, origin string, stamp time.Time, inA, inB bool) httpComparisonInput {
+func compareHTTPInput(record caso.Record, origin string, inA, inB bool) httpComparisonInput {
 	input := httpComparisonInput{Ref: HTTPComparisonEvidence{Evidence: reference(record), Origin: origin},
-		timestamp: stamp, Baseline: inA, Current: inB}
+		Baseline: inA, Current: inB}
 	status := record.Traffic.Status
 	switch {
 	case record.HTTPTransportFailure():
@@ -255,8 +267,12 @@ func compareHTTPInput(record caso.Record, origin string, stamp time.Time, inA, i
 	return input
 }
 
-func compileHTTPComparison(ctx context.Context, criteria HTTPCompareCriteria, inputs []httpComparisonInput) (HTTPComparison, error) {
-	comparison := HTTPComparison{Schema: HTTPComparisonSchema, Criteria: criteria, Rows: []HTTPCompareRow{}}
+func compileHTTPComparison(ctx context.Context, criteria HTTPCompareCriteria, inputs []httpComparisonSource) (HTTPComparison, error) {
+	schema := HTTPComparisonSchema
+	if len(inputs) > RecordLimit {
+		schema = HTTPComparisonWideSchema
+	}
+	comparison := HTTPComparison{Schema: schema, Criteria: criteria, Rows: []HTTPCompareRow{}}
 	hash := sha256.New()
 	encoder := json.NewEncoder(hash)
 	if err := encoder.Encode(comparison.Schema); err != nil {
@@ -266,13 +282,14 @@ func compileHTTPComparison(ctx context.Context, criteria HTTPCompareCriteria, in
 		return HTTPComparison{}, err
 	}
 	rows := make(map[httpRowKey]*HTTPCompareRow)
-	for _, input := range inputs {
+	newline := []byte{'\n'}
+	for _, source := range inputs {
 		if err := ctx.Err(); err != nil {
 			return HTTPComparison{}, err
 		}
-		if err := encoder.Encode(input); err != nil {
-			return HTTPComparison{}, err
-		}
+		input := source.input
+		_, _ = hash.Write(source.data)
+		_, _ = hash.Write(newline)
 		if input.Baseline {
 			comparison.Baseline.count(input)
 		}

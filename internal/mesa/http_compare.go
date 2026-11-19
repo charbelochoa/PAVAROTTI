@@ -24,7 +24,7 @@ func httpComparisonRoute(mux *http.ServeMux, store *caso.Store) {
 		switch {
 		case errors.Is(err, analisis.ErrHTTPComparisonCriteria):
 			http.Error(w, err.Error(), http.StatusBadRequest)
-		case errors.Is(err, analisis.ErrLimit), errors.Is(err, analisis.ErrSnapshotBytes):
+		case errors.Is(err, analisis.ErrHTTPComparisonLimit), errors.Is(err, analisis.ErrSnapshotBytes):
 			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		case err != nil:
 			http.Error(w, "No se pudo comparar el historial HTTP", http.StatusInternalServerError)
