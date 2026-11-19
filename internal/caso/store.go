@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -120,7 +121,18 @@ func (s *Store) Records() ([]Record, error) {
 	err := s.walkLocal(context.Background(), true, func(record Record) {
 		records = append(records, record)
 	})
-	return records, err
+	if err != nil {
+		return nil, err
+	}
+	slices.SortFunc(records, func(a, b Record) int {
+		keyA, ordinalA, _ := recordPosition(a.ID)
+		keyB, ordinalB, _ := recordPosition(b.ID)
+		if keyA != keyB {
+			return strings.Compare(keyA, keyB)
+		}
+		return ordinalA - ordinalB
+	})
+	return records, nil
 }
 
 func (s *Store) walkLocal(ctx context.Context, withEdits bool, visit func(Record)) error {
