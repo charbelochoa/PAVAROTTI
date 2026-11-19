@@ -85,3 +85,5 @@ go build -o PAVAROTTI .
 ```
 
 En Windows, usa `-o PAVAROTTI.exe`. La interfaz y los créditos se incluyen en el ejecutable.
+
+Consulta el [plan de evolución y la matriz de pruebas](PLAN.md).
