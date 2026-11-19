@@ -41,6 +41,7 @@ jobs:
         env:
           PAVAROTTI_TEST_POSTGRES: postgres://pavarotti:pavarotti-ci@127.0.0.1:${{ job.services.postgres.ports[5432] }}/pavarotti_test?sslmode=disable
       - run: go vet ./...
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
       - run: CGO_ENABLED=0 go build -trimpath -o PAVAROTTI-Kali-x64 .
       - run: docker run --rm -v "$PWD/PAVAROTTI-Kali-x64:/opt/pavarotti:ro" kalilinux/kali-rolling /opt/pavarotti -version
       - run: docker run --rm -v "$PWD/PAVAROTTI-Kali-x64:/opt/pavarotti:ro" archlinux:base /opt/pavarotti -version
