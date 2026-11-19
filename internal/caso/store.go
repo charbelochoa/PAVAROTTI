@@ -29,6 +29,7 @@ type Record struct {
 	SourceID  string     `json:"source_id,omitempty"`
 	SHA256    string     `json:"sha256,omitempty"`
 	Details   string     `json:"details,omitempty"`
+	Network   string     `json:"network,omitempty"`
 	Signals   []string   `json:"signals,omitempty"`
 	Traffic   *Traffic   `json:"traffic,omitempty"`
 	Indicator *Indicator `json:"indicator,omitempty"`

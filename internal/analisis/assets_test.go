@@ -63,3 +63,41 @@ func TestAssetsKeepEvidenceRolesAndSampleDigests(t *testing.T) {
 		t.Fatalf("cursor inválido: %v", err)
 	}
 }
+
+func TestAssetNetworkCoverageKeepsObservedAddressesDistinct(t *testing.T) {
+	store, err := caso.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save([]caso.Record{
+		{Kind: "dns", Source: "192.0.2.5, 2001:db8::7"},
+		{Kind: "rdap", Title: "Red · 192.0.2.2 – 192.0.2.5"},
+		{Kind: "rdap", Title: "Red · 192.0.2.5 – 192.0.2.5", Source: "192.0.2.5"},
+		{Kind: "stix", Network: "192.0.2.0/24"},
+		{Kind: "stix", Title: "Red · 2001:db8::/32"},
+		{Kind: "nota", Title: "Red · 0.0.0.0/0"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		kind, value       string
+		direct, coverages int
+	}{
+		{"ipv4", "192.0.2.5", 2, 2},
+		{"ipv4", "192.0.2.6", 0, 1},
+		{"ipv6", "2001:db8::7", 1, 1},
+		{"red", "192.0.2.9/24", 1, 0},
+	} {
+		detail, err := DescribeAsset(t.Context(), store, AssetQuery{AssetKey: AssetKey{Type: test.kind, Value: test.value}})
+		if err != nil || detail.Count != test.direct || detail.Coverage != test.coverages || len(detail.Rows) != test.direct+test.coverages {
+			t.Fatalf("%s: %+v, %v", test.value, detail, err)
+		}
+	}
+	page, err := ListAssets(t.Context(), store, AssetQuery{AssetKey: AssetKey{Type: "ipv4"}})
+	if err != nil || len(page.Rows) != 1 || page.Rows[0].Value != "192.0.2.5" || page.Rows[0].Count != 2 {
+		t.Fatalf("la cobertura generó observaciones: %+v, %v", page, err)
+	}
+	if _, err := DescribeAsset(t.Context(), store, AssetQuery{AssetKey: AssetKey{Type: "ipv4", Value: "192.0.3.6"}}); !errors.Is(err, caso.ErrNotFound) {
+		t.Fatalf("dirección ajena al rango: %v", err)
+	}
+}

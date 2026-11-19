@@ -93,7 +93,8 @@ func (object stixObject) record(path, hash, stamp string) (caso.Record, error) {
 				!(object.Type == "ipv4-addr" && prefix.Addr().Is4() || object.Type == "ipv6-addr" && prefix.Addr().Is6()) {
 				return caso.Record{}, errors.New("valor inválido para el tipo de observable STIX")
 			}
-			record.Title = "Red · " + prefix.Masked().String()
+			record.Network = prefix.Masked().String()
+			record.Title = "Red · " + record.Network
 			record.Details += "\nPrefijo declarado · " + prefix.String()
 			break
 		}

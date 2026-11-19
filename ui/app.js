@@ -28,7 +28,7 @@ let currentView = "records";
 let assetSearch = "";
 let recordSearch = "";
 
-const assetKinds = {dominio: "Dominio", ipv4: "IPv4", ipv6: "IPv6", sha256: "SHA-256", sha1: "SHA-1", md5: "MD5"};
+const assetKinds = {dominio: "Dominio", ipv4: "IPv4", ipv6: "IPv6", red: "Red", sha256: "SHA-256", sha1: "SHA-1", md5: "MD5"};
 const assetKey = ({type, value}) => `${type}/${value}`;
 const assetCount = ({count, indicators}) =>
   `${count} ${count === 1 ? "registro" : "registros"}${indicators ? ` · ${indicators} ${indicators === 1 ? "indicador" : "indicadores"}` : ""}`;
@@ -150,6 +150,7 @@ function inspectAsset(detail, asset) {
     const button = element("button");
     button.append(element("strong", reference.title || reference.kind),
       element("span", `${reference.kind} · ${reference.role} · rev. ${reference.revision}`, "type"));
+    if (reference.network) button.append(element("span", reference.network, "muted"));
     if (reference.time) button.append(element("span", formatTime(reference.time), "muted"));
     button.onclick = () => selectRecord(reference.id, reference.revision, {
       label: "Volver al activo", open: () => selectAsset(asset, asset.after)
@@ -170,6 +171,7 @@ function inspectAsset(detail, asset) {
   const view = byId("record-detail");
   view.replaceChildren(element("span", assetKinds[detail.type], "type"), element("h3", detail.value),
     element("p", assetCount(detail)), list, controls);
+  if (detail.coverage) list.before(element("p", `Cobertura de red · ${detail.coverage}`));
   view.scrollTop = 0;
 }
 
@@ -323,7 +325,7 @@ function showView(view) {
   byId("filter").hidden = view !== "records";
   byId("filter-asset").hidden = view !== "assets";
   byId("filter-http").hidden = view !== "http";
-  query.placeholder = view === "assets" ? "Buscar dominio, IP o huella" : "Buscar texto, origen, ID o SHA-256";
+  query.placeholder = view === "assets" ? "Buscar dominio, IP, red o huella" : "Buscar texto, origen, ID o SHA-256";
   query.maxLength = view === "assets" ? 253 : 256;
   query.value = view === "assets" ? assetSearch : recordSearch;
   byId("records").replaceChildren();

@@ -39,13 +39,15 @@ type AssetPage struct {
 
 type AssetReference struct {
 	Evidence
-	Role string `json:"role"`
+	Role    string `json:"role"`
+	Network string `json:"network,omitempty"`
 }
 
 type AssetDetail struct {
 	AssetRow
-	Rows []AssetReference `json:"rows"`
-	Next string           `json:"next,omitempty"`
+	Coverage int              `json:"coverage,omitempty"`
+	Rows     []AssetReference `json:"rows"`
+	Next     string           `json:"next,omitempty"`
 }
 
 func ListAssets(ctx context.Context, store *caso.Store, query AssetQuery) (AssetPage, error) {
@@ -63,7 +65,7 @@ func ListAssets(ctx context.Context, store *caso.Store, query AssetQuery) (Asset
 	}
 	rows := make(map[AssetKey]AssetRow)
 	err := walkAssetRecords(ctx, store, func(record caso.Record) {
-		recordAssets(record, func(key AssetKey, role string) {
+		recordAssets(record, recordNetwork(record), func(key AssetKey, role string) {
 			if (query.Type != "" && key.Type != query.Type) || (term != "" && !strings.Contains(key.Value, term)) ||
 				(query.After != "" && key.cursor() <= query.After) {
 				return
@@ -102,13 +104,21 @@ func DescribeAsset(ctx context.Context, store *caso.Store, query AssetQuery) (As
 	}
 	detail := AssetDetail{AssetRow: AssetRow{AssetKey: key}}
 	rows := make([]AssetReference, 0)
+	address, _ := netip.ParseAddr(key.Value)
 	err := walkAssetRecords(ctx, store, func(record caso.Record) {
-		recordAssets(record, func(candidate AssetKey, role string) {
+		network := recordNetwork(record)
+		direct := false
+		recordAssets(record, network, func(candidate AssetKey, role string) {
 			if candidate == key {
+				direct = true
 				detail.add(role)
 				rows = append(rows, AssetReference{Evidence: reference(record), Role: role})
 			}
 		})
+		if !direct && address.IsValid() && network.contains(address) {
+			detail.Coverage++
+			rows = append(rows, AssetReference{Evidence: reference(record), Role: "cobertura", Network: network.value})
+		}
 	})
 	if err != nil {
 		return AssetDetail{}, err
@@ -152,7 +162,7 @@ func walkAssetRecords(ctx context.Context, store *caso.Store, visit func(caso.Re
 	})
 }
 
-func recordAssets(record caso.Record, visit func(AssetKey, string)) {
+func recordAssets(record caso.Record, network assetNetwork, visit func(AssetKey, string)) {
 	if item := record.Indicator; item != nil {
 		if key, valid := normalizeAsset(AssetKey(*item)); valid {
 			visit(key, "indicador")
@@ -184,6 +194,9 @@ func recordAssets(record caso.Record, visit func(AssetKey, string)) {
 	default:
 		return
 	}
+	if network.value != "" {
+		visit(AssetKey{Type: "red", Value: network.value}, role)
+	}
 	for _, host := range sourceHosts(record.Source, record.Kind == "rdap") {
 		visit(hostAsset(host), role)
 	}
@@ -198,7 +211,7 @@ func assetPageSize(limit int) (int, bool) {
 
 func assetType(kind string) bool {
 	switch kind {
-	case "dominio", "ipv4", "ipv6", "md5", "sha1", "sha256":
+	case "dominio", "ipv4", "ipv6", "red", "md5", "sha1", "sha256":
 		return true
 	}
 	return false
@@ -222,6 +235,9 @@ func normalizeAsset(key AssetKey) (AssetKey, bool) {
 				return AssetKey{Type: key.Type, Value: value}, true
 			}
 		}
+	case "red":
+		network := parseAssetNetwork(value)
+		return AssetKey{Type: key.Type, Value: network.value}, network.value != ""
 	}
 	return AssetKey{}, false
 }
