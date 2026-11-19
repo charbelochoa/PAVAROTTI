@@ -19,9 +19,13 @@ func TestLocalPageIndexMatchesScanAcrossBatches(t *testing.T) {
 		Signals:      []string{"Señal de prueba"},
 		HTTPFindings: []HTTPFinding{{Rule: "hsts-ausente"}},
 	}
+	batch := []Record{{Kind: "nota", Title: "Anterior", Time: stamp, Details: "Primera revisión"}}
+	for range 12 {
+		batch = append(batch, sample)
+	}
 	for _, group := range [][]Record{
 		{sample, {Kind: "binario", Time: stamp, Title: "ELF", SourceID: "muestra.bin"}},
-		{{Kind: "nota", Title: "Anterior", Time: stamp, Details: "Primera revisión"}, sample, sample, sample},
+		batch,
 	} {
 		if err := store.Save(group); err != nil {
 			t.Fatal(err)

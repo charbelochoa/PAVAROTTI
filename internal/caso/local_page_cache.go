@@ -84,12 +84,12 @@ func (s *Store) localPageBatch(key string, file os.DirEntry) ([]localPageEntry, 
 	weight := 256
 	for index, item := range batch {
 		row := item.RecordRow
-		row.ID = key + "-" + strconv.Itoa(index+1)
-		row.Title = strings.Clone(clipRow(row.Title, 240))
-		row.Source = strings.Clone(clipRow(row.Source, 360))
+		row.ID = strconv.Itoa(index + 1)
+		row.Title = compactPageText(row.Title, 240)
+		row.Source = compactPageText(row.Source, 360)
 		row.SourceID = ""
 		if row.Kind == "binario" {
-			row.SourceID = strings.Clone(clipRow(item.SourceID, 160))
+			row.SourceID = compactPageText(item.SourceID, 160)
 		}
 		row.SignalCount = len(item.Signals)
 		entry := localPageEntry{RecordRow: row, rules: make([]string, 0, len(item.Rules))}
@@ -112,6 +112,25 @@ func (s *Store) localPageBatch(key string, file os.DirEntry) ([]localPageEntry, 
 	return rows, nil
 }
 
+func compactPageText(text string, limit int) string {
+	clipped := clipRow(text, limit)
+	if len(clipped) == len(text) {
+		return text
+	}
+	return strings.Clone(clipped)
+}
+
+func compareBatchPageRow(row RecordRow, key string, cursor pageCursor) int {
+	if order := strings.Compare(strings.TrimSuffix(row.Time, "Z"), cursor.Stamp); order != 0 {
+		return order
+	}
+	batch, ordinal, _ := strings.Cut(cursor.ID, "-")
+	if order := strings.Compare(key, batch); order != 0 {
+		return order
+	}
+	return strings.Compare(row.ID, ordinal)
+}
+
 func (s *Store) indexedLocalPage(ctx context.Context, request PageRequest, after pageCursor, limit int) ([]RecordRow, error) {
 	unlock, err := s.lockContext(ctx)
 	if err != nil {
@@ -127,7 +146,7 @@ func (s *Store) indexedLocalPage(ctx context.Context, request PageRequest, after
 		first := 0
 		if after.ID != "" {
 			first = sort.Search(len(batch), func(index int) bool {
-				return compareCursor(rowCursor(batch[index].RecordRow), after) < 0
+				return compareBatchPageRow(batch[index].RecordRow, key, after) < 0
 			})
 		}
 		for _, item := range batch[first:] {
@@ -135,10 +154,11 @@ func (s *Store) indexedLocalPage(ctx context.Context, request PageRequest, after
 				return err
 			}
 			row := item.RecordRow
-			if len(rows) == limit && compareCursor(rowCursor(row), rowCursor(rows[0])) <= 0 {
+			if len(rows) == limit && compareBatchPageRow(row, key, rowCursor(rows[0])) <= 0 {
 				break
 			}
 			if request.matchesRow(row.Kind, row.Time, row.Traffic, request.HTTPRule == "" || slices.Contains(item.rules, request.HTTPRule)) {
+				row.ID = key + "-" + row.ID
 				rows.include(row, limit)
 			}
 		}
