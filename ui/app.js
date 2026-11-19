@@ -8,6 +8,7 @@ const element = (tag, text, className) => {
   return node;
 };
 let selectedKey = "";
+let selectedRevision = 0;
 let selectedRecord;
 let editing;
 let pageStarts = [""];
@@ -36,7 +37,7 @@ function formatTime(value) {
 
 function inspect(record, message = "Selecciona un registro para examinarlo.") {
   selectedRecord = record;
-  byId("note-tools").hidden = record?.kind !== "nota" || !record.id;
+  byId("note-tools").hidden = record?.kind !== "nota" || !record.id || selectedRevision > 0;
   const view = byId("record-detail");
   view.replaceChildren();
   if (!record) {
@@ -46,7 +47,18 @@ function inspect(record, message = "Selecciona un registro para examinarlo.") {
   view.append(element("span", record.kind, "type"), element("h3", record.title), element("p", formatTime(record.time)));
   if (record.source) view.append(element("p", record.source));
   if (record.source_id) view.append(element("p", "ID · " + record.source_id));
-  if (record.id && record.kind === "nota") view.append(element("p", "Revisión " + record.revision));
+  if (selectedRevision) {
+    view.append(element("p", "Revisión citada " + record.revision));
+    const tools = element("div", "", "tools");
+    const current = element("button", "Abrir revisión vigente");
+    current.onclick = () => selectRecord(record.id);
+    const back = element("button", "Volver al informe");
+    back.onclick = () => byId("report-panel").showModal();
+    tools.append(current, back);
+    view.append(tools);
+  } else if (record.id && record.kind === "nota") {
+    view.append(element("p", "Revisión " + record.revision));
+  }
   if (record.sha256) view.append(element("p", "SHA-256 · " + record.sha256));
   if (record.traffic) {
     const item = record.traffic;
@@ -60,16 +72,27 @@ function inspect(record, message = "Selecciona un registro para examinarlo.") {
   if (record.details) view.append(element("pre", record.details));
 }
 
-async function loadRecord(id, focus = false) {
+function selectRecord(id, revision = 0) {
+  selectedKey = id;
+  selectedRevision = revision;
+  for (const row of byId("records").querySelectorAll("[data-record-id]")) {
+    row.setAttribute("aria-pressed", String(!revision && row.dataset.recordId === id));
+  }
+  if (revision) byId("inspector-heading").focus({preventScroll: true});
+  return loadRecord(id, true);
+}
+
+async function loadRecord(id, scroll = false) {
   inspectorRequest?.abort();
   const controller = new AbortController();
   inspectorRequest = controller;
   inspect(undefined, "Consultando evidencia…");
-  if (focus && window.matchMedia("(max-width: 970px)").matches) {
+  if (scroll && (selectedRevision || window.matchMedia("(max-width: 970px)").matches)) {
     byId("inspector").scrollIntoView({block: "nearest"});
   }
   try {
-    const record = await request("/api/registro/" + encodeURIComponent(id), {signal: controller.signal});
+    const query = selectedRevision ? "?revision=" + selectedRevision : "";
+    const record = await request("/api/registro/" + encodeURIComponent(id) + query, {signal: controller.signal});
     if (!controller.signal.aborted) inspect(record);
   } catch (error) {
     if (!controller.signal.aborted) inspect(undefined, error.message);
@@ -79,8 +102,9 @@ async function loadRecord(id, focus = false) {
 function recordNode(record) {
   const row = element("button", "", "record");
   row.type = "button";
+  row.dataset.recordId = record.id;
   row.setAttribute("aria-controls", "record-detail");
-  row.setAttribute("aria-pressed", String(record.id === selectedKey));
+  row.setAttribute("aria-pressed", String(!selectedRevision && record.id === selectedKey));
   const traffic = record.traffic;
   if (traffic) {
     row.append(element("span", `${traffic.method} ${traffic.status}`, "type"),
@@ -92,13 +116,7 @@ function recordNode(record) {
     row.append(element("span", record.kind, "type"), element("strong", record.title));
     if (record.source) row.append(element("span", record.source, "muted"));
   }
-  row.onclick = () => {
-    const prior = byId("records").querySelector('[aria-pressed="true"]');
-    prior?.setAttribute("aria-pressed", "false");
-    selectedKey = record.id;
-    row.setAttribute("aria-pressed", "true");
-    loadRecord(record.id, true);
-  };
+  row.onclick = () => selectRecord(record.id);
   return row;
 }
 
@@ -249,7 +267,10 @@ byId("note-form").addEventListener("submit", async (event) => {
     });
     byId("note-panel").close();
     byId("note-form").reset();
-    if (result.id) selectedKey = result.id;
+    if (result.id) {
+      selectedKey = result.id;
+      selectedRevision = 0;
+    }
     await refresh(result.message || "Nota actualizada");
   } catch (error) {
     byId("note-error").textContent = error.message;
@@ -258,9 +279,50 @@ byId("note-form").addEventListener("submit", async (event) => {
   }
 });
 
-function reportDialog(title, text) {
+const reportSections = [
+  ["matches", "Coincidencias"], ["assets", "Activos"], ["signals", "Señales HTTP"],
+  ["responses", "Respuestas HTTP"], ["indicators", "Indicadores"], ["hashes", "Huellas"], ["timeline", "Cronología"]
+];
+
+function reportDialog(title, text, report) {
   byId("report-title").textContent = title;
   byId("report-text").textContent = text;
+  const panel = byId("report-evidence");
+  const choice = byId("report-section");
+  const listing = byId("report-references");
+  const sections = reportSections.flatMap(([key, label]) => {
+    const values = report?.[key] || [];
+    const groups = key === "timeline" ? [{evidence: values}] : values;
+    const cited = groups.map((group) => ({...group, evidence: (group.evidence || [])
+      .filter((item) => item.id && Number.isInteger(item.revision) && item.revision > 0)}))
+      .filter((group) => group.evidence.length);
+    return cited.length ? [{label, groups: cited}] : [];
+  });
+  panel.hidden = sections.length === 0;
+  panel.open = false;
+  listing.replaceChildren();
+  choice.replaceChildren(...sections.map(({label}) => element("option", label)));
+  const renderReferences = () => {
+    const section = sections[choice.selectedIndex];
+    const groups = (section?.groups || []).map(({value, scope, evidence}) => {
+      const group = element("div", "", "reference-group");
+      if (value) group.append(element("strong", scope ? `${value} · ${scope}` : value));
+      for (const item of evidence) {
+        const action = element("button", `${item.title || item.kind} · rev. ${item.revision}`);
+        action.title = `${item.id} · revisión ${item.revision}`;
+        action.onclick = () => {
+          byId("report-panel").close();
+          selectRecord(item.id, item.revision);
+        };
+        group.append(action);
+      }
+      return group;
+    });
+    listing.replaceChildren(...groups);
+    listing.scrollTop = 0;
+  };
+  choice.onchange = renderReferences;
+  renderReferences();
   byId("report-panel").showModal();
 }
 
@@ -272,7 +334,7 @@ async function showAnalysisJob(id) {
     const result = await request("/api/analisis/tareas/" + encodeURIComponent(id));
     const job = result.job;
     const text = result.text || job.error || jobLabels[job.state];
-    reportDialog("Análisis " + job.id.slice(0, 8), text);
+    reportDialog("Análisis " + job.id.slice(0, 8), text, job.result);
   } catch (error) {
     byId("status").textContent = error.message;
   }
@@ -366,7 +428,7 @@ byId("analyze").onclick = async () => {
       return;
     }
     const result = await request("/api/analisis", {method: "POST"});
-    reportDialog("Análisis del expediente", result.text);
+    reportDialog("Análisis del expediente", result.text, result.report);
   } catch (error) {
     byId("status").textContent = error.message;
   } finally {

@@ -99,7 +99,19 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 		respond(w, stats)
 	})
 	mux.HandleFunc("GET /api/registro/{id}", func(w http.ResponseWriter, r *http.Request) {
-		record, err := store.Record(r.Context(), r.PathValue("id"))
+		id := r.PathValue("id")
+		var record caso.Record
+		var err error
+		if raw := r.URL.Query().Get("revision"); raw != "" {
+			revision, parseErr := strconv.Atoi(raw)
+			if parseErr != nil || revision < 1 || strconv.Itoa(revision) != raw {
+				http.Error(w, "La revisión debe ser un entero positivo", http.StatusBadRequest)
+				return
+			}
+			record, err = store.RecordRevision(r.Context(), id, revision)
+		} else {
+			record, err = store.Record(r.Context(), id)
+		}
 		if errors.Is(err, caso.ErrNotFound) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return

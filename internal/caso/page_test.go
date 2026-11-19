@@ -77,6 +77,18 @@ func testPage(t *testing.T, store *Store) {
 	if err != nil || note.Revision != 2 || note.Title != "REVISIÓN [cita] 100%" || len(note.Details) != 1440 {
 		t.Fatalf("inspector: revisión %d, %v", note.Revision, err)
 	}
+	for _, expected := range []struct {
+		revision int
+		title    string
+	}{{1, "Nota inicial"}, {2, "REVISIÓN [cita] 100%"}} {
+		cited, err := store.RecordRevision(ctx, id, expected.revision)
+		if err != nil || cited.Revision != expected.revision || cited.Title != expected.title || cited.ID != id {
+			t.Fatalf("cita histórica: %+v, %v", cited, err)
+		}
+	}
+	if _, err := store.RecordRevision(ctx, id, 3); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("revisión inexistente: %v", err)
+	}
 	httpPage, err := store.Page(ctx, PageRequest{Kind: "http"})
 	if err != nil || len(httpPage.Rows) != 2 || httpPage.Rows[0].Kind != "tráfico" || httpPage.Rows[1].Kind != "archivo HAR" {
 		t.Fatalf("historial HTTP: %+v, %v", httpPage, err)

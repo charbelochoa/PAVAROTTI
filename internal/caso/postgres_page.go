@@ -69,7 +69,7 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 	return rows, result.Err()
 }
 
-func (s *Store) postgresRecord(ctx context.Context, key string, ordinal int) (Record, error) {
+func (s *Store) postgresRecord(ctx context.Context, key string, ordinal, revision int) (Record, error) {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	var data []byte
@@ -77,15 +77,19 @@ func (s *Store) postgresRecord(ctx context.Context, key string, ordinal int) (Re
 		SELECT COALESCE((
 			SELECT r.snapshot FROM pavarotti_note_revisions r
 			WHERE r.expediente = b.expediente AND r.batch_key = b.batch_key AND r.ordinal = $3::bigint
+				AND ($4::bigint = 0 OR r.revision = $4::bigint)
 			ORDER BY r.revision DESC LIMIT 1
-		), b.payload -> ($3::integer - 1))
+		), CASE WHEN $4::bigint <= 1 THEN b.payload -> ($3::integer - 1) END)
 		FROM pavarotti_evidence_batches b
 		WHERE b.expediente = $1 AND b.batch_key = $2 AND $3::bigint <= jsonb_array_length(b.payload)
-	`, s.expediente, key, ordinal).Scan(&data); err != nil {
+	`, s.expediente, key, ordinal, revision).Scan(&data); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Record{}, ErrNotFound
 		}
 		return Record{}, err
+	}
+	if len(data) == 0 {
+		return Record{}, ErrNotFound
 	}
 	var record Record
 	if err := json.Unmarshal(data, &record); err != nil {

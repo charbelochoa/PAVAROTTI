@@ -175,6 +175,12 @@ func TestEdicionAnalisisYRevision(t *testing.T) {
 	if !strings.Contains(detail, "segunda revisión") {
 		t.Fatal(detail)
 	}
+	cited := call("GET", "/api/registro/"+records[0].ID+"?revision=1", "", 200).Body.String()
+	if !strings.Contains(cited, "Una revisión") || strings.Contains(cited, "segunda revisión") {
+		t.Fatal(cited)
+	}
+	call("GET", "/api/registro/"+records[0].ID+"?revision=3", "", 404)
+	call("GET", "/api/registro/"+records[0].ID+"?revision=-1", "", 400)
 	call("GET", "/api/registro/pagina?limite=101", "", 400)
 	call("GET", "/api/registro/pagina?despues=invalido", "", 400)
 	code := "package demo\nimport \"net/http\"\nfunc check() { http.Get(\"https://example.invalid\") }"
