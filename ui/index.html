@@ -52,6 +52,18 @@
           <input id="evidence" type="file" name="evidence" required>
           <button class="primary">Analizar y guardar</button>
         </form>
+        <details id="directory-panel">
+          <summary>Revisar directorio</summary>
+          <form id="directory-form">
+            <label for="directory-files">Directorio local</label>
+            <input id="directory-files" type="file" webkitdirectory multiple required>
+            <button type="submit">Revisar archivos</button>
+          </form>
+          <details id="directory-result" hidden>
+            <summary>Resultado por archivo</summary>
+            <ul id="directory-items"></ul>
+          </details>
+        </details>
       </section>
     </aside>
     <div class="workspace">

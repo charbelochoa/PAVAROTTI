@@ -40,6 +40,7 @@ Usa **Anterior** y **Siguiente** para recorrer los resultados de 50 en 50. La b�
 - **Intercambio STIX 2.1.** Usa **Exportar STIX** para descargar observaciones DNS y HTTP, dominios, IP, prefijos, huellas, indicadores literales y relaciones compatibles con citas de origen. El resultado indica cuántos registros representa. La importación muestra cuántos registros guardó y cuántos pertenecían a un archivo ya registrado.
 - **Análisis.** Los agentes de inventario, señales HTTP, cronología y correlación trabajan en paralelo sobre la evidencia del expediente. El revisor de código Go añade señales con línea y columna sin compilar ni ejecutar la fuente.
 - **Revisión estática.** Incorpora archivos Go para revisar configuraciones TLS, plazos HTTP, invocación de procesos y HMAC heredado. Las señales se abren desde el informe en sus líneas y columnas físicas. El inspector muestra hasta 250 señales por archivo, con su total separado.
+- **Revisión por directorio.** Selecciona un directorio en la mesa o usa `revisar`. Admite archivos Go, `go.mod` y `package-lock.json`, conserva sus rutas relativas y muestra el resultado de cada archivo. Omite `.git`, `node_modules` y `vendor`. La terminal también omite enlaces simbólicos. Se pueden revisar hasta 200 archivos compatibles y 32 MiB por selección.
 - **Dependencias.** Incorpora `go.mod` o `package-lock.json` v2 y v3 para consultar versiones declaradas, alcance, reemplazos y la posición de cada entrada. El inventario usa solo el contenido del manifiesto y se puede buscar por nombre, versión o reemplazo. Cada manifiesto admite hasta 4 MiB y 5,000 entradas.
 - **Cruces en el informe.** Los informes incluyen coincidencias SHA-256 entre muestras e indicadores y cobertura de IP observadas por DNS o HTTP dentro de rangos RDAP y prefijos STIX. Cada cruce lleva citas a las revisiones del expediente.
 - **Trazabilidad.** Cada análisis identifica la versión de sus agentes y la huella de su instantánea. En **Referencias de evidencia**, elige una sección y abre en el inspector la revisión citada. Puedes consultar esa revisión después de editar una nota y saltar de nuevo a la versión vigente.
@@ -71,6 +72,7 @@ pavarotti -datos ./expediente importar stix indicadores-stix.json
 pavarotti -datos ./expediente importar codigo revision.go
 pavarotti -datos ./expediente importar gomod go.mod
 pavarotti -datos ./expediente importar npmlock package-lock.json
+pavarotti -datos ./expediente revisar --json ./proyecto
 pavarotti -datos ./expediente nota --titulo "Turno de revisión" --texto "Validación manual pendiente"
 pavarotti -datos ./expediente listar --buscar "validación" --json
 pavarotti -datos ./expediente activos --tipo dominio --buscar example.invalid

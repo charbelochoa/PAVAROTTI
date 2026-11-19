@@ -512,6 +512,50 @@ function showView(view) {
 for (const view of ["records", "assets", "http"]) byId("view-" + view).onclick = () => showView(view);
 byId("refresh").addEventListener("click", () => refresh());
 
+byId("directory-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const button = event.submitter;
+  const status = byId("status");
+  const resultView = byId("directory-result");
+  const input = byId("directory-files");
+  const payload = new FormData();
+  let count = 0;
+  let bytes = 0;
+  resultView.hidden = true;
+  for (const file of input.files) {
+    const folders = file.webkitRelativePath.split("/").slice(1);
+    if (!folders.length || folders.some((part) => [".git", "node_modules", "vendor"].includes(part.toLowerCase()))) continue;
+    if (!/(?:\.go$|^(?:go\.mod|package-lock\.json)$)/i.test(file.name)) continue;
+    payload.append(folders.join("/"), file, file.name);
+    count++;
+    bytes += file.size;
+  }
+  if (!count || count > 200 || bytes > 32 * 1024 * 1024) {
+    status.textContent = !count ? "La selección requiere archivos Go, go.mod o package-lock.json." : "Selecciona hasta 200 archivos compatibles y 32 MiB.";
+    return;
+  }
+  button.disabled = true;
+  status.textContent = "Revisando directorio…";
+  try {
+    const response = await fetch("/api/revision/directorio", {method: "POST", body: payload});
+    const result = await response.json();
+    if (result.files?.length) {
+      const rows = result.files.map((file) => element("li", `${file.path} · ${file.status}${file.reason ? " · " + file.reason : ""}`));
+      byId("directory-items").replaceChildren(...rows);
+      resultView.hidden = false;
+      resultView.open = Boolean(result.rejected);
+      if (response.ok) input.value = "";
+      await refresh(result.message, true);
+    } else {
+      status.textContent = result.message;
+    }
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+
 byId("export-stix").onclick = async (event) => {
   const button = event.currentTarget;
   const status = byId("status");
