@@ -3,6 +3,7 @@ package mesa
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"pavarotti/internal/analisis"
@@ -65,6 +66,23 @@ func assetRoutes(mux *http.ServeMux, store *caso.Store) {
 			return
 		}
 		respond(w, page)
+	})
+	mux.HandleFunc("GET /api/activos/cobertura", func(w http.ResponseWriter, r *http.Request) {
+		params, err := url.ParseQuery(r.URL.RawQuery)
+		if err != nil {
+			assetError(w, analisis.ErrAssetQuery)
+			return
+		}
+		criteria := analisis.AssetCoverageCriteria{
+			AssetKey: analisis.AssetKey{Type: params.Get("tipo"), Value: params.Get("valor")},
+			From:     params.Get("desde"), To: params.Get("hasta"),
+		}
+		report, err := analisis.CoverAsset(r.Context(), store, criteria)
+		if err != nil {
+			assetError(w, err)
+			return
+		}
+		respond(w, report)
 	})
 }
 
