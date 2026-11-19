@@ -205,6 +205,9 @@ function binaryPanel(record, {binary: citation, binaryWindow: windowCitation, bi
   const fingerprint = element("button", "Consultar coincidencias SHA-256");
   fingerprint.onclick = () => selectAsset({type: "sha256", value: record.sha256});
   panel.append(fingerprint);
+  if (["PE", "ELF", "Mach-O", "Mach-O universal"].includes(report.format)) {
+    panel.append(binarySectionComparisonTools(record));
+  }
 
   const sections = Array.isArray(report.sections) ? report.sections : [];
   const images = Array.isArray(report.images) ? report.images : [];
