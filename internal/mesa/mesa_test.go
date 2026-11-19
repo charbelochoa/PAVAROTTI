@@ -64,6 +64,16 @@ func TestExpediente(t *testing.T) {
 		!strings.Contains(raw, caso.Hash([]byte(report))) || !strings.Contains(raw, "nosniff") {
 		t.Fatalf("metadatos del expediente: %s", raw)
 	}
+	catalog := call("GET", "/api/http/reglas", "", "")
+	if catalog.Code != http.StatusOK || !strings.Contains(catalog.Body.String(), "cookie-sin-secure") {
+		t.Fatalf("catálogo: %d %s", catalog.Code, catalog.Body.String())
+	}
+	listed := call("GET", "/api/registro/pagina?tipo=http&regla_http=cookie-sin-secure", "", "")
+	var traffic caso.Page
+	if err := json.Unmarshal(listed.Body.Bytes(), &traffic); listed.Code != http.StatusOK || err != nil ||
+		len(traffic.Rows) != 1 || traffic.Rows[0].Kind != "archivo HAR" {
+		t.Fatalf("filtro HTTP: %d %s (%v)", listed.Code, listed.Body.String(), err)
+	}
 }
 
 func TestProxyObservaDestinoConfigurado(t *testing.T) {
@@ -136,7 +146,7 @@ func TestProxyDistingueFalloDeConexionDeCabeceras(t *testing.T) {
 	if response.Code != 502 || err != nil || len(records) != 1 {
 		t.Fatalf("resultado: %d, %v, %v", response.Code, records, err)
 	}
-	if len(records[0].Signals) != 1 || records[0].Signals[0] != "El proxy no recibió respuesta del destino" {
+	if len(records[0].Signals) != 1 || records[0].Signals[0] != "El proxy no recibió respuesta del destino" || len(records[0].HTTPFindings) != 0 {
 		t.Fatalf("señales incorrectas: %v", records[0].Signals)
 	}
 }

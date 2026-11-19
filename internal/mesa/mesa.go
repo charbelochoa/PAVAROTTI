@@ -14,6 +14,7 @@ import (
 	"pavarotti/internal/analisis"
 	"pavarotti/internal/caso"
 	"pavarotti/internal/ingesta"
+	"pavarotti/internal/trafico"
 )
 
 type Settings struct {
@@ -72,7 +73,7 @@ func Handler(host string, config Settings, store *caso.Store, resources fs.FS) h
 		query := r.URL.Query()
 		request := caso.PageRequest{
 			Kind: query.Get("tipo"), Search: query.Get("buscar"), After: query.Get("despues"),
-			HTTPSource: query.Get("captura"), HTTPMethod: query.Get("metodo"),
+			HTTPSource: query.Get("captura"), HTTPMethod: query.Get("metodo"), HTTPRule: query.Get("regla_http"),
 			HTTPFrom: query.Get("desde"), HTTPTo: query.Get("hasta"),
 		}
 		if size := query.Get("limite"); size != "" {
@@ -101,6 +102,9 @@ func Handler(host string, config Settings, store *caso.Store, resources fs.FS) h
 			return
 		}
 		respond(w, page)
+	})
+	mux.HandleFunc("GET /api/http/reglas", func(w http.ResponseWriter, _ *http.Request) {
+		respond(w, trafico.PassiveRules())
 	})
 	mux.HandleFunc("GET /api/registro/resumen", func(w http.ResponseWriter, r *http.Request) {
 		stats, err := store.Summary(r.Context())

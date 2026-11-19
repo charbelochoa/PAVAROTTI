@@ -42,6 +42,12 @@ func TestTerminalExpediente(t *testing.T) {
 	if strings.Contains(result, "token=") || strings.Contains(result, "/secreto") {
 		t.Fatalf("se incluyó una parte privada de la URL: %s", result)
 	}
+	if got := call("listar", "--regla-http", "nosniff-ausente", "--json"); got != result {
+		t.Fatalf("filtro por regla HTTP: %s", got)
+	}
+	if got := call("exportar", "--regla-http", "hsts-inactiva"); strings.TrimSpace(got) != "[]" {
+		t.Fatalf("exportación filtrada: %s", got)
+	}
 	export := call("exportar", "--formato", "csv", "--tipo", "nota")
 	rows, err := csv.NewReader(strings.NewReader(export)).ReadAll()
 	if err != nil || len(rows) != 2 || rows[1][5] != "'=1+2" {

@@ -20,7 +20,7 @@ h2 { font-size: 1.05rem; }
 p, .muted { color: var(--dim); }
 a { color: var(--accent); }
 main { display: grid; grid-template-columns: minmax(210px, 245px) minmax(330px, 1fr) minmax(250px, .72fr); gap: .75rem; align-items: start; margin: auto; max-width: 1700px; padding: clamp(.75rem, 2vw, 1.5rem); }
-aside, .workspace { display: grid; align-content: start; gap: 1rem; min-width: 0; }
+aside, .workspace { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 1rem; min-width: 0; }
 section, .intro, #distribution, dialog { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 1rem; }
 .intro { padding-top: 0; overflow-wrap: anywhere; }
 .portrait { display: block; height: 136px; width: 100%; object-fit: contain; }
@@ -47,6 +47,7 @@ button:disabled { opacity: .6; cursor: wait; }
 .filters input { flex: 1; }
 .http-filters { align-items: center; }
 .http-filters input { flex: 0 1 auto; }
+#filter-http-rule { max-width: 100%; }
 .views { display: flex; flex-wrap: wrap; gap: .35rem; border-bottom: 1px solid var(--line); padding-bottom: .45rem; }
 .views button { background: transparent; }
 .views button[aria-pressed="true"] { background: #39272b; border-color: var(--accent); }
@@ -107,8 +108,8 @@ footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2re
 .reference-group + .reference-group { border-top: 1px solid var(--line); padding-top: .55rem; }
 .reference-group button { text-align: left; overflow-wrap: anywhere; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: #ddd2cc; }
-#groups { display: grid; grid-template-columns: max-content 1fr; gap: .4rem .8rem; }
-#groups dd { margin: 0; color: var(--dim); }
+#groups { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .4rem .8rem; }
+#groups dd { margin: 0; color: var(--dim); overflow-wrap: anywhere; }
 dialog { color: inherit; width: min(560px, calc(100vw - 2rem)); }
 dialog::backdrop { background: #09070ad9; }
 #activity-panel { width: min(720px, calc(100vw - 2rem)); }
@@ -128,7 +129,7 @@ dialog::backdrop { background: #09070ad9; }
   #inspector { grid-column: 2; position: static; }
 }
 @media (max-width: 680px) {
-  main { grid-template-columns: 1fr; }
+  main { grid-template-columns: minmax(0, 1fr); }
   #inspector { grid-column: 1; }
   .portrait { height: 140px; }
   .filters { flex-wrap: wrap; }

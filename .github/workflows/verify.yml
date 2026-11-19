@@ -109,7 +109,7 @@ jobs:
           assert asset["count"] == 2 and asset["indicators"] == 1
           assert {row["role"] for row in asset["rows"]} == {"registro", "indicador"}
           assert all(row["id"] and row["revision"] == 1 for row in asset["rows"])
-          assert report["records"] == 8 and report["agent_version"] == "3"
+          assert report["records"] == 8 and report["agent_version"] == "4"
           match, = report["matches"]
           assert match["value"] == asset["value"]
           assert {item["kind"] for item in match["evidence"]} == {"rdap", "stix"}

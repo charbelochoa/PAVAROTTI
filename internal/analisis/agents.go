@@ -11,6 +11,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"pavarotti/internal/caso"
 )
 
 type groupKey struct {
@@ -87,7 +89,7 @@ func inventory(ctx context.Context, observations []observation) result {
 	}}
 }
 
-func httpSignals(ctx context.Context, observations []observation) result {
+func httpSignals(ctx context.Context, observations []observation, citeRules bool) result {
 	signals, responses := make(groups), make(groups)
 	reviewed := 0
 	for _, item := range observations {
@@ -103,6 +105,18 @@ func httpSignals(ctx context.Context, observations []observation) result {
 			responses.add(groupKey{value: strconv.Itoa(status), scope: host}, item.ref)
 		}
 		seen := make(map[string]bool)
+		if citeRules {
+			for _, finding := range item.record.HTTPFindings[:min(len(item.record.HTTPFindings), 32)] {
+				label := clip(finding.Label, 160)
+				if label == "" || seen[label] || !caso.ValidHTTPRule(finding.Rule) {
+					continue
+				}
+				ref := item.ref
+				ref.HTTPRule = finding.Rule
+				signals.add(groupKey{value: label, scope: host}, ref)
+				seen[label] = true
+			}
+		}
 		for _, raw := range item.record.Signals[:min(len(item.record.Signals), 32)] {
 			label := clip(raw, 160)
 			if label != "" && !seen[label] {

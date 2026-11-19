@@ -211,6 +211,7 @@ func terminalRecords(command string, args []string, stdout, stderr io.Writer, op
 	flags := terminalFlags(command, command+" [opciones]", stderr)
 	kind := flags.String("tipo", "", "filtra por tipo: har, hallazgo, tráfico, binario, código, dependencias, indicador, dns, rdap, stix, nota")
 	query := flags.String("buscar", "", "busca texto en el título, origen, ID, huella y detalle")
+	httpRule := flags.String("regla-http", "", "filtra por el código exacto de una regla pasiva HTTP")
 	format := "tabla"
 	var output string
 	var limit int
@@ -228,6 +229,9 @@ func terminalRecords(command string, args []string, stdout, stderr io.Writer, op
 	}
 	if flags.NArg() != 0 || limit < 0 {
 		return fmt.Errorf("usa pavarotti %s --help", command)
+	}
+	if *httpRule != "" && !caso.ValidHTTPRule(*httpRule) {
+		return errors.New("código de regla HTTP inválido")
 	}
 	if command == "exportar" && format != "json" && format != "csv" && format != "stix" {
 		return errors.New("elige un formato de exportación json, csv o stix")
@@ -247,7 +251,7 @@ func terminalRecords(command string, args []string, stdout, stderr io.Writer, op
 	if format == "stix" {
 		search := strings.ToLower(strings.TrimSpace(*query))
 		data, stats, err := analisis.ExportSTIX(context.Background(), store, func(record caso.Record) bool {
-			return matchesExportFilter(record, normalizedKind, search)
+			return matchesExportFilter(record, normalizedKind, search, *httpRule)
 		})
 		if err != nil {
 			return err
@@ -265,7 +269,7 @@ func terminalRecords(command string, args []string, stdout, stderr io.Writer, op
 	if err != nil {
 		return err
 	}
-	records = filterRecords(records, normalizedKind, *query)
+	records = filterRecords(records, normalizedKind, *query, *httpRule)
 	if limit > 0 && len(records) > limit {
 		records = records[:limit]
 	}
@@ -289,11 +293,11 @@ func recordKind(kind string) (string, error) {
 	}
 }
 
-func filterRecords(records []caso.Record, kind string, query string) []caso.Record {
+func filterRecords(records []caso.Record, kind, query, httpRule string) []caso.Record {
 	results := make([]caso.Record, 0, len(records))
 	query = strings.ToLower(strings.TrimSpace(query))
 	for _, record := range records {
-		if matchesExportFilter(record, kind, query) {
+		if matchesExportFilter(record, kind, query, httpRule) {
 			results = append(results, record)
 		}
 	}
@@ -305,8 +309,8 @@ func filterRecords(records []caso.Record, kind string, query string) []caso.Reco
 	return results
 }
 
-func matchesExportFilter(record caso.Record, kind, query string) bool {
-	if kind != "" && record.Kind != kind {
+func matchesExportFilter(record caso.Record, kind, query, httpRule string) bool {
+	if (kind != "" && record.Kind != kind) || !record.MatchesHTTPRule(httpRule) {
 		return false
 	}
 	if query == "" {

@@ -57,6 +57,7 @@ type Evidence struct {
 	Line     int    `json:"line,omitempty"`
 	Column   int    `json:"column,omitempty"`
 	Location string `json:"location,omitempty"`
+	HTTPRule string `json:"http_rule,omitempty"`
 }
 
 type AgentResult struct {
@@ -99,11 +100,14 @@ func analyze(ctx context.Context, records []caso.Record, version string) (Report
 	slices.SortStableFunc(observations, func(a, b observation) int {
 		return b.date.Compare(a.date)
 	})
-	agents := []func(context.Context, []observation) result{inventory, httpSignals, chronology}
-	if version == AgentVersion || version == networkAgent {
+	httpAgent := func(ctx context.Context, records []observation) result {
+		return httpSignals(ctx, records, version == AgentVersion)
+	}
+	agents := []func(context.Context, []observation) result{inventory, httpAgent, chronology}
+	if version == AgentVersion || version == auditAgent || version == networkAgent {
 		agents = append(agents, correlateEvidence)
 	}
-	if version == AgentVersion {
+	if version == AgentVersion || version == auditAgent {
 		agents = append(agents, summarizeAudit)
 	}
 	tasks := make([]chan result, len(agents))
@@ -197,6 +201,9 @@ func (e Evidence) text() string {
 	}
 	if e.Location != "" {
 		fields = append(fields, e.Location)
+	}
+	if e.HTTPRule != "" {
+		fields = append(fields, e.HTTPRule)
 	}
 	return strings.Join(fields, " · ")
 }

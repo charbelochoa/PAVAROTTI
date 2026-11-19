@@ -25,6 +25,7 @@ type PageRequest struct {
 	HTTPClass  int
 	HTTPSource string
 	HTTPMethod string
+	HTTPRule   string
 	HTTPFrom   string
 	HTTPTo     string
 }
@@ -89,13 +90,16 @@ func (s *Store) Page(ctx context.Context, request PageRequest) (Page, error) {
 
 func (request PageRequest) validateTraffic() error {
 	if request.Kind != "http" {
-		if request.HTTPClass != 0 || request.HTTPSource != "" || request.HTTPMethod != "" || request.HTTPFrom != "" || request.HTTPTo != "" {
+		if request.HTTPClass != 0 || request.HTTPSource != "" || request.HTTPMethod != "" || request.HTTPRule != "" || request.HTTPFrom != "" || request.HTTPTo != "" {
 			return ErrInvalidPage
 		}
 		return nil
 	}
 	if request.HTTPClass < 0 || request.HTTPClass > 5 {
 		return ErrInvalidPage
+	}
+	if request.HTTPRule != "" && !ValidHTTPRule(request.HTTPRule) {
+		return fmt.Errorf("%w: código de regla HTTP inválido", ErrInvalidPage)
 	}
 	switch request.HTTPSource {
 	case "", "tráfico", "archivo HAR":
@@ -174,7 +178,7 @@ func matchesView(record Record, request PageRequest) bool {
 	if request.Kind == "http" {
 		if record.Traffic == nil || (request.HTTPClass != 0 && record.Traffic.Status/100 != request.HTTPClass) ||
 			(request.HTTPSource != "" && record.Kind != request.HTTPSource) ||
-			(request.HTTPMethod != "" && record.Traffic.Method != request.HTTPMethod) {
+			(request.HTTPMethod != "" && record.Traffic.Method != request.HTTPMethod) || !record.MatchesHTTPRule(request.HTTPRule) {
 			return false
 		}
 		date := record.Time[:min(len(record.Time), len(time.DateOnly))]
