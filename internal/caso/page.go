@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -71,10 +70,8 @@ func (s *Store) Page(ctx context.Context, request PageRequest) (Page, error) {
 	var rows []RecordRow
 	if s.db != nil {
 		rows, err = s.postgresPage(ctx, request, after, limit)
-	} else if request.Search == "" {
-		rows, err = s.indexedLocalPage(ctx, request, after, limit)
 	} else {
-		rows, err = s.localPage(ctx, request, after, limit)
+		rows, err = s.indexedLocalPage(ctx, request, after, limit)
 	}
 	if err != nil {
 		return Page{}, err
@@ -193,18 +190,12 @@ func matches(record Record, term string) bool {
 	if term == "" {
 		return true
 	}
-	if record.MatchesDependency(term) {
-		return true
+	for field := range record.searchFields {
+		if strings.Contains(strings.ToLower(field), term) {
+			return true
+		}
 	}
-	fields := []string{record.ID, record.Kind, record.Time, record.Title, record.Source, record.SourceID, record.SHA256, record.Details}
-	fields = append(fields, record.Signals...)
-	if record.Traffic != nil {
-		fields = append(fields, record.Traffic.Method, record.Traffic.Type, strconv.Itoa(record.Traffic.Status),
-			strconv.FormatInt(record.Traffic.Millis, 10), strconv.FormatInt(record.Traffic.Bucket, 10))
-	}
-	return slices.ContainsFunc(fields, func(field string) bool {
-		return strings.Contains(strings.ToLower(field), term)
-	})
+	return false
 }
 
 func clipRow(text string, length int) string {

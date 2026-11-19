@@ -80,7 +80,8 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 18. **Cobertura de activos por periodo.** La 0.4.8 permite navegar desde una red hacia las IP observadas en DNS y HTTP. La mesa y el CLI generan el mismo informe con fechas UTC inclusivas y citas de origen. La prueba reabre el JSON en un expediente restaurado y confirma la huella y las revisiones.
 19. **Consultas por ventanas.** Desde 0.4.9 PostgreSQL descarta las fechas ajenas antes de entregar registros al análisis. El almacén local conserva en memoria los límites de fecha de los lotes ya leídos. La comparación y la cobertura acotan los registros que coinciden. Las pruebas conservan los nanosegundos, las fechas con desfase y las revisiones citadas.
 20. **Paginación de expedientes.** Desde 0.4.10 el almacén local reutiliza un resumen de los lotes para la navegación sin búsqueda de texto. PostgreSQL mantiene un índice derivado de las capturas HTTP, rellena los lotes antiguos por partes y reconstruye el índice al restaurar. Las pruebas comprueban el orden, los cursores y las citas durante la actualización y después de restaurar.
-21. **Paquetes y capacidad.** Medir búsqueda de texto y operaciones de respaldo con expedientes de distintos tamaños. Añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
+21. **Búsqueda literal de expedientes.** Desde 0.4.11 el almacén local comparte texto normalizado entre registros del mismo lote. PostgreSQL genera documentos de búsqueda, aprovecha `pg_trgm` cuando está disponible y prepara expedientes antiguos en segundo plano desde la mesa. Las pruebas comprueban coincidencias literales, señales, dependencias, textos extensos y la revisión vigente de las notas.
+22. **Paquetes y capacidad.** Medir respaldo, restauración y retención con expedientes de distintos tamaños. Verificar los binarios y sus huellas en cada etiqueta.
 
 ## Medición de consultas por fecha
 
@@ -106,9 +107,23 @@ Se probaron los mismos tamaños y se compararon 24 respuestas completas entre 0.
 | Segunda página | 672 ms | 0.83 ms | 243 ms | 1.34 ms |
 | Fecha y regla HTTP | 677 ms | 7.16 ms | 76 ms | 2.34 ms |
 
-La primera apertura local creó la caché en 589 ms y el pico de memoria del proceso llegó a 58 MiB. La primera consulta del expediente anterior en PostgreSQL tardó 2.9 s al rellenar el índice. La búsqueda de texto en esa base tardó unos 942 ms y queda pendiente de optimización.
+La primera apertura local creó la caché en 589 ms y el pico de memoria del proceso llegó a 58 MiB. La primera consulta del expediente anterior en PostgreSQL tardó 2.9 s al rellenar el índice. La búsqueda de texto tardó unos 942 ms con la 0.4.10.
 
 Repite la medición local de paginación con `go test ./internal/caso -run '^$' -bench '^BenchmarkHistoryPages$' -benchtime=5x -benchmem`.
+
+## Medición de la búsqueda literal
+
+La prueba usó 1,000, 10,000 y 50,000 capturas más dos registros de notas y dependencias por expediente. Las respuestas paginadas coincidieron con 0.4.10. Cada valor de la tabla es la mediana de cinco peticiones con la caché o el índice preparado.
+
+| Consulta con 50,000 capturas | Local 0.4.10 | Local 0.4.11 | PostgreSQL 0.4.10 | PostgreSQL 0.4.11 |
+| --- | --- | --- | --- | --- |
+| Origen HTTP | 788 ms | 10 ms | 972 ms | 14 ms |
+| Dependencia de reemplazo | 783 ms | 9 ms | 958 ms | 2.4 ms |
+| Fragmento literal con `%` y `_` | 785 ms | 10 ms | 974 ms | 1.9 ms |
+
+La caché local del expediente mayor elevó el pico del proceso a 57 MiB. En PostgreSQL el índice y su tabla ocuparon 91 MiB. La preparación del expediente existente tardó 43 s en segundo plano. Durante ese tiempo, la primera consulta tardó 1.0 s. También se comprobó la búsqueda en PostgreSQL con una cuenta de esquema que carecía de permisos para instalar `pg_trgm`.
+
+Para repetir la medición local de texto usa `go test ./internal/caso -run '^$' -bench 'BenchmarkHistoryPages/.*/texto_origen' -benchtime=5x -benchmem`.
 
 ## Flujo de trabajo OSINT
 

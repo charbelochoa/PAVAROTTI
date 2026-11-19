@@ -11,9 +11,17 @@ import (
 )
 
 func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pageCursor, limit int) ([]RecordRow, error) {
-	if request.Kind == "http" && request.Search == "" {
+	var prepare func(context.Context) (bool, error)
+	var indexed func(context.Context, PageRequest, pageCursor, int) ([]RecordRow, error)
+	switch {
+	case request.Search != "" && !strings.ContainsRune(request.Search, 31):
+		prepare, indexed = s.searchPageForRequest, s.postgresSearchPage
+	case request.Kind == "http" && request.Search == "":
+		prepare, indexed = s.prepareHTTPPageIndex, s.postgresIndexedHTTPPage
+	}
+	if prepare != nil {
 		indexContext, cancelIndex := context.WithTimeout(ctx, 8*time.Second)
-		ready, err := s.prepareHTTPPageIndex(indexContext)
+		ready, err := prepare(indexContext)
 		cancelIndex()
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -21,9 +29,13 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 		if err == nil && ready {
 			ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 			defer cancel()
-			return s.postgresIndexedHTTPPage(ctx, request, after, limit)
+			return indexed(ctx, request, after, limit)
 		}
 	}
+	return s.postgresPageScan(ctx, request, after, limit)
+}
+
+func (s *Store) postgresPageScan(ctx context.Context, request PageRequest, after pageCursor, limit int) ([]RecordRow, error) {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	result, err := s.db.QueryContext(ctx, `
@@ -81,6 +93,25 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 		return nil, err
 	}
 	return scanPostgresPage(result, limit)
+}
+
+func (s *Store) preparePageProjection(ctx context.Context, pendingQuery, backfill string, maximum int) (bool, error) {
+	var pending bool
+	if err := s.db.QueryRowContext(ctx, pendingQuery, s.expediente).Scan(&pending); err != nil || !pending {
+		return !pending, err
+	}
+	tx, err := s.beginCaseWrite(ctx, true)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, backfill, s.expediente, maximum); err != nil {
+		return false, err
+	}
+	if err := tx.QueryRowContext(ctx, pendingQuery, s.expediente).Scan(&pending); err != nil {
+		return false, err
+	}
+	return !pending, tx.Commit()
 }
 
 func scanPostgresPage(result *sql.Rows, limit int) ([]RecordRow, error) {
