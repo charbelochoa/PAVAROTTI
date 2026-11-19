@@ -32,6 +32,7 @@ type Record struct {
 	Details      string               `json:"details,omitempty"`
 	Network      string               `json:"network,omitempty"`
 	Signals      []string             `json:"signals,omitempty"`
+	HTTPFindings []HTTPFinding        `json:"http_findings,omitempty"`
 	Traffic      *Traffic             `json:"traffic,omitempty"`
 	Indicator    *Indicator           `json:"indicator,omitempty"`
 	FileHashes   []Indicator          `json:"file_hashes,omitempty"`
@@ -51,6 +52,13 @@ type Traffic struct {
 	Type   string `json:"type"`
 	Millis int64  `json:"millis"`
 	Bucket int64  `json:"bucket"`
+}
+
+type HTTPFinding struct {
+	Rule        string `json:"rule"`
+	Label       string `json:"label"`
+	Header      string `json:"header,omitempty"`
+	Observation string `json:"observation,omitempty"`
 }
 
 type Store struct {

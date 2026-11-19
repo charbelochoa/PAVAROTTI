@@ -136,7 +136,7 @@ func TestProxyDistingueFalloDeConexionDeCabeceras(t *testing.T) {
 	if response.Code != 502 || err != nil || len(records) != 1 {
 		t.Fatalf("resultado: %d, %v, %v", response.Code, records, err)
 	}
-	if len(records[0].Signals) != 1 || records[0].Signals[0] != "El proxy no recibió respuesta del destino" {
+	if len(records[0].Signals) != 1 || records[0].Signals[0] != "El proxy no recibió respuesta del destino" || len(records[0].HTTPFindings) != 0 {
 		t.Fatalf("señales incorrectas: %v", records[0].Signals)
 	}
 }
