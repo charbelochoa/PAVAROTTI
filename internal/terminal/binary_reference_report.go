@@ -24,12 +24,7 @@ func terminalBinaryReferences(args []string, stdout, stderr io.Writer, open open
 	if flags.NArg() != 0 || *manifest == "" || *path == "" {
 		return errors.New("indica el informe y el archivo original")
 	}
-	file, err := openRegularFile(*manifest)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	report, err := analisis.ReadBinaryReferenceReport(file)
+	report, err := readBinaryReferenceFile(*manifest)
 	if err != nil {
 		return err
 	}
@@ -54,4 +49,13 @@ func terminalBinaryReferences(args []string, stdout, stderr io.Writer, open open
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(review.Report)
 	})
+}
+
+func readBinaryReferenceFile(path string) (analisis.BinaryReferenceReport, error) {
+	file, err := openRegularFile(path)
+	if err != nil {
+		return analisis.BinaryReferenceReport{}, err
+	}
+	defer file.Close()
+	return analisis.ReadBinaryReferenceReport(file)
 }

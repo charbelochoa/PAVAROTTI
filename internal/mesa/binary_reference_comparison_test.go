@@ -5,12 +5,19 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 
 	"pavarotti/internal/analisis"
 	"pavarotti/internal/caso"
 	"pavarotti/internal/ingesta"
+	"pavarotti/internal/terminal"
 	"pavarotti/internal/triaje"
 )
 
@@ -122,5 +129,78 @@ func TestCompareBinaryReferencesKeepsBothWindowCitations(t *testing.T) {
 	}
 	if _, err := compare(baseline, review.Report, sample); !errors.Is(err, analisis.ErrBinaryReferenceComparison) {
 		t.Fatalf("destinos distintos: %v", err)
+	}
+}
+
+func TestCompareBinaryReferencesAcrossInterfaces(t *testing.T) {
+	store, sample, baseline, current := comparisonFixture(t)
+	const host = "127.0.0.1:8443"
+	handler := Handler(host, Settings{}, store, testResources)
+	post := func(later analisis.BinaryReferenceReport) *httptest.ResponseRecorder {
+		t.Helper()
+		var body bytes.Buffer
+		form := multipart.NewWriter(&body)
+		for _, field := range []struct {
+			name   string
+			report analisis.BinaryReferenceReport
+		}{{"base", baseline}, {"actual", later}} {
+			manifest, err := form.CreateFormField(field.name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := json.NewEncoder(manifest).Encode(field.report); err != nil {
+				t.Fatal(err)
+			}
+		}
+		original, err := form.CreateFormFile("archivo", "muestra.exe")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := original.Write(sample); err != nil {
+			t.Fatal(err)
+		}
+		if err := form.Close(); err != nil {
+			t.Fatal(err)
+		}
+		request := httptest.NewRequest(http.MethodPost, "http://"+host+"/api/referencias-binarias/comparar", &body)
+		request.Header.Set("Origin", "http://"+host)
+		request.Header.Set("Content-Type", form.FormDataContentType())
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	response := post(current)
+	var web analisis.BinaryReferenceComparison
+	if err := json.Unmarshal(response.Body.Bytes(), &web); response.Code != http.StatusOK || err != nil || web.Shared != 1 {
+		t.Fatalf("web: %d %s: %v", response.Code, response.Body, err)
+	}
+	tampered := current
+	tampered.ReportSHA256 = ""
+	if response := post(tampered); response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("informe sin sello: %d %s", response.Code, response.Body)
+	}
+	folder := t.TempDir()
+	basePath, currentPath, samplePath := filepath.Join(folder, "base.json"), filepath.Join(folder, "actual.json"), filepath.Join(folder, "muestra.exe")
+	for path, report := range map[string]analisis.BinaryReferenceReport{basePath: baseline, currentPath: current} {
+		encoded, err := json.Marshal(report)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, encoded, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(samplePath, sample, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	_, err := terminal.Run([]string{"comparar-referencias", "--base", basePath, "--actual", currentPath, "--archivo", samplePath},
+		&stdout, &stderr, func() (*caso.Store, error) { return store, nil })
+	if err != nil {
+		t.Fatalf("CLI: %v, %s", err, &stderr)
+	}
+	var cli analisis.BinaryReferenceComparison
+	if err := json.Unmarshal(stdout.Bytes(), &cli); err != nil || !reflect.DeepEqual(cli, web) {
+		t.Fatalf("comparación CLI: %+v, %v", cli, err)
 	}
 }
