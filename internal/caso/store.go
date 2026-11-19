@@ -40,6 +40,8 @@ type Record struct {
 	STIX         *STIXObject          `json:"stix,omitempty"`
 	Review       *CodeReview          `json:"code_review,omitempty"`
 	Dependencies *DependencyInventory `json:"dependencies,omitempty"`
+
+	BinaryListing int `json:"binary_listing,omitempty"`
 }
 
 type Indicator struct {
@@ -133,6 +135,9 @@ func (s *Store) SaveEvidence(ctx context.Context, records []Record) (SaveResult,
 		identity := records[0].Kind + ":" + records[0].SHA256
 		if records[0].Directory {
 			identity += ":" + records[0].SourceID
+		}
+		if records[0].Kind == "binario" && records[0].BinaryListing > 0 {
+			identity += ":listado:" + strconv.Itoa(records[0].BinaryListing)
 		}
 		hash = Hash([]byte(identity))
 	}

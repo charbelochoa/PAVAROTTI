@@ -27,11 +27,18 @@ type machOSlice struct {
 	binaryImageRange
 }
 
-func (b *Binary) inspectMachO(file *macho.File, image binaryImageRange, remaining int) {
+func (b *Binary) inspectMachO(data []byte, file *macho.File, image binaryImageRange, remaining int) {
 	sectionBudget := min(len(file.Sections), (maxBinarySections-len(b.Sections))/remaining)
+	instructionBudget := len(b.Instructions) + (maxBinaryInstructions-len(b.Instructions))/remaining
+	decode := machOInstructionDecoder(file)
 	b.SectionCount += len(file.Sections) - sectionBudget
 	for _, section := range file.Sections[:sectionBudget] {
-		b.add(image, section.Seg+"/"+section.Name, section.Addr, section.Size, uint64(section.Offset), machOFileSize(section))
+		size := machOFileSize(section)
+		index := b.add(image, section.Seg+"/"+section.Name, section.Addr, section.Size, uint64(section.Offset), size)
+		const hasInstructions = 0x80000400
+		if decode != nil && section.Flags&hasInstructions != 0 && size > 0 {
+			b.addInstructions(data, image, index, section.Addr, uint64(section.Offset), size, decode, file.Type != macho.TypeObj, instructionBudget)
+		}
 	}
 	b.machOSymbols(file, image, len(b.Symbols)+(maxBinarySymbols-len(b.Symbols))/remaining)
 }
@@ -69,7 +76,7 @@ func (b *Binary) inspectMachOFat(data []byte) {
 		b.Images = append(b.Images, BinaryImage{Architecture: header.cpu.String(), Subtype: fmt.Sprintf("0x%x", header.subtype),
 			File: FileRange{Offset: fmt.Sprintf("0x%x", header.offset), Size: header.size}})
 		header.index = len(b.Images)
-		b.inspectMachO(member.file, header.binaryImageRange, remaining)
+		b.inspectMachO(data, member.file, header.binaryImageRange, remaining)
 		hits := printableStrings(data[header.offset:header.offset+header.size], header.offset, (maxBinaryStrings-len(b.Strings))/remaining)
 		b.Strings = append(b.Strings, hits...)
 	}

@@ -129,6 +129,40 @@ jobs:
           assert dependency["value"] == "sample.invalid/catalog" and dependency["evidence"][0]["line"] == 2
           PY
           done
+      - name: Instrucciones de un ELF en Kali y Arch
+        run: |
+          samples=$(mktemp -d)
+          cat > "$samples/muestra.s" <<'ASM'
+          .text
+          .globl _start
+          _start:
+            jmp .Lfin
+            nop
+          .Lfin:
+            ret
+          ASM
+          as --64 -o "$samples/muestra.o" "$samples/muestra.s"
+          ld -Ttext 0x401000 -o "$samples/muestra" "$samples/muestra.o"
+          for image in kalilinux/kali-rolling archlinux:base; do
+            docker run --rm --network none -v "$PWD/PAVAROTTI-Kali-x64:/opt/pavarotti:ro" -v "$samples:/samples:ro" "$image" /bin/sh -ec '
+              /opt/pavarotti -datos /tmp/expediente importar binario /samples/muestra >&2
+              /opt/pavarotti -datos /tmp/expediente listar --tipo binario --json
+            ' > "$samples/instrucciones.json"
+            python3 - "$samples/instrucciones.json" "$samples/muestra" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+          record, = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          sample = Path(sys.argv[2]).read_bytes()
+          assert record["sha256"] == hashlib.sha256(sample).hexdigest()
+          first, middle, last = json.loads(record["details"])["instructions"]
+          assert first["address"] == "0x401000" and first["target"] == last["address"] == "0x401003"
+          assert middle["text"] == "nop" and last["text"] == "ret"
+          offset = int(first["offset"], 16)
+          assert first["bytes"] == sample[offset:offset+2].hex() == "eb01"
+          PY
+          done
       - name: Comparación de capturas en Kali y Arch
         run: |
           samples=$(mktemp -d)

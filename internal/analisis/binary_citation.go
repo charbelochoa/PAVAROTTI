@@ -2,6 +2,7 @@ package analisis
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -27,7 +28,7 @@ type BinaryCitation struct {
 }
 
 func CiteBinary(ctx context.Context, store *caso.Store, id string, revision int, kind string, index int) (BinaryCitation, error) {
-	if id == "" || revision < 1 || index < 0 || (kind != "seccion" && kind != "cadena" && kind != "simbolo") {
+	if id == "" || revision < 1 || index < 0 || (kind != "seccion" && kind != "cadena" && kind != "simbolo" && kind != "instruccion") {
 		return BinaryCitation{}, ErrBinaryCitation
 	}
 	record, err := store.RecordRevision(ctx, id, revision)
@@ -39,8 +40,8 @@ func CiteBinary(ctx context.Context, store *caso.Store, id string, revision int,
 		return BinaryCitation{}, caso.ErrNotFound
 	}
 	offset := binaryCitationOffset(report, kind, index)
-	position, err := strconv.ParseUint(strings.TrimPrefix(offset, "0x"), 16, 64)
-	if err != nil || !strings.HasPrefix(offset, "0x") || report.Size <= 0 || position >= uint64(report.Size) {
+	position, valid := parseBinaryHex(offset)
+	if !valid || report.Size <= 0 || position >= uint64(report.Size) {
 		return BinaryCitation{}, caso.ErrNotFound
 	}
 	return BinaryCitation{Schema: BinaryCitationSchema, RecordID: record.ID, Revision: record.Revision, SHA256: record.SHA256,
@@ -61,6 +62,45 @@ func binaryCitationOffset(report triaje.Binary, kind string, index int) string {
 		if index < len(report.Symbols) {
 			return report.Symbols[index].Offset
 		}
+	case "instruccion":
+		return instructionCitationOffset(report, index)
 	}
 	return ""
+}
+
+func instructionCitationOffset(report triaje.Binary, index int) string {
+	if index >= len(report.Instructions) || report.Size <= 0 {
+		return ""
+	}
+	inst := report.Instructions[index]
+	if inst.Section < 0 || inst.Section >= len(report.Sections) || len(inst.Bytes) == 0 || len(inst.Bytes) > 30 {
+		return ""
+	}
+	section := report.Sections[inst.Section]
+	if section.File == nil {
+		return ""
+	}
+	code, err := hex.DecodeString(inst.Bytes)
+	position, validPosition := parseBinaryHex(inst.Offset)
+	start, validStart := parseBinaryHex(section.File.Offset)
+	address, validAddress := parseBinaryHex(inst.Address)
+	base, validBase := parseBinaryHex(section.Address)
+	if err != nil || !validPosition || !validStart || !validAddress || !validBase ||
+		position < start || start >= uint64(report.Size) || section.File.Size > uint64(report.Size)-start || address < base {
+		return ""
+	}
+	delta := position - start
+	if delta >= section.File.Size || uint64(len(code)) > section.File.Size-delta || address-base != delta {
+		return ""
+	}
+	return inst.Offset
+}
+
+func parseBinaryHex(value string) (uint64, bool) {
+	digits, ok := strings.CutPrefix(value, "0x")
+	if !ok {
+		return 0, false
+	}
+	position, err := strconv.ParseUint(digits, 16, 64)
+	return position, err == nil
 }

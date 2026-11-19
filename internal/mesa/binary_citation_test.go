@@ -83,6 +83,15 @@ func TestUniversalBinaryCitationsKeepDistinctPhysicalOffsets(t *testing.T) {
 			{Architecture: "CpuAmd64", Subtype: "0x3", File: triaje.FileRange{Offset: "0x1000", Size: 0x200}},
 			{Architecture: "CpuArm64", Subtype: "0x0", File: triaje.FileRange{Offset: "0x3000", Size: 0x200}},
 		},
+		Sections: []triaje.Section{
+			{Name: "__TEXT/__text", Address: "0x1000", Size: 16, File: &triaje.FileRange{Offset: "0x1100", Size: 16}, Image: 1},
+			{Name: "__TEXT/__text", Address: "0x1000", Size: 16, File: &triaje.FileRange{Offset: "0x3100", Size: 16}, Image: 2},
+		},
+		Instructions: []triaje.Instruction{
+			{Section: 0, Address: "0x1008", Offset: "0x1108", Bytes: "c3", Text: "ret"},
+			{Section: 1, Address: "0x1008", Offset: "0x3108", Bytes: "c0035fd6", Text: "ret"},
+			{Section: 1, Address: "0x100f", Offset: "0x310f", Bytes: "c0035fd6", Text: "ret"},
+		},
 		Symbols: []triaje.Symbol{
 			{Name: "entry", Kind: "Externo", Address: "0x1008", Section: "__TEXT/__text", Offset: "0x1108", Image: 1},
 			{Name: "entry", Kind: "Externo", Address: "0x1008", Section: "__TEXT/__text", Offset: "0x3108", Image: 2},
@@ -102,26 +111,34 @@ func TestUniversalBinaryCitationsKeepDistinctPhysicalOffsets(t *testing.T) {
 	id := page.Rows[0].ID
 	const host = "127.0.0.1:8443"
 	handler := Handler(host, Settings{}, store, testResources)
-	for index, offset := range []string{"0x1108", "0x3108"} {
-		position := strconv.Itoa(index)
-		query := "/api/registro/" + id + "/cita-binaria?revision=1&tipo=simbolo&indice=" + position
-		response := httptest.NewRecorder()
-		handler.ServeHTTP(response, httptest.NewRequest("GET", "http://"+host+query, nil))
-		expected := analisis.BinaryCitation{Schema: analisis.BinaryCitationSchema, RecordID: id, Revision: 1, SHA256: hash,
-			InspectionSHA256: caso.Hash(data), Kind: "simbolo", Index: index, Offset: offset}
-		var actual analisis.BinaryCitation
-		if err := json.Unmarshal(response.Body.Bytes(), &actual); response.Code != 200 || err != nil || actual != expected {
-			t.Fatalf("cita web: %+v, %v, %d", actual, err, response.Code)
+	for _, kind := range []string{"simbolo", "instruccion"} {
+		for index, offset := range []string{"0x1108", "0x3108"} {
+			position := strconv.Itoa(index)
+			query := "/api/registro/" + id + "/cita-binaria?revision=1&tipo=" + kind + "&indice=" + position
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, httptest.NewRequest("GET", "http://"+host+query, nil))
+			expected := analisis.BinaryCitation{Schema: analisis.BinaryCitationSchema, RecordID: id, Revision: 1, SHA256: hash,
+				InspectionSHA256: caso.Hash(data), Kind: kind, Index: index, Offset: offset}
+			var actual analisis.BinaryCitation
+			if err := json.Unmarshal(response.Body.Bytes(), &actual); response.Code != 200 || err != nil || actual != expected {
+				t.Fatalf("cita web: %+v, %v, %d", actual, err, response.Code)
+			}
+			var stdout, stderr bytes.Buffer
+			_, err := terminal.Run([]string{"citar-binario", "--id", id, "--revision", "1", "--tipo", kind, "--indice", position},
+				&stdout, &stderr, func() (*caso.Store, error) { return store, nil })
+			if err != nil {
+				t.Fatalf("CLI: %v, %s", err, &stderr)
+			}
+			actual = analisis.BinaryCitation{}
+			if err := json.Unmarshal(stdout.Bytes(), &actual); err != nil || actual != expected {
+				t.Fatalf("cita CLI: %+v, %v", actual, err)
+			}
 		}
-		var stdout, stderr bytes.Buffer
-		_, err := terminal.Run([]string{"citar-binario", "--id", id, "--revision", "1", "--tipo", "simbolo", "--indice", position},
-			&stdout, &stderr, func() (*caso.Store, error) { return store, nil })
-		if err != nil {
-			t.Fatalf("CLI: %v, %s", err, &stderr)
-		}
-		actual = analisis.BinaryCitation{}
-		if err := json.Unmarshal(stdout.Bytes(), &actual); err != nil || actual != expected {
-			t.Fatalf("cita CLI: %+v, %v", actual, err)
-		}
+	}
+	response := httptest.NewRecorder()
+	query := "/api/registro/" + id + "/cita-binaria?revision=1&tipo=instruccion&indice=2"
+	handler.ServeHTTP(response, httptest.NewRequest("GET", "http://"+host+query, nil))
+	if response.Code != 404 {
+		t.Fatalf("se citó una instrucción sin respaldo físico completo: %d", response.Code)
 	}
 }

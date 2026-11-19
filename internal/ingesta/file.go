@@ -98,9 +98,14 @@ func ParseNamed(kind string, reader io.Reader, name string) ([]caso.Record, erro
 		if err != nil {
 			return nil, err
 		}
+		title, listing := result.Format, 0
+		if len(result.Instructions) > 0 {
+			title += " · Instrucciones"
+			listing = 1
+		}
 		return []caso.Record{{
-			Kind: "binario", Time: caso.Now(), Title: result.Format,
-			SHA256: result.SHA256, SourceID: sourceName(name), Details: string(details),
+			Kind: "binario", Time: caso.Now(), Title: title,
+			SHA256: result.SHA256, SourceID: sourceName(name), Details: string(details), BinaryListing: listing,
 		}}, nil
 	}
 }

@@ -9,7 +9,7 @@ import (
 )
 
 func terminalBinaryCitation(args []string, stdout, stderr io.Writer, open openExpediente) error {
-	flags := terminalFlags("citar-binario", "citar-binario --id ID --revision N --tipo seccion|cadena|simbolo --indice N [--salida archivo.json]", stderr)
+	flags := terminalFlags("citar-binario", "citar-binario --id ID --revision N --tipo seccion|cadena|simbolo|instruccion --indice N [--salida archivo.json]", stderr)
 	id := flags.String("id", "", "identificador del registro")
 	revision := flags.Int("revision", 0, "revisión del registro")
 	kind := flags.String("tipo", "", "seccion, cadena o simbolo")
