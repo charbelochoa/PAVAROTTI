@@ -44,7 +44,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 
 | Flujo | Disponible | Trabajo pendiente y prueba de cierre |
 | --- | --- | --- |
-| Expedientes, terminal y agentes | Evidencia con procedencia, inventario de activos, cobertura por periodo con citas, cola persistente, revisión de código Go y exportación STIX. | Medir la latencia del inventario y de los informes de cobertura en expedientes grandes. |
+| Expedientes, terminal y agentes | Evidencia con procedencia, inventario y fichas por página en expedientes de 50,000 observaciones, cobertura por periodo con citas, cola persistente, revisión de código Go y exportación STIX. | Reducir el trabajo por página en fichas cuyos activos aparecen en pocos lotes y medir consultas concurrentes. |
 | Inspección estática de binarios | PE, ELF y Mach-O con ventanas verificadas, referencias entrantes por símbolo e imagen y comparación de informes por destino con citas de ambos lados. | Medir el tiempo de verificación y la memoria para informes cercanos al límite admitido. |
 | Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros, reglas pasivas y comparación de dos periodos con citas a la revisión exacta. | Medir el tiempo de consulta para ventanas acotadas en expedientes con capturas voluminosas. |
 | Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, auditoría y restauración. Se prueban la apertura y la edición de otros expedientes durante una restauración. | Medir la latencia de escritura con carga sostenida y distintos almacenamientos del registro de escritura anticipada de PostgreSQL (WAL). |
@@ -90,6 +90,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 28. **Informes de referencias portátiles.** La 0.4.18 exporta el destino seleccionado con los orígenes observados. La mesa y el CLI verifican el informe con el expediente y el archivo original. Las pruebas recuperan dos ventanas de origen en una copia del expediente y rechazan informes o archivos alterados.
 29. **Referencias por símbolo.** La 0.4.19 filtra símbolos con referencias observadas y abre el panel de su instrucción de entrada. Los alias comparten referencias cuando coinciden imagen, dirección y desplazamiento. Las pruebas comprueban el recuento, el salto al origen y el rechazo de destinos ambiguos.
 30. **Comparación de informes de referencias.** La 0.4.20 verifica dos informes del mismo binario, imagen y destino. Distingue orígenes comunes, agregados y ausentes del informe actual, conserva sus citas y abre los orígenes desde la mesa. Las pruebas comprueban informes con anclas distintas, el rechazo de alteraciones y la coincidencia entre la API y el CLI.
+31. **Activos en expedientes grandes.** La 0.4.21 pagina el inventario y las fichas con recuentos completos, y conserva en memoria las filas de la página más una para detectar la siguiente. Las fichas mantienen su orden por fecha e ID y verifican que el cursor siga perteneciendo al activo. Las búsquedas de red aprovechan el tipo solicitado para omitir la extracción de dominios.
 30. **Paquetes y capacidad.** Verificar los binarios y sus huellas en cada etiqueta. Repetir la prueba de escritura con carga sostenida y medir el efecto del almacenamiento del WAL.
 
 ## Medición de consultas por fecha
@@ -159,6 +160,24 @@ En PostgreSQL 17.12 local, una copia de 23.4 MiB contenía 50,000 capturas HTTP,
 
 PostgreSQL registró esperas de bloqueo en `CREATE UNIQUE INDEX IF NOT EXISTS` con 0.4.12. Esa espera desapareció con 0.4.13. Con dos restauraciones, la mediana de lectura desde la mesa fue de 15 ms en la segunda pasada. El guardado de notas alcanzó un máximo de 0.94 s en esa pasada y de 2.54 s en la primera. PostgreSQL siguió registrando esperas de escritura y sincronización del WAL. Las restauraciones conservaron la huella y los recuentos de la copia.
 
+## Medición del inventario de activos
+
+Se midieron 1,000 y 50,000 observaciones DNS sintéticas en Windows x64 con almacén local y PostgreSQL 17.12. Cada expediente incluye una IP con evidencia DNS y un indicador, un rango RDAP y un prefijo STIX. La tabla muestra el promedio de siete operaciones con 50,000 observaciones y la memoria asignada por operación según `-benchmem`. Los informes de cobertura consultan un día UTC con 1,000 observaciones y las cinco fuentes de control.
+
+| Operación | Local | PostgreSQL |
+| --- | --- | --- |
+| Primera página del inventario | 187 ms · 82.5 MiB | 198 ms · 91.6 MiB |
+| Ficha de IP | 204 ms · 82.5 MiB | 208 ms · 91.7 MiB |
+| Ficha de rango RDAP | 135 ms · 71.0 MiB | 188 ms · 80.2 MiB |
+| Ficha de prefijo STIX | 133 ms · 71.0 MiB | 157 ms · 80.2 MiB |
+| Cobertura de IP por día | 4.12 ms · 1.70 MiB | 47.3 ms · 1.46 MiB |
+| Cobertura RDAP por día | 3.42 ms · 1.49 MiB | 48.6 ms · 1.27 MiB |
+| Cobertura STIX por día | 3.26 ms · 1.51 MiB | 49.2 ms · 1.27 MiB |
+
+La 0.4.20 rechazaba el inventario y las fichas tras recorrer 10,000 registros. La 0.4.21 recorre los lotes del expediente y conserva los resultados de la página. En una prueba con 12,004 registros, el CLI y la mesa devolvieron las mismas fichas y citas tras la migración a PostgreSQL. Los tres informes de cobertura coincidieron byte a byte entre ambas versiones y almacenes. El informe de cobertura conserva su límite de 10,000 registros coincidentes por periodo y de 32 MiB de entrada.
+
+Repite la medición con `go test ./internal/analisis -run '^$' -bench '^BenchmarkAssetScale$' -benchtime=7x -benchmem`. Con `PAVAROTTI_TEST_POSTGRES` configurado, usa una base de pruebas para los expedientes que crea el benchmark.
+
 ## Flujo de trabajo OSINT
 
 1. **Incorporar.** Un expediente reúne indicadores, capturas HTTP, binarios, DNS, RDAP y paquetes STIX aportados por el analista. Las entradas conservan su huella y sus referencias de origen cuando el formato las proporciona.
@@ -170,7 +189,7 @@ PostgreSQL registró esperas de bloqueo en `CREATE UNIQUE INDEX IF NOT EXISTS` c
 
 | Vista | Trabajo pendiente | Criterio de cierre |
 | --- | --- | --- |
-| Activos y fuentes | Medir consultas de inventario, red y cobertura con varios miles de observaciones | Medir latencia y memoria para una IP, un rango RDAP y un prefijo STIX y comprobar que devuelven los mismos cruces. |
+| Activos y fuentes | Reducir el tiempo de consulta al navegar entre activos de expedientes grandes | Medir fichas con pocas coincidencias durante consultas concurrentes y comprobar orden, recuentos y revisiones tras importar evidencia o editar una nota. |
 | Triaje de binarios | Medir comparaciones de referencias de gran tamaño | Registrar duración y memoria al verificar informes de varios tamaños y comprobar que la mesa filtra y pagina sus orígenes. |
 | Historial HTTP | Medir las comparaciones con archivos HAR y tráfico de varios orígenes y tamaños | Registrar latencia de consulta, tamaño de entrada y memoria, y repetir con una ventana acotada y otra amplia. |
 
