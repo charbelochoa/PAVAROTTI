@@ -36,7 +36,7 @@ func TestInstructionWindowBeyondStoredELFListing(t *testing.T) {
 	}
 	binary.LittleEndian.PutUint64(data[24:], 0x401000)
 	window, err := OpenInstructionWindow(data, 0, nil)
-	if err != nil || !window.Limited || len(window.Instructions) != maxWindowInstructions {
+	if err != nil || !window.Limited || len(window.Instructions) != MaxWindowInstructions {
 		t.Fatalf("límite de ventana: %+v, %v", window, err)
 	}
 }

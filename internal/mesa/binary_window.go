@@ -26,7 +26,7 @@ func binaryWindowRoute(mux *http.ServeMux, store *caso.Store) {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, triaje.MaxBinaryBytes)
-		request := analisis.BinaryWindowRequest{RecordID: r.PathValue("id"), Revision: revision, Kind: query.Get("tipo"), Index: index}
+		request := analisis.BinaryWindowRequest{RecordID: r.PathValue("id"), Revision: revision, Kind: query.Get("tipo"), Index: index, Path: query.Get("pasos")}
 		report, err := analisis.OpenBinaryWindow(r.Context(), store, request, r.Body)
 		var tooLarge *http.MaxBytesError
 		switch {
