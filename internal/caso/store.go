@@ -17,18 +17,24 @@ import (
 )
 
 type Record struct {
-	ID        string   `json:"id,omitempty"`
-	Revision  int      `json:"revision,omitempty"`
-	UpdatedAt string   `json:"updated_at,omitempty"`
-	Kind      string   `json:"kind"`
-	Time      string   `json:"time"`
-	Title     string   `json:"title"`
-	Source    string   `json:"source,omitempty"`
-	SourceID  string   `json:"source_id,omitempty"`
-	SHA256    string   `json:"sha256,omitempty"`
-	Details   string   `json:"details,omitempty"`
-	Signals   []string `json:"signals,omitempty"`
-	Traffic   *Traffic `json:"traffic,omitempty"`
+	ID        string     `json:"id,omitempty"`
+	Revision  int        `json:"revision,omitempty"`
+	UpdatedAt string     `json:"updated_at,omitempty"`
+	Kind      string     `json:"kind"`
+	Time      string     `json:"time"`
+	Title     string     `json:"title"`
+	Source    string     `json:"source,omitempty"`
+	SourceID  string     `json:"source_id,omitempty"`
+	SHA256    string     `json:"sha256,omitempty"`
+	Details   string     `json:"details,omitempty"`
+	Signals   []string   `json:"signals,omitempty"`
+	Traffic   *Traffic   `json:"traffic,omitempty"`
+	Indicator *Indicator `json:"indicator,omitempty"`
+}
+
+type Indicator struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
 }
 
 type Traffic struct {

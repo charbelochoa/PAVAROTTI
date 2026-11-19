@@ -50,24 +50,39 @@ func (g groups) top() []Group {
 }
 
 func inventory(ctx context.Context, observations []observation) result {
-	assets, hashes := make(groups), make(groups)
+	assets, hashes, indicators := make(groups), make(groups), make(groups)
 	for _, item := range observations {
 		if err := ctx.Err(); err != nil {
 			return result{err: err}
 		}
-		for _, host := range observedHosts(item.record.Source) {
-			assets.add(groupKey{value: host}, item.ref)
+		if item.record.Indicator == nil {
+			for _, host := range observedHosts(item.record.Source) {
+				assets.add(groupKey{value: host}, item.ref)
+			}
 		}
 		if item.ref.SHA256 != "" {
 			hashes.add(groupKey{value: item.ref.SHA256, scope: item.ref.Kind}, item.ref)
+		}
+		if indicator := item.record.Indicator; indicator != nil && indicator.Value != "" {
+			indicators.add(groupKey{value: clip(indicator.Value, 253), scope: clip(indicator.Type, 32)}, item.ref)
+		}
+	}
+	matches := make(groups)
+	for key, entry := range indicators {
+		if observed := assets[groupKey{value: key.value}]; observed != nil {
+			matches[key] = &Group{Value: key.value, Scope: key.scope, Count: observed.Count}
+			matches[key].Evidence = append(matches[key].Evidence, entry.Evidence[0])
+			matches[key].Evidence = append(matches[key].Evidence, observed.Evidence[:min(len(observed.Evidence), referenceLimit-1)]...)
 		}
 	}
 	assetGroups, hashGroups := assets.top(), hashes.top()
 	return result{apply: func(report *Report) {
 		report.Assets, report.Hashes = assetGroups, hashGroups
+		report.Indicators = indicators.top()
+		report.Matches = matches.top()
 		report.Agents = append(report.Agents, AgentResult{
-			Name: "Inventario", Reviewed: len(observations), Matched: len(assets) + len(hashes),
-			Shown: len(report.Assets) + len(report.Hashes),
+			Name: "Inventario", Reviewed: len(observations), Matched: len(assets) + len(hashes) + len(indicators) + len(matches),
+			Shown: len(report.Assets) + len(report.Hashes) + len(report.Indicators) + len(report.Matches),
 		})
 	}}
 }

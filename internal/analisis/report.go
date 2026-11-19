@@ -21,13 +21,15 @@ const (
 var ErrLimit = errors.New("el informe admite hasta 10000 registros por ejecución")
 
 type Report struct {
-	Records   int           `json:"records"`
-	Assets    []Group       `json:"assets"`
-	Hashes    []Group       `json:"hashes"`
-	Signals   []Group       `json:"signals"`
-	Responses []Group       `json:"responses"`
-	Timeline  []Evidence    `json:"timeline"`
-	Agents    []AgentResult `json:"agents"`
+	Records    int           `json:"records"`
+	Assets     []Group       `json:"assets"`
+	Indicators []Group       `json:"indicators"`
+	Matches    []Group       `json:"matches"`
+	Hashes     []Group       `json:"hashes"`
+	Signals    []Group       `json:"signals"`
+	Responses  []Group       `json:"responses"`
+	Timeline   []Evidence    `json:"timeline"`
+	Agents     []AgentResult `json:"agents"`
 }
 
 type Group struct {
@@ -118,7 +120,7 @@ func (r Report) Text() string {
 	for _, section := range []struct {
 		name   string
 		groups []Group
-	}{{"Activos observados", r.Assets}, {"Huellas de evidencia", r.Hashes}, {"Respuestas HTTP", r.Responses}, {"Señales HTTP", r.Signals}} {
+	}{{"Activos registrados", r.Assets}, {"Indicadores aportados", r.Indicators}, {"Indicadores coincidentes", r.Matches}, {"Huellas de evidencia", r.Hashes}, {"Respuestas HTTP", r.Responses}, {"Señales HTTP", r.Signals}} {
 		if len(section.groups) == 0 {
 			continue
 		}
