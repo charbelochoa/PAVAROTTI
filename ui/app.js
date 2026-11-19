@@ -108,7 +108,7 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
   }
   if (record.code_review) view.append(codeReviewPanel(record.id, record.code_review, citation));
   if (record.dependencies) view.append(dependencyPanel(record.dependencies, citation));
-  const binary = record.kind === "binario" && binaryPanel(record);
+  const binary = record.kind === "binario" && binaryPanel(record, citation?.binary);
   if (binary) view.append(binary);
   if (!record.code_review && record.signals?.length) {
     const list = element("ul");
@@ -124,7 +124,45 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
   }
 }
 
-function binaryPanel(record) {
+function binaryCitationURL({record_id, revision, kind, index}) {
+  const query = new URLSearchParams({revision, tipo: kind, indice: index});
+  return `/api/registro/${encodeURIComponent(record_id)}/cita-binaria?${query}`;
+}
+
+function download(content, filename) {
+  const url = URL.createObjectURL(content);
+  const link = element("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function binaryCitationButton(record, kind, index) {
+  const button = element("button", "Exportar cita");
+  button.onclick = async () => {
+    button.disabled = true;
+    try {
+      const citation = await request(binaryCitationURL({record_id: record.id, revision: record.revision, kind, index}));
+      download(new Blob([JSON.stringify(citation, null, 2) + "\n"], {type: "application/json"}), "PAVAROTTI-cita-binaria.json");
+      byId("status").textContent = `Cita exportada · ${citation.offset} · rev. ${citation.revision}`;
+    } catch (error) {
+      byId("status").textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  };
+  return button;
+}
+
+function markBinaryCitation(row, citation, kind, index) {
+  if (citation?.kind === kind && citation.index === index) {
+    row.classList.add("audit-cited");
+    row.tabIndex = -1;
+  }
+}
+
+function binaryPanel(record, citation) {
   let report;
   try {
     report = JSON.parse(record.details);
@@ -142,9 +180,11 @@ function binaryPanel(record) {
   const count = report.section_count || sections.length;
   const names = element("details");
   names.append(element("summary", `Secciones · ${sections.length < count ? `${sections.length} de ${count}` : count}`));
+  names.open = citation?.kind === "seccion";
   const textHits = element("details");
   const hits = Array.isArray(report.strings) ? report.strings : [];
   textHits.append(element("summary", `Cadenas ASCII registradas · ${hits.length}`));
+  textHits.open = citation?.kind === "cadena";
   const search = element("input");
   search.type = "search";
   search.placeholder = "Buscar texto o desplazamiento";
@@ -158,15 +198,16 @@ function binaryPanel(record) {
     const term = search.value.trim().toLowerCase();
     const start = selectedSection ? Number.parseInt(selectedSection.file.offset, 16) : 0;
     const end = selectedSection ? start + selectedSection.file.size : report.size;
-    const matching = hits.filter((hit) => {
+    const matching = hits.map((hit, index) => ({hit, index})).filter(({hit}) => {
       const offset = Number.parseInt(hit.offset, 16);
       return offset >= start && offset < end && (hit.offset.toLowerCase().includes(term) || hit.text.toLowerCase().includes(term));
     });
     scope.textContent = `${matching.length} ${matching.length === 1 ? "cadena" : "cadenas"}${selectedSection ? ` en ${selectedSection.name}` : ""}`;
     reset.hidden = !selectedSection;
-    strings.replaceChildren(...matching.map((hit) => {
+    strings.replaceChildren(...matching.map(({hit, index}) => {
       const row = element("li");
-      row.append(element("code", hit.offset, "type"), element("pre", hit.text));
+      row.append(element("code", hit.offset, "type"), element("pre", hit.text), binaryCitationButton(record, "cadena", index));
+      markBinaryCitation(row, citation, "cadena", index);
       return row;
     }));
   }
@@ -174,7 +215,7 @@ function binaryPanel(record) {
   search.oninput = paintStrings;
   textHits.append(search, reset, scope, strings);
   const sectionsList = element("ol", "", "binary-list");
-  for (const section of sections) {
+  for (const [index, section] of sections.entries()) {
     const row = element("li");
     row.append(element("strong", section.name || "Sin nombre"), element("p",
       `${report.format === "PE" ? "RVA" : "Dirección"} ${section.address} · ${section.size} bytes`));
@@ -188,20 +229,24 @@ function binaryPanel(record) {
         paintStrings();
         search.focus();
       };
-      row.append(pivot);
+      const tools = element("div", "", "tools");
+      tools.append(pivot, binaryCitationButton(record, "seccion", index));
+      row.append(tools);
     }
+    markBinaryCitation(row, citation, "seccion", index);
     sectionsList.append(row);
   }
   names.append(sections.length ? sectionsList : element("p", "No hay secciones registradas."));
   paintStrings();
-  panel.append(names, textHits, binarySymbolPanel(report));
+  panel.append(names, textHits, binarySymbolPanel(report, record, citation));
   return panel;
 }
 
-function binarySymbolPanel(report) {
+function binarySymbolPanel(report, record, citation) {
   const symbols = Array.isArray(report.symbols) ? report.symbols : [];
   const details = element("details");
   details.append(element("summary", `Símbolos · ${symbols.length}`));
+  details.open = citation?.kind === "simbolo";
   if (report.symbols_limited) details.append(element("p", "La inspección alcanzó su límite de símbolos."));
   if (!symbols.length) {
     details.append(element("p", "Este registro no contiene símbolos guardados."));
@@ -219,10 +264,11 @@ function binarySymbolPanel(report) {
   let shown = 0;
   function appendRows() {
     const batch = matching.slice(shown, shown + 50);
-    for (const symbol of batch) {
+    for (const {symbol, index} of batch) {
       const row = element("li");
       row.append(element("strong", symbol.name), element("p", [symbol.kind, symbol.section, symbol.address].filter(Boolean).join(" · ")));
-      if (symbol.offset) row.append(element("p", `Archivo ${symbol.offset}`));
+      if (symbol.offset) row.append(element("p", `Archivo ${symbol.offset}`), binaryCitationButton(record, "simbolo", index));
+      markBinaryCitation(row, citation, "simbolo", index);
       list.append(row);
     }
     shown += batch.length;
@@ -231,8 +277,12 @@ function binarySymbolPanel(report) {
   }
   search.oninput = () => {
     const term = search.value.trim().toLowerCase();
-    matching = symbols.filter((symbol) => [symbol.name, symbol.section, symbol.address, symbol.offset]
+    matching = symbols.map((symbol, index) => ({symbol, index})).filter(({symbol}) => [symbol.name, symbol.section, symbol.address, symbol.offset]
       .some((field) => field?.toLowerCase().includes(term)));
+    if (citation?.kind === "simbolo") {
+      const target = matching.findIndex(({index}) => index === citation.index);
+      if (target > 0) matching.unshift(...matching.splice(target, 1));
+    }
     shown = 0;
     list.replaceChildren();
     appendRows();
@@ -758,6 +808,7 @@ function showView(view) {
   }
   byId("filter").hidden = view !== "records";
   byId("filter-asset").hidden = view !== "assets";
+  byId("open-binary-citation").hidden = view !== "binaries";
   byId("http-filters").hidden = view !== "http";
   query.placeholder = views[view].placeholder;
   query.maxLength = view === "assets" ? 253 : 256;
@@ -767,6 +818,37 @@ function showView(view) {
 }
 for (const view of Object.keys(views)) byId("view-" + view).onclick = () => showView(view);
 byId("refresh").addEventListener("click", () => refresh());
+
+byId("open-binary-citation").onclick = () => byId("binary-citation-file").click();
+byId("binary-citation-file").onchange = async (event) => {
+  const input = event.currentTarget;
+  const file = input.files[0];
+  if (!file) return;
+  const button = byId("open-binary-citation");
+  const status = byId("status");
+  button.disabled = true;
+  try {
+    if (file.size > 4096) throw new Error("El archivo de cita supera los 4 KiB");
+    const citation = JSON.parse(await file.text());
+    if (citation?.schema !== "pavarotti.binary-citation.v1" || typeof citation.record_id !== "string" ||
+      !/^[a-f0-9]{64}-[1-9][0-9]*$/.test(citation.record_id) || !Number.isSafeInteger(citation.revision) ||
+      citation.revision < 1 || !Number.isSafeInteger(citation.index) || citation.index < 0 ||
+      !["seccion", "cadena", "simbolo"].includes(citation.kind)) {
+      throw new Error("El archivo no contiene una cita de binario válida");
+    }
+    const verified = await request(binaryCitationURL(citation));
+    if (Object.entries(verified).some(([key, value]) => citation[key] !== value)) {
+      throw new Error("La cita no coincide con la huella, revisión o desplazamiento del expediente");
+    }
+    await selectRecord(verified.record_id, verified.revision, undefined, undefined, {binary: verified});
+    status.textContent = `Cita verificada · ${verified.offset} · rev. ${verified.revision}`;
+  } catch (error) {
+    status.textContent = error instanceof SyntaxError ? "El archivo de cita contiene JSON inválido" : error.message;
+  } finally {
+    input.value = "";
+    button.disabled = false;
+  }
+};
 
 byId("directory-form").onsubmit = async (event) => {
   event.preventDefault();
@@ -820,12 +902,7 @@ byId("export-stix").onclick = async (event) => {
   status.textContent = "Preparando paquete STIX…";
   try {
     const response = await requireResponse(await fetch("/api/exportar/stix"));
-    const url = URL.createObjectURL(await response.blob());
-    const download = element("a");
-    download.href = url;
-    download.download = "PAVAROTTI-STIX.json";
-    download.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    download(await response.blob(), "PAVAROTTI-STIX.json");
     status.textContent = `STIX · ${response.headers.get("X-Pavarotti-Objects")} objetos · ` +
       `${response.headers.get("X-Pavarotti-Exported")} registros representados · ` +
       `${response.headers.get("X-Pavarotti-Excluded")} fuera del formato`;

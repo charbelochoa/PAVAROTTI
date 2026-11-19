@@ -50,8 +50,9 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 8. **Revisión estática e inventario.** 0.3.8 amplía la revisión Go y lee `go.mod` y `package-lock.json` v2 y v3. Guarda reglas, líneas, columnas, versiones declaradas, reemplazos y huellas. Los informes del agente 3 abren la señal o dependencia citada. La prueba comprueba la recuperación de tareas pendientes del agente 2 y los límites de 250 señales guardadas y 5,000 entradas de manifiesto.
 9. **Flujo de revisión humana.** 0.3.9 revisa directorios desde la mesa y el CLI, conserva las rutas relativas y presenta el resultado de cada archivo. Guarda el estado, fecha y justificación de cada señal con revisiones de triaje. Las pruebas verifican la recuperación tras reiniciar, la migración a PostgreSQL y el rechazo de escrituras con una revisión obsoleta.
 10. **Mesa de investigación compartida.** 0.4.0 añade acceso HTTPS con roles por expediente, filtros combinados sobre el historial HTTP y un inspector de binarios que abre cadenas desde una sección y conecta la huella con los activos. La prueba comprueba cada flujo desde el navegador con un lector y un analista.
-11. **Auditoría y restauración.** Asociar cada cambio a un operador, aplicar la retención acordada, restaurar una copia a una base nueva y comprobar las referencias entre registros, revisiones y tareas.
-12. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
+11. **Símbolos y citas de binarios.** 0.4.1 guarda símbolos definidos de tablas ELF, COFF y Mach-O. La mesa exporta una cita JSON con la huella del archivo, la huella del análisis, el ID, la revisión y el desplazamiento. Al reabrirla, verifica esos datos y señala la fila citada. Las revisiones previas siguen mostrando los metadatos que guardaron.
+12. **Auditoría y restauración.** Asociar las incorporaciones, ediciones, decisiones de triaje y operaciones de cola a un operador y al expediente. Registrar las acciones confirmadas junto con la transacción que aplica el cambio. Probar escrituras concurrentes, aislamiento y que los errores de validación y conflictos de revisión conservan el estado previo. Restaurar una copia en una base nueva y comprobar sus referencias antes de definir la retención.
+13. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
 
 ## Flujo de trabajo OSINT
 
@@ -65,7 +66,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | Vista | Trabajo pendiente | Criterio de cierre |
 | --- | --- | --- |
 | Activos y fuentes | Mostrar desde una red las IP que ya tienen observaciones en el expediente | Abrir la revisión exacta de una observación de IP desde la ficha de red y comprobar su procedencia. |
-| Triaje de binarios | Incorporar símbolos disponibles y citas exportables por huella y desplazamiento | Abrir una muestra de prueba, comparar secciones, cadenas y símbolos con su archivo y volver a los desplazamientos citados. |
+| Triaje de binarios | Incorporar exportaciones PE por nombre y símbolos de imágenes Mach-O universales | Comparar símbolos y desplazamientos con muestras de referencia, y reabrir sus citas con la misma huella y revisión. |
 | Historial HTTP | Comparar periodos y conservar los criterios de revisión con el informe | Reproducir con HAR y proxy local un caso con varias clases de respuesta y abrir desde el informe los registros que justifican cada señal. |
 
 ## Ramas y commits

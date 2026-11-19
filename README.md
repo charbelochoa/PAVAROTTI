@@ -31,6 +31,7 @@ Usa **Anterior** y **Siguiente** para recorrer los resultados de 50 en 50. La b�
 - **Tráfico.** Proxy inverso HTTP(S) de un solo destino e importación de HAR. El expediente registra origen, estado HTTP, tipo MIME, latencia y señales de configuración. Las señales sirven para priorizar la revisión manual.
 - **Evidencia.** Importación de hallazgos JSON con huella SHA-256 del archivo y búsqueda por texto, origen, ID o huella. También puedes registrar notas manuales.
 - **Binarios.** Triaje estático de cabeceras PE, ELF y Mach-O. Consulta hasta 256 secciones, 128 vistas previas de cadenas ASCII y 2,048 símbolos definidos por archivo. El inspector busca símbolos en las tablas ELF, COFF y Mach-O y muestra su desplazamiento cuando la sección tiene respaldo físico. La huella SHA-256 abre la ficha del activo.
+- **Citas de binarios.** Usa **Exportar cita** desde una sección, cadena o símbolo con desplazamiento. En **Binarios → Abrir cita JSON**, la mesa verifica la huella del archivo, la huella del análisis guardado y la revisión, y señala la ubicación exacta. Una cita incluye referencias y desplazamientos.
 - **Indicadores.** Importa dominios, direcciones IP y huellas desde un archivo de texto, un valor por línea. El informe correlaciona dominios e IP con los activos que ya constan en el expediente y cita los registros que justifican cada coincidencia.
 - **DNS.** Carga una respuesta DNS en JSON o un arreglo de respuestas con `Status`, `Question` y `Answer`. La vista **DNS** conserva valores, TTL, respuestas negativas y huella del archivo. Los destinos de A, AAAA, CNAME, NS, PTR, MX y SRV entran en el inventario de activos del expediente.
 - **RDAP.** Importa archivos JSON de dominio, resultados de búsqueda de dominios y rangos IP. El inspector conserva la posición en el archivo, su huella, servidores de nombre, estados y fechas del registro. La importación omite las fichas de contacto y los enlaces del archivo.
@@ -71,6 +72,7 @@ pavarotti -datos ./expediente importar dns observaciones.json
 pavarotti -datos ./expediente importar rdap registro-dominio.json
 pavarotti -datos ./expediente importar stix indicadores-stix.json
 pavarotti -datos ./expediente importar codigo revision.go
+pavarotti -datos ./expediente citar-binario --id ID --revision 1 --tipo cadena --indice 0 --salida cita.json
 pavarotti -datos ./expediente importar gomod go.mod
 pavarotti -datos ./expediente importar npmlock package-lock.json
 pavarotti -datos ./expediente revisar --json ./proyecto

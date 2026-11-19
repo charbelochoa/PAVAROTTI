@@ -214,6 +214,7 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 	stixRoutes(mux, store)
 	directoryRoutes(mux, store)
 	codeTriageRoutes(mux, store)
+	binaryCitationRoute(mux, store)
 	var handler http.Handler = mux
 	origin := "http://" + host
 	if config.Shared {

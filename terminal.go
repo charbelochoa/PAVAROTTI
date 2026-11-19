@@ -30,6 +30,7 @@ Uso: pavarotti [opciones globales] <comando> [argumentos]
   importar  Incorpora evidencia, código Go o manifiestos de dependencias.
   revisar   Revisa código Go y manifiestos de un directorio local.
   triaje    Consulta o clasifica señales de código con su justificación.
+  citar-binario Exporta la ubicación verificada de un binario como JSON.
   usuarios  Administra cuentas de acceso para el expediente PostgreSQL.
   nota      Registra una nota del analista.
   editar    Actualiza una nota con su revisión actual.
@@ -71,6 +72,8 @@ func terminal(args []string, stdout, stderr io.Writer, open func() (*caso.Store,
 		err = terminalDirectory(args[1:], stdout, stderr, open)
 	case "triaje":
 		err = terminalCodeTriage(args[1:], stdout, stderr, open)
+	case "citar-binario":
+		err = terminalBinaryCitation(args[1:], stdout, stderr, open)
 	case "usuarios":
 		err = terminalSharedAccounts(args[1:], stdout, stderr, open)
 	case "nota":
