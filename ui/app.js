@@ -180,10 +180,10 @@ byId("history").onclick = async () => {
   try {
     const record = selectedRecord;
     const history = await request("/api/nota/" + encodeURIComponent(record.id) + "/historial");
-    const text = [...(history || []), record].map((item) =>
+    const text = (history || []).map((item) =>
       `Revisión ${item.revision} · ${formatTime(item.updated_at || item.time)}\n${item.title}\n${item.source || ""}\n${item.details}`
     ).join("\n\n");
-    reportDialog("Historial de la nota", text);
+    reportDialog("Versiones anteriores de la nota", text || "Aún no hay versiones anteriores.");
   } catch (error) {
     byId("status").textContent = error.message;
   }

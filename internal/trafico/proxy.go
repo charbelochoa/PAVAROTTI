@@ -31,6 +31,9 @@ func Reverse(target *url.URL, listener string, store *caso.Store) http.Handler {
 	record := func(req *http.Request, status int, headers http.Header) {
 		start, _ := req.Context().Value(startKey{}).(time.Time)
 		entry := Observe(origin, req.Method, status, time.Since(start), headers)
+		if headers == nil {
+			entry.Signals = []string{"El proxy no recibió respuesta del destino"}
+		}
 		if err := store.Save([]caso.Record{entry}); err != nil {
 			log.Printf("Registro de tráfico: %v", err)
 		}

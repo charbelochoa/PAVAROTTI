@@ -110,6 +110,32 @@ func TestProxyObservaDestinoConfigurado(t *testing.T) {
 	}
 }
 
+func TestProxyDistingueFalloDeConexionDeCabeceras(t *testing.T) {
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	target, err := trafico.Target(upstream.URL)
+	upstream.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := caso.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const host = "127.0.0.1:7001"
+	handler := trafico.Reverse(target, host, store)
+	request := httptest.NewRequest("GET", "/", nil)
+	request.Host = host
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	records, err := store.Records()
+	if response.Code != 502 || err != nil || len(records) != 1 {
+		t.Fatalf("resultado: %d, %v, %v", response.Code, records, err)
+	}
+	if len(records[0].Signals) != 1 || records[0].Signals[0] != "El proxy no recibió respuesta del destino" {
+		t.Fatalf("señales incorrectas: %v", records[0].Signals)
+	}
+}
+
 func TestEdicionAnalisisYRevision(t *testing.T) {
 	const host = "127.0.0.1:7000"
 	store, err := caso.Open(t.TempDir())
