@@ -35,6 +35,7 @@ type RecordRow struct {
 	Time        string   `json:"time"`
 	Title       string   `json:"title"`
 	Source      string   `json:"source,omitempty"`
+	SourceID    string   `json:"source_id,omitempty"`
 	Traffic     *Traffic `json:"traffic,omitempty"`
 	SignalCount int      `json:"signal_count,omitempty"`
 }
@@ -151,6 +152,9 @@ func (s *Store) localPage(ctx context.Context, request PageRequest, after pageCu
 		}
 		row := RecordRow{ID: record.ID, Kind: record.Kind, Time: record.Time,
 			Title: clipRow(record.Title, 240), Source: clipRow(record.Source, 360)}
+		if record.Kind == "binario" {
+			row.SourceID = clipRow(record.SourceID, 160)
+		}
 		if request.Kind == "http" {
 			row.Traffic, row.SignalCount = record.Traffic, len(record.Signals)
 		}

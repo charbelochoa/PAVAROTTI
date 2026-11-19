@@ -100,7 +100,7 @@ func ParseNamed(kind string, reader io.Reader, name string) ([]caso.Record, erro
 		}
 		return []caso.Record{{
 			Kind: "binario", Time: caso.Now(), Title: result.Format,
-			SHA256: result.SHA256, Details: string(details),
+			SHA256: result.SHA256, SourceID: sourceName(name), Details: string(details),
 		}}, nil
 	}
 }

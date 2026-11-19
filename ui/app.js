@@ -28,9 +28,13 @@ let canWrite = false;
 let checkingQueue = false;
 let queueSignature = "";
 let currentView = "records";
-let assetSearch = "";
-let recordSearch = "";
-let httpSearch = "";
+const viewSearch = new Map();
+const views = {
+  records: {filter: "filter", placeholder: "Buscar texto, origen, ID o SHA-256"},
+  assets: {filter: "filter-asset", placeholder: "Buscar dominio, IP, red o huella"},
+  binaries: {kind: "binario", placeholder: "Buscar archivo, formato, cadena o SHA-256"},
+  http: {kind: "http", placeholder: "Buscar origen, señal o tipo MIME"}
+};
 
 const httpFilters = {"filter-http": "clase_http", "filter-capture": "captura", "filter-method": "metodo", "filter-from": "desde", "filter-to": "hasta"};
 const captureLabel = (kind) => ({"tráfico": "Proxy inverso", "archivo HAR": "Archivo HAR"})[kind] || kind;
@@ -68,7 +72,10 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
   }
   view.append(element("span", record.kind, "type"), element("h3", record.title), element("p", formatTime(record.time)));
   if (record.source) view.append(element("p", record.source));
-  if (record.source_id) view.append(element("p", (record.code_review || record.dependencies ? "Archivo · " : "ID · ") + record.source_id));
+  if (record.source_id) {
+    const label = record.code_review || record.dependencies || record.kind === "binario" ? "Archivo" : "ID";
+    view.append(element("p", `${label} · ${record.source_id}`));
+  }
   if (selectedRevision) {
     view.append(element("p", "Revisión citada " + record.revision));
   } else if (record.id && record.kind === "nota") {
@@ -101,18 +108,94 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
   }
   if (record.code_review) view.append(codeReviewPanel(record.id, record.code_review, citation));
   if (record.dependencies) view.append(dependencyPanel(record.dependencies, citation));
+  const binary = record.kind === "binario" && binaryPanel(record);
+  if (binary) view.append(binary);
   if (!record.code_review && record.signals?.length) {
     const list = element("ul");
     for (const signal of record.signals) list.append(element("li", signal));
     if (record.traffic) view.append(element("h4", "Señales HTTP"));
     view.append(list);
   }
-  if (!record.code_review && record.details) view.append(element("pre", record.details));
+  if (!record.code_review && !binary && record.details) view.append(element("pre", record.details));
   const linked = view.querySelector(".audit-cited");
   if (linked) {
     linked.focus({preventScroll: true});
     linked.scrollIntoView({block: "nearest"});
   }
+}
+
+function binaryPanel(record) {
+  let report;
+  try {
+    report = JSON.parse(record.details);
+  } catch {
+    return null;
+  }
+  if (report?.sha256 !== record.sha256 || !Number.isInteger(report?.size)) return null;
+  const panel = element("div", "", "binary-panel");
+  panel.append(element("p", `${report.format} · ${report.architecture || "Arquitectura sin identificar"} · ${report.size} bytes`));
+  const fingerprint = element("button", "Consultar coincidencias SHA-256");
+  fingerprint.onclick = () => selectAsset({type: "sha256", value: record.sha256});
+  panel.append(fingerprint);
+
+  const sections = Array.isArray(report.sections) ? report.sections : [];
+  const count = report.section_count || sections.length;
+  const names = element("details");
+  names.append(element("summary", `Secciones · ${sections.length < count ? `${sections.length} de ${count}` : count}`));
+  const textHits = element("details");
+  const hits = Array.isArray(report.strings) ? report.strings : [];
+  textHits.append(element("summary", `Cadenas ASCII registradas · ${hits.length}`));
+  const search = element("input");
+  search.type = "search";
+  search.placeholder = "Buscar texto o desplazamiento";
+  search.setAttribute("aria-label", "Buscar cadenas ASCII");
+  search.maxLength = 160;
+  const scope = element("p");
+  const reset = element("button", "Ver todas las secciones");
+  const strings = element("ol", "", "binary-list");
+  let selectedSection;
+  function paintStrings() {
+    const term = search.value.trim().toLowerCase();
+    const start = selectedSection ? Number.parseInt(selectedSection.file.offset, 16) : 0;
+    const end = selectedSection ? start + selectedSection.file.size : report.size;
+    const matching = hits.filter((hit) => {
+      const offset = Number.parseInt(hit.offset, 16);
+      return offset >= start && offset < end && (hit.offset.toLowerCase().includes(term) || hit.text.toLowerCase().includes(term));
+    });
+    scope.textContent = `${matching.length} ${matching.length === 1 ? "cadena" : "cadenas"}${selectedSection ? ` en ${selectedSection.name}` : ""}`;
+    reset.hidden = !selectedSection;
+    strings.replaceChildren(...matching.map((hit) => {
+      const row = element("li");
+      row.append(element("code", hit.offset, "type"), element("pre", hit.text));
+      return row;
+    }));
+  }
+  reset.onclick = () => { selectedSection = undefined; paintStrings(); };
+  search.oninput = paintStrings;
+  textHits.append(search, reset, scope, strings);
+  const sectionsList = element("ol", "", "binary-list");
+  for (const section of sections) {
+    const row = element("li");
+    row.append(element("strong", section.name || "Sin nombre"), element("p",
+      `${report.format === "PE" ? "RVA" : "Dirección"} ${section.address} · ${section.size} bytes`));
+    if (section.file) {
+      row.append(element("p", `Archivo ${section.file.offset} · ${section.file.size} bytes`));
+      const pivot = element("button", "Cadenas de la sección");
+      pivot.onclick = () => {
+        selectedSection = section;
+        search.value = "";
+        textHits.open = true;
+        paintStrings();
+        search.focus();
+      };
+      row.append(pivot);
+    }
+    sectionsList.append(row);
+  }
+  names.append(sections.length ? sectionsList : element("p", "No hay secciones registradas."));
+  paintStrings();
+  panel.append(names, textHits);
+  return panel;
 }
 
 function codeReviewPanel(id, review, citation) {
@@ -496,7 +579,8 @@ function recordNode(record) {
     row.append(element("span", details.join(" · "), "muted"));
   } else {
     row.append(element("span", record.kind, "type"), element("strong", record.title));
-    if (record.source) row.append(element("span", record.source, "muted"));
+    const source = record.source || record.source_id;
+    if (source) row.append(element("span", source, "muted"));
   }
   row.onclick = () => selectRecord(record.id);
   return row;
@@ -544,7 +628,8 @@ function pagingBusy(busy) {
 }
 
 function filters() {
-  const type = currentView === "http" ? "http" : byId(currentView === "assets" ? "filter-asset" : "filter").value;
+  const view = views[currentView];
+  const type = view.kind ?? byId(view.filter).value;
   const params = new URLSearchParams({tipo: type, buscar: byId("query").value.trim()});
   if (currentView === "http") {
     for (const [id, name] of Object.entries(httpFilters)) {
@@ -620,25 +705,22 @@ for (const id of ["filter", "filter-asset", ...Object.keys(httpFilters)]) {
 function showView(view) {
   if (currentView === view) return;
   const query = byId("query");
-  if (currentView === "assets") assetSearch = query.value;
-  else if (currentView === "http") httpSearch = query.value;
-  else recordSearch = query.value;
+  viewSearch.set(currentView, query.value);
   currentView = view;
   clearTimeout(searchTimer);
-  for (const name of ["records", "assets", "http"]) {
+  for (const name of Object.keys(views)) {
     byId("view-" + name).setAttribute("aria-pressed", String(name === view));
   }
   byId("filter").hidden = view !== "records";
   byId("filter-asset").hidden = view !== "assets";
   byId("http-filters").hidden = view !== "http";
-  query.placeholder = {assets: "Buscar dominio, IP, red o huella", http: "Buscar origen, señal o tipo MIME",
-    records: "Buscar texto, origen, ID o SHA-256"}[view];
+  query.placeholder = views[view].placeholder;
   query.maxLength = view === "assets" ? 253 : 256;
-  query.value = {assets: assetSearch, http: httpSearch, records: recordSearch}[view];
+  query.value = viewSearch.get(view) || "";
   byId("records").replaceChildren();
   loadPage(0, [""]);
 }
-for (const view of ["records", "assets", "http"]) byId("view-" + view).onclick = () => showView(view);
+for (const view of Object.keys(views)) byId("view-" + view).onclick = () => showView(view);
 byId("refresh").addEventListener("click", () => refresh());
 
 byId("directory-form").onsubmit = async (event) => {

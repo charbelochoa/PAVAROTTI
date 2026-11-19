@@ -33,6 +33,7 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 		)
 		SELECT id, kind, time, left(COALESCE(current_record->>'title', ''), 240),
 		       left(COALESCE(current_record->>'source', ''), 360),
+		       CASE WHEN kind = 'binario' THEN left(COALESCE(current_record->>'source_id', ''), 160) ELSE '' END,
 		       CASE WHEN $2 = 'http' THEN current_record->'traffic' END,
 		       CASE WHEN $2 = 'http' AND jsonb_typeof(current_record->'signals') = 'array'
 		            THEN jsonb_array_length(current_record->'signals') ELSE 0 END
@@ -69,7 +70,7 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 	for result.Next() {
 		var row RecordRow
 		var traffic []byte
-		if err := result.Scan(&row.ID, &row.Kind, &row.Time, &row.Title, &row.Source, &traffic, &row.SignalCount); err != nil {
+		if err := result.Scan(&row.ID, &row.Kind, &row.Time, &row.Title, &row.Source, &row.SourceID, &traffic, &row.SignalCount); err != nil {
 			return nil, err
 		}
 		if len(traffic) != 0 {
