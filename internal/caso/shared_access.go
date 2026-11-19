@@ -40,6 +40,13 @@ type SharedAccount struct {
 func (s *Store) SharedCase() string { return s.expediente }
 
 func migrateSharedAccess(ctx context.Context, tx *sql.Tx) error {
+	var installed bool
+	if err := tx.QueryRowContext(ctx, `SELECT
+		to_regclass('pavarotti_case_members') IS NOT NULL AND
+		to_regclass('pavarotti_case_sessions') IS NOT NULL AND
+		to_regclass('pavarotti_case_sessions_member') IS NOT NULL`).Scan(&installed); err != nil || installed {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS pavarotti_case_members (
 		expediente TEXT NOT NULL,
 		username TEXT NOT NULL,

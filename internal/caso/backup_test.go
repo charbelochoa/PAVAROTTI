@@ -208,6 +208,69 @@ func TestCaseRestoreSerializesDestinationWrites(t *testing.T) {
 	}
 }
 
+func TestCaseRestoreLeavesOtherCasesAvailable(t *testing.T) {
+	source, destination, active := openAuditTest(t), openAuditTest(t), openAuditTest(t)
+	ctx, stop := context.WithTimeout(t.Context(), 10*time.Second)
+	defer stop()
+	sourceID := backupTestNote(t, source, "Nota a restaurar")
+	activeID := backupTestNote(t, active, "Nota de otro expediente")
+	job, err := source.EnqueueAnalysis(ctx, Hash([]byte("prueba de restauración concurrente")), "respaldo", 1, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var archive bytes.Buffer
+	if _, err := source.BackupCase(ctx, &archive); err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := bytes.Index(archive.Bytes(), []byte("\n{\"type\":\"audit_event\",")) + 1
+	if checkpoint == 0 {
+		t.Fatal("faltan los eventos en la copia")
+	}
+	started, resume := make(chan struct{}), make(chan struct{})
+	gate := &backupTestReader{Reader: bytes.NewReader(archive.Bytes()[checkpoint:]), started: started, resume: resume}
+	input := io.MultiReader(bytes.NewReader(archive.Bytes()[:checkpoint]), gate)
+	restored := make(chan error, 1)
+	go func() {
+		_, err := destination.RestoreCase(ctx, input)
+		restored <- err
+	}()
+	defer func() {
+		if resume != nil {
+			close(resume)
+			<-restored
+		}
+	}()
+	select {
+	case <-started:
+	case err := <-restored:
+		resume = nil
+		t.Fatalf("la restauración terminó antes de la pausa: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("la restauración no llegó al registro de auditoría")
+	}
+	available, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if _, err := destination.Record(available, sourceID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("la evidencia sin confirmar debe permanecer oculta: %v", err)
+	}
+	other, err := OpenPostgres(available, os.Getenv("PAVAROTTI_TEST_POSTGRES"), active.expediente)
+	if err != nil {
+		t.Fatalf("abrir otro expediente durante la restauración: %v", err)
+	}
+	defer other.Close()
+	if record, err := other.EditContext(available, activeID, 1, "Edición concurrente", "", "Revisión de prueba"); err != nil || record.Revision != 2 {
+		t.Fatalf("editar otro expediente durante la restauración: %+v, %v", record, err)
+	}
+	close(resume)
+	resume = nil
+	if err := <-restored; err != nil {
+		t.Fatal(err)
+	}
+	if item, err := destination.AnalysisJob(ctx, job.ID); err != nil || item.State != "queued" {
+		t.Fatalf("tarea restaurada: %+v, %v", item, err)
+	}
+}
+
 func TestCaseRestoreRejectsInvalidEvidenceReferences(t *testing.T) {
 	source, destination := openAuditTest(t), openAuditTest(t)
 	ctx := t.Context()

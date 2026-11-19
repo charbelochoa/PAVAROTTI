@@ -44,6 +44,14 @@ type AnalysisClaim struct {
 const jobFields = "id, fingerprint, agent_version, state, priority, attempts, created_at, updated_at, failure"
 
 func migrateAnalysisQueue(ctx context.Context, tx *sql.Tx) error {
+	var installed bool
+	if err := tx.QueryRowContext(ctx, `SELECT
+		to_regclass('pavarotti_analysis_jobs') IS NOT NULL AND
+		to_regclass('pavarotti_jobs_unique_input') IS NOT NULL AND
+		to_regclass('pavarotti_jobs_claim') IS NOT NULL AND
+		to_regclass('pavarotti_jobs_recent') IS NOT NULL`).Scan(&installed); err != nil || installed {
+		return err
+	}
 	_, err := tx.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS pavarotti_analysis_jobs (
 			expediente TEXT NOT NULL,

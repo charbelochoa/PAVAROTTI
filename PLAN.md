@@ -47,7 +47,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | Expedientes, terminal y agentes | Evidencia con procedencia, inventario de activos, cobertura por periodo con citas, cola persistente, revisión de código Go y exportación STIX. | Medir la latencia del inventario y de los informes de cobertura en expedientes grandes. |
 | Inspección estática de binarios | PE, ELF y Mach-O con secciones, cadenas, símbolos y citas por desplazamiento. PE incluye exportaciones y Mach-O universal permite seleccionar una imagen. | Navegar instrucciones y referencias en secciones de muestras locales y comprobar sus desplazamientos con archivos de referencia. |
 | Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros, reglas pasivas y comparación de dos periodos con citas a la revisión exacta. | Medir el tiempo de consulta para ventanas acotadas en expedientes con capturas voluminosas. |
-| Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, actividad por expediente, respaldo, restauración y retención verificada. | Medir cómo se comportan las consultas y escrituras de otros expedientes cuando se restauran copias grandes en la misma base. |
+| Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, auditoría y restauración. Se prueban la apertura y la edición de otros expedientes durante una restauración. | Medir la latencia de escritura con carga sostenida y distintos almacenamientos del registro de escritura anticipada de PostgreSQL (WAL). |
 
 ## Hallazgos de la revisión de 0.3
 
@@ -82,7 +82,8 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 20. **Paginación de expedientes.** Desde 0.4.10 el almacén local reutiliza un resumen de los lotes para la navegación sin búsqueda de texto. PostgreSQL mantiene un índice derivado de las capturas HTTP, rellena los lotes antiguos por partes y reconstruye el índice al restaurar. Las pruebas comprueban el orden, los cursores y las citas durante la actualización y después de restaurar.
 21. **Búsqueda literal de expedientes.** Desde 0.4.11 el almacén local comparte texto normalizado entre registros del mismo lote. PostgreSQL genera documentos de búsqueda, aprovecha `pg_trgm` cuando está disponible y prepara expedientes antiguos en segundo plano desde la mesa. Las pruebas comprueban coincidencias literales, señales, dependencias, textos extensos y la revisión vigente de las notas.
 22. **Restauración de expedientes grandes.** La 0.4.12 inserta por lotes y prepara los índices de búsqueda e historial HTTP después de restaurar. Las pruebas comprueban que una copia truncada revierte todos los lotes y que las consultas conservan las citas durante la preparación de los índices.
-23. **Paquetes y capacidad.** Verificar los binarios y sus huellas en cada etiqueta. Medir el impacto de restaurar copias grandes en otros expedientes de la misma base.
+23. **Expedientes concurrentes.** La 0.4.13 consulta si los índices de tareas y sesiones están instalados antes de enviar DDL. La prueba detiene una restauración con tareas ya insertadas y verifica que se puede abrir y editar otro expediente antes de confirmar la copia.
+24. **Paquetes y capacidad.** Verificar los binarios y sus huellas en cada etiqueta. Repetir la prueba de escritura con carga sostenida y medir el efecto del almacenamiento del WAL.
 
 ## Medición de consultas por fecha
 
@@ -138,6 +139,18 @@ Se midió una ejecución del CLI por operación y tamaño en Windows x64 con Pos
 | Aplicar retención | 1.06 s | 1.15 s |
 
 Con 1,000 capturas la restauración pasó de 0.58 a 0.10 s y con 10,000 de 9.53 a 0.58 s. Con la copia mayor, el pico del proceso restaurador en 0.4.12 fue de 27.1 MiB. La medición termina al confirmar la evidencia y deja fuera la preparación posterior de los índices. Se conservaron el SHA-256 y los recuentos de la copia, se abrieron ambas revisiones en el destino y la retención retiró los 40,000 eventos previstos en el origen.
+
+## Medición entre expedientes concurrentes
+
+En PostgreSQL 17.12 local, una copia de 23.4 MiB contenía 50,000 capturas HTTP, 50,000 eventos de auditoría y una tarea. En otro expediente con 10,000 capturas, la mesa consultó páginas de historial y guardó notas. Cuatro procesos nuevos ejecutaron `actividad --limite 1` al detectar que la restauración había empezado a insertar tareas. La tabla muestra la mediana de esos cuatro comandos de terminal.
+
+| Restauraciones simultáneas | 0.4.12 | 0.4.13 |
+| --- | --- | --- |
+| Sin restauración, muestra de control | 90 ms | |
+| Una restauración | 1,930 ms | 101 ms |
+| Dos restauraciones | 3,543 ms | 268 ms |
+
+PostgreSQL registró esperas de bloqueo en `CREATE UNIQUE INDEX IF NOT EXISTS` con 0.4.12. Esa espera desapareció con 0.4.13. Con dos restauraciones, la mediana de lectura desde la mesa fue de 15 ms en la segunda pasada. El guardado de notas alcanzó un máximo de 0.94 s en esa pasada y de 2.54 s en la primera. PostgreSQL siguió registrando esperas de escritura y sincronización del WAL. Las restauraciones conservaron la huella y los recuentos de la copia.
 
 ## Flujo de trabajo OSINT
 
