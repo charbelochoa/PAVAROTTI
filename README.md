@@ -92,6 +92,10 @@ pavarotti seguimiento listar --lista "Guardia" --json
 
 En Windows abre `PAVAROTTI.exe`. En Kali o Arch, copia el ejecutable a un volumen con permisos de ejecución y ábrelo con `./PAVAROTTI-Kali-x64`. Si la copia perdió el permiso, usa `chmod +x PAVAROTTI-Kali-x64`. El programa abre el navegador en una dirección de tu equipo y muestra esa misma URL en la terminal. Elige **Créditos** para consultar la atribución.
 
+El paquete `.deb` para Kali y el paquete `.pkg.tar.xz` para Arch instalan el comando `pavarotti` y una entrada con su icono en el menú de aplicaciones. En Kali usa `sudo dpkg -i ./pavarotti_0.4.24-1_amd64.deb`. En Arch usa `sudo pacman -U ./pavarotti-0.4.24-1-x86_64.pkg.tar.xz`. Para uso portátil, descomprime el `.tar.gz` de Linux o el `.zip` de Windows. En Linux ejecuta `./pavarotti` desde la carpeta extraída. En Windows abre `PAVAROTTI.exe`.
+
+El archivo `SHA256SUMS` incluye las huellas de los cuatro paquetes y del manifiesto. Comprueba la carpeta completa con `sha256sum -c SHA256SUMS` en Linux o con `python packaging/verify_packages.py ruta/a/los/paquetes` desde el repositorio. Para verificar un solo archivo en Windows, usa `Get-FileHash -Algorithm SHA256 -LiteralPath archivo.zip` y coteja la huella con su línea en `SHA256SUMS`. El manifiesto `build-info.json` identifica el commit, la versión de Go, los módulos compilados y la huella de cada ejecutable.
+
 Para guardar un expediente en una ruta específica y observar un servicio que administras, ejecuta el binario con estas opciones. En Windows, usa el nombre del archivo `.exe`.
 
 ```sh
@@ -251,5 +255,17 @@ go build -o PAVAROTTI .
 ```
 
 En Windows, usa `-o PAVAROTTI.exe`. La interfaz y los créditos se incluyen en el ejecutable.
+
+Para generar los cuatro paquetes desde un commit de la versión, usa Go 1.26.11 y Python 3.11 o posterior. Los comandos de un shell en Linux son los siguientes.
+
+```sh
+mkdir -p .build
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o .build/pavarotti .
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -o .build/PAVAROTTI.exe .
+python3 packaging/build_packages.py --linux .build/pavarotti --windows .build/PAVAROTTI.exe --out dist/paquetes
+python3 packaging/verify_packages.py dist/paquetes
+```
+
+El generador usa los archivos de licencia y el icono del commit. CI prueba los instaladores en Kali y Arch y ejecuta el ZIP en Windows. Las etiquetas `v<versión>` comprueban que la versión del ejecutable coincide con la etiqueta.
 
 Consulta el [plan de evolución y la matriz de pruebas](PLAN.md).

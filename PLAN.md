@@ -14,7 +14,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | 4. Agentes persistentes | Cola de análisis en PostgreSQL, estado visible, cancelación y reintentos acotados. Incluir versión del agente, huella de entrada y referencia a cada resultado | Interrumpir el servicio durante una tarea, recuperarla en un arranque posterior y confirmar un único informe. Probar prioridades, cancelación y aislamiento por expediente. |
 | 5. Revisión de código | Reglas estáticas ampliadas, reportes de dependencias y clasificación de resultados con revisión humana. Entradas locales por archivo o directorio seleccionado | Casos positivos y negativos con posiciones reproducibles, sin ejecutar los artefactos. Verificar límites de CPU y memoria con entradas grandes y malformadas. |
 | 6. Operación compartida | Autenticación, roles, auditoría, retención, exportación y restauración. Separar secretos de configuración y documentar despliegue con TLS | Probar acceso cruzado entre expedientes, vencimiento de sesiones, respaldo y restauración en una base nueva. Publicar solo tras verificar integridad de registros y revisiones. |
-| 7. Entrega y mantenimiento | Paquetes nativos, manifiesto de dependencias, verificación de huellas y matriz de regresión | Probar cada etiqueta en Windows, Kali y Arch, además de Compose. Registrar versión del compilador y hash del ejecutable. |
+| 7. Entrega y mantenimiento | Instaladores `.deb` y `.pkg.tar.xz`, archivos portátiles, manifiesto de dependencias, huellas y matriz de regresión | Verificar la versión y el SHA-256 de los paquetes. Instalar y retirar los paquetes en Kali y Arch conservando el expediente. Abrir un expediente desde el ZIP de Windows. Ejecutar la matriz al publicar una etiqueta. |
 
 ## Configuraciones que se prueban
 
@@ -39,6 +39,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | `internal/caso` y `internal/config` | Evidencia, revisiones, autenticación, cola y auditoría en `internal/caso`. Lectura de secretos en `internal/config`. |
 | `internal/analisis` | Preparación de instantáneas, correlación, agentes e informes. |
 | `internal/ingesta`, `internal/trafico`, `internal/triaje` y `internal/revision` | Importación de artefactos, observación HTTP, inspección de binarios y revisión de código y dependencias, respectivamente. |
+| `packaging` | Instaladores y archivos portátiles x64, entrada de escritorio y verificación de sumas. |
 
 ## Cobertura defensiva de la mesa
 
@@ -93,7 +94,8 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 31. **Activos en expedientes grandes.** La 0.4.21 pagina el inventario y las fichas con recuentos completos, y conserva en memoria las filas de la página más una para detectar la siguiente. Las fichas mantienen su orden por fecha e ID y verifican que el cursor siga perteneciendo al activo. Las búsquedas de red aprovechan el tipo solicitado para omitir la extracción de dominios.
 32. **Seguimiento de activos.** La 0.4.22 guarda listas por expediente en archivos y PostgreSQL. La mesa y el CLI revisan sus activos contra la evidencia almacenada y conservan la última cita, incluidas las fuentes de cobertura de una IP. Las pruebas verifican cambios concurrentes, permisos, migración idempotente, restauración y validación del respaldo.
 33. **Comparaciones HTTP amplias.** La 0.4.23 admite 50,000 observaciones distintas con el límite de 32 MiB. Conserva la huella y el formato de las comparaciones de hasta 10,000 observaciones y abre informes de ambos formatos. PostgreSQL reutiliza el índice del historial para localizar lotes de ventanas que suman hasta siete días. Las pruebas cubren periodos superpuestos, lotes por indexar y fechas con desfase UTC.
-30. **Paquetes y capacidad.** Verificar los binarios y sus huellas en cada etiqueta. Repetir la prueba de escritura con carga sostenida y medir el efecto del almacenamiento del WAL.
+34. **Paquetes nativos y portátiles.** La 0.4.24 genera paquetes para Kali, Arch y uso portátil en Windows y Linux. El manifiesto registra el commit, los módulos de Go y la huella de cada binario. La matriz comprueba las sumas, instala y retira los paquetes nativos y vuelve a abrir el expediente creado por el ZIP de Windows.
+35. **Capacidad de escritura.** Repetir la prueba con carga sostenida y medir el efecto del almacenamiento del WAL.
 
 ## Medición de consultas por fecha
 

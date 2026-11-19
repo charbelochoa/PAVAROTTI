@@ -2,6 +2,7 @@ name: PAVAROTTI
 on:
   push:
     branches: [main, 'blue-team/**']
+    tags: ['v[0-9]*']
   pull_request:
 permissions:
   contents: read
