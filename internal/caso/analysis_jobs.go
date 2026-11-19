@@ -111,7 +111,7 @@ func (s *Store) EnqueueAnalysis(ctx context.Context, fingerprint, version string
 	return row, err
 }
 
-func (s *Store) ClaimAnalysis(ctx context.Context, version string) (AnalysisClaim, bool, error) {
+func (s *Store) ClaimAnalysis(ctx context.Context, versions ...string) (AnalysisClaim, bool, error) {
 	if !s.HasAnalysisQueue() {
 		return AnalysisClaim{}, false, ErrQueueUnavailable
 	}
@@ -121,16 +121,16 @@ func (s *Store) ClaimAnalysis(ctx context.Context, version string) (AnalysisClai
 		UPDATE pavarotti_analysis_jobs
 		SET state = 'failed', lease_until = NULL, lease_token = NULL, updated_at = clock_timestamp(),
 		    failure = 'Se agotaron los intentos de recuperar el análisis'
-		WHERE expediente = $1 AND agent_version = $2 AND state = 'running'
+		WHERE expediente = $1 AND agent_version = ANY($2::text[]) AND state = 'running'
 		  AND lease_until <= clock_timestamp() AND attempts >= $3
-	`, s.expediente, version, AnalysisMaxAttempts); err != nil {
+	`, s.expediente, versions, AnalysisMaxAttempts); err != nil {
 		return AnalysisClaim{}, false, err
 	}
 	claim := AnalysisClaim{Token: randomKey()}
 	row := s.db.QueryRowContext(ctx, `
 		WITH candidate AS (
 			SELECT id AS next_id FROM pavarotti_analysis_jobs
-			WHERE expediente = $1 AND agent_version = $2 AND attempts < $3
+			WHERE expediente = $1 AND agent_version = ANY($2::text[]) AND attempts < $3
 			  AND (state = 'queued' OR (state = 'running' AND lease_until <= clock_timestamp()))
 			ORDER BY priority DESC, created_at, id FOR UPDATE SKIP LOCKED LIMIT 1
 		)
@@ -138,7 +138,7 @@ func (s *Store) ClaimAnalysis(ctx context.Context, version string) (AnalysisClai
 		SET state = 'running', attempts = attempts + 1, updated_at = clock_timestamp(),
 		    lease_until = clock_timestamp() + $4::bigint * interval '1 millisecond', lease_token = $5
 		FROM candidate WHERE expediente = $1 AND id = candidate.next_id
-		RETURNING `+jobFields+`, snapshot`, s.expediente, version, AnalysisMaxAttempts, AnalysisLease.Milliseconds(), claim.Token)
+		RETURNING `+jobFields+`, snapshot`, s.expediente, versions, AnalysisMaxAttempts, AnalysisLease.Milliseconds(), claim.Token)
 	err := row.Scan(append(claim.Job.fields(), &claim.Snapshot)...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return AnalysisClaim{}, false, nil

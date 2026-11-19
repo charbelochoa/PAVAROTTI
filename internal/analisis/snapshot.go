@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	AgentVersion      = "1"
+	AgentVersion      = "2"
+	legacyAgent       = "1"
 	SnapshotByteLimit = 32 << 20
 )
 
@@ -84,6 +85,7 @@ func analysisRecord(base caso.Record) caso.Record {
 		ID: base.ID, Revision: base.Revision, UpdatedAt: clip(base.UpdatedAt, 48),
 		Kind: clip(base.Kind, 64), Time: clip(base.Time, 48), Title: clip(base.Title, 160),
 		SourceID: clip(base.SourceID, 160), SHA256: digest(base.SHA256),
+		Network: recordNetwork(base).value,
 	}
 	hosts := observedHosts(base.Source)
 	if base.Traffic != nil {
@@ -109,7 +111,10 @@ func analysisRecord(base caso.Record) caso.Record {
 }
 
 func (snapshot Snapshot) Analyze(ctx context.Context) (Report, error) {
-	report, err := Analyze(ctx, snapshot.Records)
+	if !supportedAgent(snapshot.AgentVersion) {
+		return Report{}, errors.New("versión de agentes desconocida")
+	}
+	report, err := analyze(ctx, snapshot.Records, snapshot.AgentVersion == AgentVersion)
 	if err != nil {
 		return Report{}, err
 	}
@@ -117,3 +122,5 @@ func (snapshot Snapshot) Analyze(ctx context.Context) (Report, error) {
 	report.AgentVersion = snapshot.AgentVersion
 	return report, nil
 }
+
+func supportedAgent(version string) bool { return version == AgentVersion || version == legacyAgent }

@@ -457,7 +457,8 @@ byId("note-form").addEventListener("submit", async (event) => {
 });
 
 const reportSections = [
-  ["matches", "Coincidencias"], ["assets", "Activos"], ["signals", "Señales HTTP"],
+  ["matches", "Coincidencias"], ["hash_matches", "Coincidencias SHA-256"], ["network_matches", "Cobertura de red"],
+  ["assets", "Activos"], ["signals", "Señales HTTP"],
   ["responses", "Respuestas HTTP"], ["indicators", "Indicadores"], ["hashes", "Huellas"], ["timeline", "Cronología"]
 ];
 
@@ -481,9 +482,10 @@ function reportDialog(title, text, report) {
   choice.replaceChildren(...sections.map(({label}) => element("option", label)));
   const renderReferences = () => {
     const section = sections[choice.selectedIndex];
-    const groups = (section?.groups || []).map(({value, scope, evidence}) => {
+    const groups = (section?.groups || []).map(({value, scope, evidence, samples}) => {
       const group = element("div", "", "reference-group");
       if (value) group.append(element("strong", scope ? `${value} · ${scope}` : value));
+      if (samples?.length) group.append(element("span", "IP citadas · " + samples.join(", "), "muted"));
       for (const item of evidence) {
         const action = element("button", `${item.title || item.kind} · rev. ${item.revision}`);
         action.title = `${item.id} · revisión ${item.revision}`;

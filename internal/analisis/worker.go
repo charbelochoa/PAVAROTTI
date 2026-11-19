@@ -35,7 +35,7 @@ func RunQueue(ctx context.Context, store *caso.Store) error {
 	poll := time.NewTicker(time.Second)
 	defer poll.Stop()
 	for ctx.Err() == nil {
-		claim, found, err := store.ClaimAnalysis(ctx, AgentVersion)
+		claim, found, err := store.ClaimAnalysis(ctx, AgentVersion, legacyAgent)
 		switch {
 		case ctx.Err() != nil:
 			return nil
@@ -98,7 +98,7 @@ func renewClaim(ctx context.Context, store *caso.Store, claim caso.AnalysisClaim
 
 func claimResult(ctx context.Context, claim caso.AnalysisClaim) (json.RawMessage, string) {
 	var snapshot Snapshot
-	if err := json.Unmarshal(claim.Snapshot, &snapshot); err != nil || snapshot.AgentVersion != AgentVersion ||
+	if err := json.Unmarshal(claim.Snapshot, &snapshot); err != nil || !supportedAgent(snapshot.AgentVersion) ||
 		snapshot.AgentVersion != claim.Job.AgentVersion || snapshot.Fingerprint != claim.Job.Fingerprint {
 		return nil, "La instantánea no coincide con la tarea"
 	}
