@@ -67,7 +67,11 @@ func ListAssets(ctx context.Context, store *caso.Store, query AssetQuery) (Asset
 	}
 	rows := make([]AssetRow, 0, limit+1)
 	err := store.Walk(ctx, func(record caso.Record) error {
-		recordAssets(record, recordNetwork(record), func(key AssetKey, role string) {
+		var network assetNetwork
+		if query.Type == "" || query.Type == "red" {
+			network = recordNetwork(record)
+		}
+		recordAssets(record, network, query.Type, func(key AssetKey, role string) {
 			if (query.Type != "" && key.Type != query.Type) || (term != "" && !strings.Contains(key.Value, term)) ||
 				(after.Type != "" && compareAssetKeys(key, after) <= 0) {
 				return
@@ -201,9 +205,12 @@ func compareAssetSourcePositions(a, b assetSourceCursor) int {
 }
 
 func assetSource(record caso.Record, key AssetKey, address netip.Addr) (string, string) {
-	network := recordNetwork(record)
+	var network assetNetwork
+	if key.Type == "red" || address.IsValid() {
+		network = recordNetwork(record)
+	}
 	var role string
-	recordAssets(record, network, func(candidate AssetKey, current string) {
+	recordAssets(record, network, key.Type, func(candidate AssetKey, current string) {
 		if candidate == key && role == "" {
 			role = current
 		}
@@ -226,22 +233,29 @@ func walkEvidence(ctx context.Context, store *caso.Store, visit func(caso.Record
 	})
 }
 
-func recordAssets(record caso.Record, network assetNetwork, visit func(AssetKey, string)) {
+func recordAssets(record caso.Record, network assetNetwork, kind string, visit func(AssetKey, string)) {
 	if item := record.Indicator; item != nil {
-		if key, valid := normalizeAsset(AssetKey(*item)); valid {
-			visit(key, "indicador")
+		if kind == "" || item.Type == kind {
+			if key, valid := normalizeAsset(AssetKey(*item)); valid {
+				visit(key, "indicador")
+			}
 		}
 		return
 	}
 	if record.Kind == "binario" {
-		if value := digest(record.SHA256); value != "" {
-			visit(AssetKey{Type: "sha256", Value: value}, "muestra")
+		if kind == "" || kind == "sha256" {
+			if value := digest(record.SHA256); value != "" {
+				visit(AssetKey{Type: "sha256", Value: value}, "muestra")
+			}
 		}
 		return
 	}
+	withHosts := kind == "" || kind == "dominio" || kind == "ipv4" || kind == "ipv6"
 	if record.Traffic != nil {
-		if host := networkHost(record.Source); host != "" {
-			visit(hostAsset(host), "observación")
+		if withHosts {
+			if host := networkHost(record.Source); host != "" {
+				visit(hostAsset(host), "observación")
+			}
 		}
 		return
 	}
@@ -258,18 +272,23 @@ func recordAssets(record caso.Record, network assetNetwork, visit func(AssetKey,
 	default:
 		return
 	}
-	if network.value != "" {
+	if network.value != "" && (kind == "" || kind == "red") {
 		visit(AssetKey{Type: "red", Value: network.value}, role)
 	}
 	if record.Kind == "stix" {
 		for _, item := range record.FileHashes {
+			if kind != "" && item.Type != kind {
+				continue
+			}
 			if key, valid := normalizeAsset(AssetKey(item)); valid {
 				visit(key, "huella declarada")
 			}
 		}
 	}
-	for _, host := range sourceHosts(record.Source, record.Kind == "rdap") {
-		visit(hostAsset(host), role)
+	if withHosts {
+		for _, host := range sourceHosts(record.Source, record.Kind == "rdap") {
+			visit(hostAsset(host), role)
+		}
 	}
 }
 

@@ -212,7 +212,7 @@ func (build *stixBuilder) observables(record caso.Record) []string {
 	var ids []string
 	hashes := make(map[string]string)
 	network := recordNetwork(record)
-	recordAssets(record, network, func(key AssetKey, _ string) {
+	recordAssets(record, network, "", func(key AssetKey, _ string) {
 		if kind := stixSCOType(key.Type); kind != "" {
 			ids = appendDistinct(ids, build.sco(&exchangeEntry{Type: kind, Value: key.Value}))
 		} else if algorithm := stixHashName(key.Type); algorithm != "" {
