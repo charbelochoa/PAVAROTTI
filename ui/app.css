@@ -77,6 +77,8 @@ footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2re
 .http-details dd { margin: 0; color: var(--dim); }
 .binary-panel > details, .binary-panel button, .binary-panel input { margin-top: .6rem; }
 .binary-panel input { width: 100%; }
+.binary-image { display: grid; gap: .25rem; margin-top: .65rem; }
+.binary-image select { width: 100%; }
 .binary-list { display: grid; gap: .35rem; max-height: 19rem; overflow: auto; list-style: none; padding: 0; }
 .binary-list li { border: 1px solid var(--line); border-radius: 3px; padding: .45rem .55rem; }
 .binary-list li.audit-cited { border-color: var(--accent); }
