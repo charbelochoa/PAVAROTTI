@@ -9,6 +9,29 @@ import (
 	"time"
 )
 
+func TestOpenPostgresDuringSharedSessionWrite(t *testing.T) {
+	active := openAuditTest(t)
+	ctx := t.Context()
+	tx, err := active.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `LOCK TABLE pavarotti_case_sessions IN ROW EXCLUSIVE MODE`); err != nil {
+		t.Fatal(err)
+	}
+	available, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	other, err := OpenPostgres(available, os.Getenv("PAVAROTTI_TEST_POSTGRES"), active.expediente+"-otro")
+	if err != nil {
+		t.Fatalf("abrir otro expediente durante una escritura de sesión: %v", err)
+	}
+	defer other.Close()
+	if accounts, err := other.SharedAccounts(available); err != nil || len(accounts) != 0 {
+		t.Fatalf("consultar las cuentas del otro expediente: %+v, %v", accounts, err)
+	}
+}
+
 func TestSharedAccessKeepsSessionsInsideTheCase(t *testing.T) {
 	dsn := os.Getenv("PAVAROTTI_TEST_POSTGRES")
 	if dsn == "" {
