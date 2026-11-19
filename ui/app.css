@@ -83,6 +83,16 @@ footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2re
 .binary-list li { border: 1px solid var(--line); border-radius: 3px; padding: .45rem .55rem; }
 .binary-list li.audit-cited { border-color: var(--accent); }
 .binary-list pre { margin: .25rem 0 0; }
+.instruction-table { overflow-x: auto; margin-top: .65rem; }
+.instruction-table table { border-collapse: collapse; width: 100%; font-size: .78rem; text-align: left; }
+.instruction-table th, .instruction-table td { border-bottom: 1px solid var(--line); padding: .35rem .45rem; vertical-align: top; }
+.instruction-table th { color: var(--dim); font-weight: 400; }
+.instruction-table small { display: block; font-size: .72rem; color: var(--dim); }
+.instruction-table .instruction-address, .instruction-table .instruction-target { border: 0; padding: 0; margin: 0; color: var(--accent); background: transparent; }
+.instruction-table .instruction-address:hover, .instruction-table .instruction-target:hover { text-decoration: underline; }
+.instruction-table .instruction-target { display: block; margin-top: .16rem; text-align: left; }
+.instruction-table tr:has([aria-pressed="true"]), .instruction-table tr.audit-cited { background: #39272b; }
+.instruction-table tr.audit-cited { box-shadow: inset 3px 0 var(--accent); }
 #directory-panel, #directory-result { margin-top: .65rem; }
 #directory-items { padding-left: 1.2rem; max-height: 16rem; overflow: auto; overflow-wrap: anywhere; }
 .asset-sources { display: grid; gap: .4rem; margin-top: .8rem; }

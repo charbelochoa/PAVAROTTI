@@ -254,6 +254,7 @@ function binaryPanel(record, citation) {
   textHits.append(search, reset, scope, strings);
   const sectionsList = element("ol", "", "binary-list");
   const noSections = element("p", "No hay secciones registradas.");
+  const instructions = binaryInstructionPanel(report, record, citation, sections, images);
   const symbols = binarySymbolPanel(report, record, citation, images);
   function paintSections() {
     const rows = [];
@@ -274,6 +275,11 @@ function binaryPanel(record, citation) {
           search.focus();
         };
         const tools = element("div", "", "tools");
+        if (instructions.hasSection(index)) {
+          const listing = element("button", "Instrucciones de la sección");
+          listing.onclick = () => instructions.showSection(index);
+          tools.append(listing);
+        }
         tools.append(pivot, binaryCitationButton(record, "seccion", index));
         row.append(tools);
       }
@@ -294,6 +300,7 @@ function binaryPanel(record, citation) {
       `${images.length} ${images.length === 1 ? "imagen registrada" : "imágenes registradas"}`;
     paintSections();
     paintStrings();
+    instructions.paintImage(index);
     symbols.paint(index);
   }
   if (images.length) {
@@ -309,6 +316,7 @@ function binaryPanel(record, citation) {
     }
     if (citation?.kind === "seccion") selectedImage = sections[citation.index]?.image || 0;
     if (citation?.kind === "simbolo") selectedImage = report.symbols?.[citation.index]?.image || 0;
+    if (citation?.kind === "instruccion") selectedImage = sections[report.instructions?.[citation.index]?.section]?.image || 0;
     if (citation?.kind === "cadena") {
       const offset = Number.parseInt(hits[citation.index]?.offset, 16);
       selectedImage = images.findIndex(({file}) => {
@@ -324,7 +332,7 @@ function binaryPanel(record, citation) {
   }
   names.append(sectionsList, noSections);
   paintImage(selectedImage);
-  panel.append(names, textHits, symbols.details);
+  panel.append(instructions.details, names, textHits, symbols.details);
   return panel;
 }
 
@@ -948,7 +956,7 @@ byId("binary-citation-file").onchange = async (event) => {
     if (citation?.schema !== "pavarotti.binary-citation.v1" || typeof citation.record_id !== "string" ||
       !/^[a-f0-9]{64}-[1-9][0-9]*$/.test(citation.record_id) || !Number.isSafeInteger(citation.revision) ||
       citation.revision < 1 || !Number.isSafeInteger(citation.index) || citation.index < 0 ||
-      !["seccion", "cadena", "simbolo"].includes(citation.kind)) {
+      !["seccion", "cadena", "simbolo", "instruccion"].includes(citation.kind)) {
       throw new Error("El archivo no contiene una cita de binario válida");
     }
     const verified = await request(binaryCitationURL(citation));
