@@ -45,7 +45,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | Flujo | Disponible | Trabajo pendiente y prueba de cierre |
 | --- | --- | --- |
 | Expedientes, terminal y agentes | Evidencia con procedencia, inventario de activos, cobertura por periodo con citas, cola persistente, revisión de código Go y exportación STIX. | Medir la latencia del inventario y de los informes de cobertura en expedientes grandes. |
-| Inspección estática de binarios | PE, ELF y Mach-O con ventanas verificadas, referencias entrantes por símbolo e imagen e informes portátiles por destino. | Comparar dos informes de referencias y conservar las citas de los orígenes que cambiaron. |
+| Inspección estática de binarios | PE, ELF y Mach-O con ventanas verificadas, referencias entrantes por símbolo e imagen y comparación de informes por destino con citas de ambos lados. | Medir el tiempo de verificación y la memoria para informes cercanos al límite admitido. |
 | Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros, reglas pasivas y comparación de dos periodos con citas a la revisión exacta. | Medir el tiempo de consulta para ventanas acotadas en expedientes con capturas voluminosas. |
 | Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, auditoría y restauración. Se prueban la apertura y la edición de otros expedientes durante una restauración. | Medir la latencia de escritura con carga sostenida y distintos almacenamientos del registro de escritura anticipada de PostgreSQL (WAL). |
 
@@ -89,6 +89,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 27. **Referencias entrantes observadas.** La 0.4.17 reúne el listado guardado y las últimas 64 ventanas verificadas del inspector. Agrupa referencias por imagen y deduplica por dirección y desplazamiento. Reabre cada origen con la cita de su ventana o la instrucción guardada. Al reabrir una cita de recorrido incorpora el último salto verificado.
 28. **Informes de referencias portátiles.** La 0.4.18 exporta el destino seleccionado con los orígenes observados. La mesa y el CLI verifican el informe con el expediente y el archivo original. Las pruebas recuperan dos ventanas de origen en una copia del expediente y rechazan informes o archivos alterados.
 29. **Referencias por símbolo.** La 0.4.19 filtra símbolos con referencias observadas y abre el panel de su instrucción de entrada. Los alias comparten referencias cuando coinciden imagen, dirección y desplazamiento. Las pruebas comprueban el recuento, el salto al origen y el rechazo de destinos ambiguos.
+30. **Comparación de informes de referencias.** La 0.4.20 verifica dos informes del mismo binario, imagen y destino. Distingue orígenes comunes, agregados y ausentes del informe actual, conserva sus citas y abre los orígenes desde la mesa. Las pruebas comprueban informes con anclas distintas, el rechazo de alteraciones y la coincidencia entre la API y el CLI.
 30. **Paquetes y capacidad.** Verificar los binarios y sus huellas en cada etiqueta. Repetir la prueba de escritura con carga sostenida y medir el efecto del almacenamiento del WAL.
 
 ## Medición de consultas por fecha
@@ -170,7 +171,7 @@ PostgreSQL registró esperas de bloqueo en `CREATE UNIQUE INDEX IF NOT EXISTS` c
 | Vista | Trabajo pendiente | Criterio de cierre |
 | --- | --- | --- |
 | Activos y fuentes | Medir consultas de inventario, red y cobertura con varios miles de observaciones | Medir latencia y memoria para una IP, un rango RDAP y un prefijo STIX y comprobar que devuelven los mismos cruces. |
-| Triaje de binarios | Comparar informes de referencias | Comparar un informe con dos orígenes y otro con un origen adicional. Comprobar el delta y abrir el origen añadido con su cita. |
+| Triaje de binarios | Medir comparaciones de referencias de gran tamaño | Registrar duración y memoria al verificar informes de varios tamaños y comprobar que la mesa filtra y pagina sus orígenes. |
 | Historial HTTP | Medir las comparaciones con archivos HAR y tráfico de varios orígenes y tamaños | Registrar latencia de consulta, tamaño de entrada y memoria, y repetir con una ventana acotada y otra amplia. |
 
 ## Ramas y commits
