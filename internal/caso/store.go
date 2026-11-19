@@ -122,7 +122,12 @@ func (s *Store) SaveEvidence(ctx context.Context, records []Record) (SaveResult,
 	if s.db != nil {
 		ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 		defer cancel()
-		result, err := s.db.ExecContext(ctx, `
+		tx, err := s.db.BeginTx(ctx, nil)
+		if err != nil {
+			return SaveResult{}, err
+		}
+		defer tx.Rollback()
+		result, err := tx.ExecContext(ctx, `
 			INSERT INTO pavarotti_evidence_batches (expediente, batch_key, payload)
 			VALUES ($1, $2, $3) ON CONFLICT (expediente, batch_key) DO NOTHING`,
 			s.expediente, hash, data)
@@ -135,6 +140,16 @@ func (s *Store) SaveEvidence(ctx context.Context, records []Record) (SaveResult,
 		}
 		if inserted == 0 {
 			return SaveResult{Duplicates: len(records)}, nil
+		}
+		action := AuditEvidence
+		if len(records) == 1 && records[0].Kind == "nota" {
+			action = AuditNote
+		}
+		if err := s.appendAudit(ctx, tx, action, hash+"-1", AuditDetails{Count: len(records), Revision: 1}); err != nil {
+			return SaveResult{}, err
+		}
+		if err := tx.Commit(); err != nil {
+			return SaveResult{}, err
 		}
 		return SaveResult{Imported: len(records)}, nil
 	}

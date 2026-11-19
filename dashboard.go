@@ -168,7 +168,7 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		save(w, store, []caso.Record{record})
+		save(w, r, store, []caso.Record{record})
 	})
 	mux.HandleFunc("PATCH /api/nota/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var note noteInput
@@ -177,7 +177,7 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 			http.Error(w, "Nota inválida", http.StatusBadRequest)
 			return
 		}
-		record, err := store.Edit(r.PathValue("id"), note.Revision, note.Title, note.Source, note.Details)
+		record, err := store.EditContext(r.Context(), r.PathValue("id"), note.Revision, note.Title, note.Source, note.Details)
 		if err != nil {
 			editError(w, err)
 			return
@@ -258,8 +258,8 @@ func respond(w http.ResponseWriter, data any) {
 	replyJSON(w, http.StatusOK, data)
 }
 
-func save(w http.ResponseWriter, store *caso.Store, records []caso.Record) {
-	if err := store.Save(records); err != nil {
+func save(w http.ResponseWriter, r *http.Request, store *caso.Store, records []caso.Record) {
+	if _, err := store.SaveEvidence(r.Context(), records); err != nil {
 		http.Error(w, "No se pudo guardar el expediente", http.StatusInternalServerError)
 		return
 	}

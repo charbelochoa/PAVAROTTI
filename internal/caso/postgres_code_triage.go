@@ -79,6 +79,11 @@ func (s *Store) classifyCodePostgres(ctx context.Context, batch string, ordinal 
 	if err := putCodeTriage(ctx, tx, s.expediente, batch, ordinal, next); err != nil {
 		return CodeDisposition{}, err
 	}
+	if err := s.appendAudit(ctx, tx, AuditTriage, fmt.Sprintf("%s-%d", batch, ordinal), AuditDetails{
+		Revision: next.Revision, Finding: &next.FindingKey, Status: next.Status,
+	}); err != nil {
+		return CodeDisposition{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return CodeDisposition{}, err
 	}

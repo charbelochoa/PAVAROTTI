@@ -19,6 +19,10 @@ var (
 )
 
 func (s *Store) Edit(id string, revision int, title, source, details string) (Record, error) {
+	return s.EditContext(context.Background(), id, revision, title, source, details)
+}
+
+func (s *Store) EditContext(ctx context.Context, id string, revision int, title, source, details string) (Record, error) {
 	key, ordinal, valid := recordPosition(id)
 	if !valid {
 		return Record{}, ErrNotFound
@@ -44,9 +48,9 @@ func (s *Store) Edit(id string, revision int, title, source, details string) (Re
 		return current, nil
 	}
 	if s.db != nil {
-		return s.postgresEdit(key, ordinal, rewrite)
+		return s.postgresEdit(ctx, key, ordinal, rewrite)
 	}
-	unlock, err := s.lock()
+	unlock, err := s.lockContext(ctx)
 	if err != nil {
 		return Record{}, err
 	}
@@ -152,8 +156,8 @@ func batchRecord(key string, ordinal int, data []byte) (Record, error) {
 	return batch[ordinal-1], nil
 }
 
-func (s *Store) postgresEdit(key string, ordinal int, rewrite func(Record, []Record) (Record, error)) (Record, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
+func (s *Store) postgresEdit(ctx context.Context, key string, ordinal int, rewrite func(Record, []Record) (Record, error)) (Record, error) {
+	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -189,6 +193,9 @@ func (s *Store) postgresEdit(key string, ordinal int, rewrite func(Record, []Rec
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO pavarotti_note_revisions (expediente, batch_key, ordinal, revision, snapshot)
 		VALUES ($1, $2, $3, $4, $5)`, s.expediente, key, ordinal, current.Revision, snapshot); err != nil {
+		return Record{}, err
+	}
+	if err := s.appendAudit(ctx, tx, AuditEdit, current.ID, AuditDetails{Revision: current.Revision}); err != nil {
 		return Record{}, err
 	}
 	return current, tx.Commit()

@@ -141,7 +141,7 @@ func sharedDashboard(mux *http.ServeMux, store *caso.Store, origin string) http.
 			return
 		}
 		ctx := context.WithValue(r.Context(), sharedAccountKey{}, account)
-		mux.ServeHTTP(w, r.WithContext(ctx))
+		mux.ServeHTTP(w, r.WithContext(store.AuditContext(ctx, account)))
 	})
 }
 
