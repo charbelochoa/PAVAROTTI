@@ -199,7 +199,7 @@ func stixValue(value, kind string) (caso.Indicator, bool) {
 		return caso.Indicator{}, false
 	}
 	if kind == "dominio" {
-		if name, ok := normalizedDNSName(value); ok && name != "." && !strings.Contains(name, "_") {
+		if name, ok := caso.NormalizeDNSName(value); ok && name != "." && !strings.Contains(name, "_") {
 			if _, err := netip.ParseAddr(name); err != nil {
 				return caso.Indicator{Type: kind, Value: name}, true
 			}

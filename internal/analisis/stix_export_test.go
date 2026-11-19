@@ -10,6 +10,41 @@ import (
 	"pavarotti/internal/ingesta"
 )
 
+func TestSTIXExchangeKeepsDNSServiceEvidencePortable(t *testing.T) {
+	store, err := caso.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	dns := `{"Status":0,"Answer":[{"name":"_sip._tcp.portal.invalid","type":33,"data":"0 10 5060 servicio.invalid"}]}`
+	rows, err := ingesta.Parse("dns", strings.NewReader(dns))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(rows); err != nil {
+		t.Fatal(err)
+	}
+	relations, err := analisis.RelateAsset(t.Context(), store, analisis.AssetRelationCriteria{
+		AssetKey: analisis.AssetKey{Type: "dominio", Value: "_sip._tcp.portal.invalid"},
+	})
+	if err != nil || len(relations.Rows) != 1 || len(relations.Rows[0].Sources) != 1 {
+		t.Fatalf("relación DNS SRV: %+v, %v", relations, err)
+	}
+	ref := relations.Rows[0].Sources[0]
+	data, stats, err := analisis.ExportSTIX(t.Context(), store, nil)
+	if err != nil || stats.Exported != 1 {
+		t.Fatalf("exportación STIX: %+v, %v", stats, err)
+	}
+	imported, err := ingesta.Parse("stix", bytes.NewReader(data))
+	if err != nil || len(imported) != 2 {
+		t.Fatalf("reimportación: %d registros, %v", len(imported), err)
+	}
+	if !bytes.Contains(data, []byte(ref.ID+"@1")) || !bytes.Contains(data, []byte(`"value": "servicio.invalid"`)) ||
+		bytes.Contains(data, []byte(`"value": "_sip._tcp.portal.invalid"`)) {
+		t.Fatalf("procedencia y destino STIX: %s", data)
+	}
+}
+
 func TestSTIXExchangeRoundTripPreservesProvenanceAndObservableLinks(t *testing.T) {
 	ctx := t.Context()
 	origin, err := caso.Open(t.TempDir())

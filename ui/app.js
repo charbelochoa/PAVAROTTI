@@ -810,7 +810,9 @@ function inspectAsset(detail, asset, signal) {
   const actions = element("div", "", "tools");
   const report = element("button", "Cobertura por periodo");
   report.onclick = () => openAssetCoverage(detail);
-  actions.append(report);
+  const relations = element("button", "Relaciones del activo");
+  relations.onclick = () => openAssetRelations(detail);
+  actions.append(report, relations);
   if (canWrite) {
     const follow = element("button", "Añadir a seguimiento");
     follow.onclick = () => openWatchlists(detail);
