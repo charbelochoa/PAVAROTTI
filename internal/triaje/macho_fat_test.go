@@ -93,11 +93,28 @@ func TestMachOFatUsesContainerOffsetsInBothImages(t *testing.T) {
 					t.Errorf("sección: %+v", section)
 				}
 			}
+			for _, offset := range []string{"0x1151", "0x3151"} {
+				if !slices.Contains(result.Strings, TextHit{Offset: offset, Text: "sample_entry"}) {
+					t.Errorf("cadena ausente en %s: %+v", offset, result.Strings)
+				}
+			}
 		})
 	}
 	if result := Inspect(first); result.Format != "Mach-O" || len(result.Images) != 0 || len(result.Symbols) != 1 ||
 		result.Symbols[0].Offset != "0x108" || result.Symbols[0].Image != 0 {
 		t.Fatalf("Mach-O simple: %+v", result)
+	}
+}
+
+func TestMachOFatReservesStringCapacityForBothImages(t *testing.T) {
+	first := thinMachOFixture(t, macho.CpuAmd64, 3, 0x100)
+	second := thinMachOFixture(t, macho.CpuArm64, 0, 0x100)
+	for range maxBinaryStrings {
+		first = append(first, []byte("first image text\x00")...)
+	}
+	report := Inspect(fatMachOFixture(t, false, false, first, second))
+	if !slices.Contains(report.Strings, TextHit{Offset: "0x3151", Text: "sample_entry"}) || len(report.Strings) > maxBinaryStrings {
+		t.Fatalf("cadenas: %d, segunda imagen sin su referencia esperada", len(report.Strings))
 	}
 }
 

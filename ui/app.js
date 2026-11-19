@@ -215,7 +215,8 @@ function binaryPanel(record, citation) {
   names.open = citation?.kind === "seccion";
   const textHits = element("details");
   const hits = Array.isArray(report.strings) ? report.strings : [];
-  textHits.append(element("summary", `Cadenas ASCII registradas · ${hits.length}`));
+  const stringTitle = element("summary");
+  textHits.append(stringTitle);
   textHits.open = citation?.kind === "cadena";
   const search = element("input");
   search.type = "search";
@@ -233,10 +234,12 @@ function binaryPanel(record, citation) {
     const range = selectedSection?.file || images[selectedImage - 1]?.file;
     const start = range ? Number.parseInt(range.offset, 16) : 0;
     const end = range ? start + range.size : report.size;
-    const matching = hits.map((hit, index) => ({hit, index})).filter(({hit}) => {
+    const stored = hits.map((hit, index) => ({hit, index})).filter(({hit}) => {
       const offset = Number.parseInt(hit.offset, 16);
-      return offset >= start && offset < end && (hit.offset.toLowerCase().includes(term) || hit.text.toLowerCase().includes(term));
+      return offset >= start && offset < end;
     });
+    stringTitle.textContent = `Cadenas ASCII registradas · ${stored.length}`;
+    const matching = stored.filter(({hit}) => hit.offset.toLowerCase().includes(term) || hit.text.toLowerCase().includes(term));
     scope.textContent = `${matching.length} ${matching.length === 1 ? "cadena" : "cadenas"}${selectedSection ? ` en ${selectedSection.name}` : ""}`;
     reset.hidden = !selectedSection;
     strings.replaceChildren(...matching.map(({hit, index}) => {
@@ -306,6 +309,13 @@ function binaryPanel(record, citation) {
     }
     if (citation?.kind === "seccion") selectedImage = sections[citation.index]?.image || 0;
     if (citation?.kind === "simbolo") selectedImage = report.symbols?.[citation.index]?.image || 0;
+    if (citation?.kind === "cadena") {
+      const offset = Number.parseInt(hits[citation.index]?.offset, 16);
+      selectedImage = images.findIndex(({file}) => {
+        const start = Number.parseInt(file.offset, 16);
+        return offset >= start && offset < start + file.size;
+      }) + 1;
+    }
     select.value = String(selectedImage);
     select.onchange = () => paintImage(Number(select.value));
     label.append(select);

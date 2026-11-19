@@ -65,10 +65,13 @@ func (b *Binary) inspectMachOFat(data []byte) {
 	b.UnreadableImages = len(headers) - len(usable)
 	for index, member := range usable {
 		header := member.header
+		remaining := len(usable) - index
 		b.Images = append(b.Images, BinaryImage{Architecture: header.cpu.String(), Subtype: fmt.Sprintf("0x%x", header.subtype),
 			File: FileRange{Offset: fmt.Sprintf("0x%x", header.offset), Size: header.size}})
 		header.index = len(b.Images)
-		b.inspectMachO(member.file, header.binaryImageRange, len(usable)-index)
+		b.inspectMachO(member.file, header.binaryImageRange, remaining)
+		hits := printableStrings(data[header.offset:header.offset+header.size], header.offset, (maxBinaryStrings-len(b.Strings))/remaining)
+		b.Strings = append(b.Strings, hits...)
 	}
 }
 

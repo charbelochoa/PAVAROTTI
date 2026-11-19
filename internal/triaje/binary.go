@@ -23,7 +23,10 @@ type Binary struct {
 	UnreadableImages int           `json:"unreadable_images,omitempty"`
 }
 
-const maxBinarySections = 256
+const (
+	maxBinarySections = 256
+	maxBinaryStrings  = 128
+)
 
 type BinaryImage struct {
 	Architecture string    `json:"architecture"`
@@ -93,13 +96,14 @@ func Inspect(data []byte) Binary {
 			result.inspectMachOFat(data)
 		}
 	}
-	result.Strings = printableStrings(data)
+	if len(result.Images) == 0 {
+		result.Strings = printableStrings(data, 0, maxBinaryStrings)
+	}
 	return result
 }
 
-func printableStrings(data []byte) []TextHit {
+func printableStrings(data []byte, base uint64, limit int) []TextHit {
 	const minimum = 8
-	const limit = 128
 	const preview = 160
 	var hits []TextHit
 	for offset := 0; offset < len(data) && len(hits) < limit; {
@@ -112,7 +116,7 @@ func printableStrings(data []byte) []TextHit {
 			offset++
 		}
 		if offset-start >= minimum {
-			hits = append(hits, TextHit{Offset: fmt.Sprintf("0x%x", start),
+			hits = append(hits, TextHit{Offset: fmt.Sprintf("0x%x", base+uint64(start)),
 				Text: string(data[start:min(offset, start+preview)])})
 		}
 	}
