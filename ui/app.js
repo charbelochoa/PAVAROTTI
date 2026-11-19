@@ -359,7 +359,8 @@ byId("analyze").onclick = async () => {
         method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({priority: Number(byId("analysis-priority").value)})
       });
-      byId("status").textContent = `Tarea ${job.id.slice(0, 8)} · ${jobLabels[job.state]}`;
+      const action = job.state === "succeeded" ? "Informe recuperado" : "Tarea registrada";
+      byId("status").textContent = `${action} · ${job.id.slice(0, 8)}`;
       await refreshQueue();
       if (job.state === "succeeded") await showAnalysisJob(job.id);
       return;
