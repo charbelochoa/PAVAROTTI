@@ -56,44 +56,56 @@ func ListAssets(ctx context.Context, store *caso.Store, query AssetQuery) (Asset
 	if !ok || query.Value != "" || (query.Type != "" && !assetType(query.Type)) || len(term) > 253 || strings.ContainsRune(term, 0) {
 		return AssetPage{}, ErrAssetQuery
 	}
+	var after AssetKey
 	if query.After != "" {
 		kind, value, _ := strings.Cut(query.After, "/")
 		key, valid := normalizeAsset(AssetKey{Type: kind, Value: value})
 		if !valid || key.cursor() != query.After || (query.Type != "" && key.Type != query.Type) {
 			return AssetPage{}, ErrAssetQuery
 		}
+		after = key
 	}
-	rows := make(map[AssetKey]AssetRow)
-	err := walkEvidence(ctx, store, func(record caso.Record) {
+	rows := make([]AssetRow, 0, limit+1)
+	err := store.Walk(ctx, func(record caso.Record) error {
 		recordAssets(record, recordNetwork(record), func(key AssetKey, role string) {
 			if (query.Type != "" && key.Type != query.Type) || (term != "" && !strings.Contains(key.Value, term)) ||
-				(query.After != "" && key.cursor() <= query.After) {
+				(after.Type != "" && compareAssetKeys(key, after) <= 0) {
 				return
 			}
-			row := rows[key]
-			row.AssetKey = key
-			row.add(role)
-			rows[key] = row
+			index, found := slices.BinarySearchFunc(rows, key, func(row AssetRow, key AssetKey) int {
+				return compareAssetKeys(row.AssetKey, key)
+			})
+			if found {
+				rows[index].add(role)
+				return
+			}
+			if index == cap(rows) {
+				return
+			}
+			if len(rows) == cap(rows) {
+				rows = rows[:len(rows)-1]
+			}
+			next := AssetRow{AssetKey: key}
+			next.add(role)
+			rows = slices.Insert(rows, index, next)
 		})
+		return nil
 	})
 	if err != nil {
 		return AssetPage{}, err
 	}
-	ordered := make([]AssetRow, 0, len(rows))
-	for _, row := range rows {
-		ordered = append(ordered, row)
-	}
-	slices.SortFunc(ordered, func(a, b AssetRow) int {
-		if order := strings.Compare(a.Type, b.Type); order != 0 {
-			return order
-		}
-		return strings.Compare(a.Value, b.Value)
-	})
-	page := AssetPage{Rows: ordered[:min(len(ordered), limit)]}
-	if len(ordered) > limit {
+	page := AssetPage{Rows: rows[:min(len(rows), limit)]}
+	if len(rows) > limit {
 		page.Next = page.Rows[limit-1].cursor()
 	}
 	return page, nil
+}
+
+func compareAssetKeys(a, b AssetKey) int {
+	if order := strings.Compare(a.Type, b.Type); order != 0 {
+		return order
+	}
+	return strings.Compare(a.Value, b.Value)
 }
 
 func DescribeAsset(ctx context.Context, store *caso.Store, query AssetQuery) (AssetDetail, error) {
@@ -103,48 +115,89 @@ func DescribeAsset(ctx context.Context, store *caso.Store, query AssetQuery) (As
 		return AssetDetail{}, ErrAssetQuery
 	}
 	detail := AssetDetail{AssetRow: AssetRow{AssetKey: key}}
-	rows := make([]AssetReference, 0)
+	var after assetSourceCursor
+	if query.After != "" {
+		original, err := store.RecordRevision(ctx, query.After, 1)
+		if err != nil && !errors.Is(err, caso.ErrNotFound) {
+			return AssetDetail{}, err
+		}
+		if err == nil {
+			after = assetSourcePosition(original)
+		}
+	}
+	afterFound := query.After == ""
+	rows := make([]orderedAssetSource, 0, limit+1)
 	address, _ := netip.ParseAddr(key.Value)
-	err := walkEvidence(ctx, store, func(record caso.Record) {
+	err := store.Walk(ctx, func(record caso.Record) error {
 		role, network := assetSource(record, key, address)
 		switch role {
 		case "":
-			return
+			return nil
 		case "cobertura":
 			detail.Coverage++
 		default:
 			detail.add(role)
 		}
-		rows = append(rows, AssetReference{Evidence: reference(record), Role: role, Network: network})
+		position := assetSourcePosition(record)
+		if query.After != "" {
+			order := compareAssetSourcePositions(position, after)
+			afterFound = afterFound || order == 0
+			if after.id == "" || order <= 0 {
+				return nil
+			}
+		}
+		index, _ := slices.BinarySearchFunc(rows, position, func(row orderedAssetSource, key assetSourceCursor) int {
+			return compareAssetSourcePositions(row.position, key)
+		})
+		if index == cap(rows) {
+			return nil
+		}
+		if len(rows) == cap(rows) {
+			rows = rows[:len(rows)-1]
+		}
+		row := AssetReference{Evidence: reference(record), Role: role, Network: network}
+		rows = slices.Insert(rows, index, orderedAssetSource{position: position, source: row})
+		return nil
 	})
 	if err != nil {
 		return AssetDetail{}, err
 	}
-	if len(rows) == 0 {
+	if detail.Count+detail.Coverage == 0 {
 		return AssetDetail{}, caso.ErrNotFound
 	}
-	slices.SortFunc(rows, func(a, b AssetReference) int {
-		if a.Time != b.Time {
-			left, _ := time.Parse(time.RFC3339Nano, a.Time)
-			right, _ := time.Parse(time.RFC3339Nano, b.Time)
-			if order := right.Compare(left); order != 0 {
-				return order
-			}
-		}
-		return strings.Compare(a.ID, b.ID)
-	})
-	if query.After != "" {
-		index := slices.IndexFunc(rows, func(row AssetReference) bool { return row.ID == query.After })
-		if index == -1 {
-			return AssetDetail{}, ErrAssetQuery
-		}
-		rows = rows[index+1:]
+	if !afterFound {
+		return AssetDetail{}, ErrAssetQuery
 	}
-	detail.Rows = rows[:min(len(rows), limit)]
+	detail.Rows = make([]AssetReference, min(len(rows), limit))
+	for index := range detail.Rows {
+		detail.Rows[index] = rows[index].source
+	}
 	if len(rows) > limit {
 		detail.Next = detail.Rows[limit-1].ID
 	}
 	return detail, nil
+}
+
+type assetSourceCursor struct {
+	stamp time.Time
+	id    string
+}
+
+type orderedAssetSource struct {
+	position assetSourceCursor
+	source   AssetReference
+}
+
+func assetSourcePosition(record caso.Record) assetSourceCursor {
+	stamp, _ := time.Parse(time.RFC3339Nano, clip(record.Time, 48))
+	return assetSourceCursor{stamp: stamp, id: record.ID}
+}
+
+func compareAssetSourcePositions(a, b assetSourceCursor) int {
+	if order := b.stamp.Compare(a.stamp); order != 0 {
+		return order
+	}
+	return strings.Compare(a.id, b.id)
 }
 
 func assetSource(record caso.Record, key AssetKey, address netip.Addr) (string, string) {
