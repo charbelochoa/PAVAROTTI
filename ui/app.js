@@ -1029,6 +1029,7 @@ const priorityLabels = ["baja", "normal", "alta"];
 const activityLabels = {
   "evidencia.incorporada": "Evidencia incorporada", "nota.creada": "Nota registrada", "nota.editada": "Nota editada",
   "expediente.migrado": "Expediente migrado",
+  "expediente.restaurado": "Expediente restaurado",
   "senal.clasificada": "Señal clasificada", "tarea.encolada": "Tarea encolada", "tarea.priorizada": "Prioridad cambiada",
   "tarea.iniciada": "Tarea iniciada", "tarea.finalizada": "Tarea finalizada", "tarea.cancelada": "Tarea cancelada"
 };
@@ -1045,6 +1046,7 @@ function activityEntry(event) {
   if (details.count > 1 || (details.count && event.action === "expediente.migrado")) context.push(`${details.count} ${details.count === 1 ? "registro" : "registros"}`);
   if (details.note_revisions) context.push(`${details.note_revisions} ${details.note_revisions === 1 ? "revisión de nota" : "revisiones de notas"}`);
   if (details.triage_revisions) context.push(`${details.triage_revisions} ${details.triage_revisions === 1 ? "decisión" : "decisiones"} de triaje`);
+  if (details.backup_sha256) context.push(`SHA-256 ${details.backup_sha256}`);
   if (details.finding) {
     const {rule, line, column} = details.finding;
     context.push(`${rule} · línea ${line}, columna ${column} · decisión ${details.revision}`);

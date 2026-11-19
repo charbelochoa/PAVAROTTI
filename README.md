@@ -96,6 +96,20 @@ El ejecutable usa almacenamiento local por defecto. Para compartir un expediente
 
 La actividad empieza al instalar la 0.4.2. Las operaciones del modo HTTPS se atribuyen a la cuenta de la sesión. La terminal, la instancia local y el ejecutor figuran con el rol de PostgreSQL que aplicó el cambio. El registro incluye metadatos y referencias de evidencia. En la terminal, `actividad --limite 50 --salida actividad.json` guarda una página. Pasa su campo `next` a `--antes` para consultar eventos anteriores.
 
+### Respaldar y restaurar un expediente
+
+La terminal guarda una instantánea de PostgreSQL con los lotes de evidencia, las revisiones de notas y triaje, las tareas con sus informes y la actividad. Los comandos muestran el expediente de origen, la fecha, la huella SHA-256 y el recuento por tipo de fila. `verificar-respaldo` comprueba el formato y la huella del archivo y funciona sin conexión a PostgreSQL.
+
+```sh
+PAVAROTTI_POSTGRES="$PG_ORIGEN" pavarotti -expediente incidente respaldar --salida incidente.jsonl
+pavarotti verificar-respaldo --archivo incidente.jsonl
+PAVAROTTI_POSTGRES="$PG_DESTINO" pavarotti -expediente incidente-restaurado restaurar --archivo incidente.jsonl
+```
+
+El destino debe ser un expediente vacío. La restauración conserva IDs, revisiones y citas y registra la huella del respaldo en **Actividad**. Las tareas que estaban en ejecución vuelven a la cola con los intentos disponibles. Si agotaron sus intentos, quedan registradas como fallidas. Aprovisiona las cuentas de acceso en el destino con `usuarios`.
+
+Guarda la copia en el almacenamiento privado del expediente. El archivo contiene la evidencia y el historial de operaciones.
+
 ### Acceso al expediente por HTTPS
 
 Con PostgreSQL, un operador puede crear cuentas desde la terminal. `lector` consulta evidencia, historial e informes y exporta STIX. `analista` también incorpora archivos, registra notas, clasifica señales y gestiona tareas. La cuenta pertenece al expediente indicado en `-expediente`. Cambiar el rol o la contraseña cierra las sesiones vigentes de esa cuenta.
