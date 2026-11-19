@@ -13,6 +13,7 @@
   <script src="/app.js" defer></script>
   <script src="/http-comparison.js" defer></script>
   <script src="/asset-coverage.js" defer></script>
+  <script src="/watchlists.js" defer></script>
   <script src="/binary-reference-comparison.js" defer></script>
 </head>
 <body>
@@ -119,6 +120,7 @@
             <option value="md5">MD5</option>
           </select>
           <button id="open-asset-coverage" hidden>Cobertura por periodo</button>
+          <button id="open-watchlists" hidden>Seguimiento</button>
           <button id="open-binary-citation" title="Abrir cita o informe de referencias" hidden>Abrir cita JSON</button>
           <button id="open-binary-reference-comparison" hidden>Comparar informes</button>
           <input id="binary-citation-file" type="file" accept=".json,application/json" aria-label="Cita de binario" hidden>
@@ -295,6 +297,38 @@
     <input type="file" id="asset-coverage-file" accept=".json,application/json" aria-label="Informe de cobertura de activos" hidden>
     <p id="asset-coverage-status" role="status"></p>
     <div id="asset-coverage-result" hidden></div>
+  </dialog>
+  <dialog id="watchlists" aria-labelledby="watchlists-title">
+    <div class="comparison-heading">
+      <h2 id="watchlists-title">Listas de seguimiento</h2>
+      <form method="dialog"><button>Cerrar</button></form>
+    </div>
+    <div class="tools watchlist-fields">
+      <label>Lista de seguimiento<select id="watchlist-select"></select></label>
+      <button id="watchlist-refresh">Actualizar</button>
+      <button id="watchlist-delete" hidden>Eliminar lista</button>
+    </div>
+    <form id="watchlist-create" class="tools watchlist-fields" hidden>
+      <label>Nombre de la lista<input name="nombre" maxlength="80" required></label>
+      <button>Crear lista</button>
+    </form>
+    <form id="watchlist-add" class="tools watchlist-fields" hidden>
+      <label>Tipo de activo
+        <select name="tipo">
+          <option value="dominio">Dominio</option>
+          <option value="ipv4">IPv4</option>
+          <option value="ipv6">IPv6</option>
+          <option value="red">Red</option>
+          <option value="sha256">SHA-256</option>
+          <option value="sha1">SHA-1</option>
+          <option value="md5">MD5</option>
+        </select>
+      </label>
+      <label>Activo a seguir<input name="valor" maxlength="254" required></label>
+      <button>Agregar activo</button>
+    </form>
+    <p id="watchlist-status" role="status"></p>
+    <ul id="watchlist-rows" class="binary-list"></ul>
   </dialog>
   <dialog id="binary-reference-comparison" aria-labelledby="binary-reference-comparison-title">
     <div class="comparison-heading">
