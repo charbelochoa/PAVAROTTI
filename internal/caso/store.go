@@ -68,6 +68,7 @@ type Store struct {
 	path       string
 	db         *sql.DB
 	expediente string
+	batchDates localBatchDates
 }
 
 const operationTimeout = 15 * time.Second
@@ -212,6 +213,10 @@ func (s *Store) Walk(ctx context.Context, visit func(Record) error) error {
 }
 
 func (s *Store) walkLocal(ctx context.Context, withEdits bool, visit func(Record) error) error {
+	return s.walkLocalFiltered(ctx, withEdits, EvidenceFilter{}, visit)
+}
+
+func (s *Store) walkLocalFiltered(ctx context.Context, withEdits bool, filter EvidenceFilter, visit func(Record) error) error {
 	unlock, err := s.lockContext(ctx)
 	if err != nil {
 		return err
@@ -238,6 +243,19 @@ func (s *Store) walkLocal(ctx context.Context, withEdits bool, visit func(Record
 			if !entry.Type().IsRegular() || !isJSON || !isBatchKey(key) {
 				continue
 			}
+			var info os.FileInfo
+			var dates batchDates
+			var knownDates bool
+			if len(filter.Periods) > 0 {
+				info, err = entry.Info()
+				if err != nil {
+					return err
+				}
+				dates, knownDates = s.batchDates.lookup(key, info)
+				if knownDates && !dates.matches(filter) {
+					continue
+				}
+			}
 			data, err := os.ReadFile(filepath.Join(s.path, entry.Name()))
 			if err != nil {
 				return err
@@ -246,9 +264,15 @@ func (s *Store) walkLocal(ctx context.Context, withEdits bool, visit func(Record
 			if err != nil {
 				return fmt.Errorf("%s: %w", entry.Name(), err)
 			}
+			if info != nil && !knownDates {
+				s.batchDates.remember(key, info, batch)
+			}
 			for _, record := range batch {
 				if err := ctx.Err(); err != nil {
 					return err
+				}
+				if !filter.matches(record) {
+					continue
 				}
 				if withEdits {
 					record, err = s.latestLocal(record)
