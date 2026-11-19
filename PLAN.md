@@ -53,6 +53,14 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 3. **Correlacionar.** Los agentes agrupan la evidencia por activo, respuesta HTTP e indicador. Los resultados quedan asociados a la versión del agente y a la huella de entrada.
 4. **Entregar.** El analista verifica coincidencias, añade notas y exporta el expediente. Los créditos del binario quedan accesibles en su panel propio.
 
+## Próximas vistas de la mesa
+
+| Vista | Trabajo pendiente | Criterio de cierre |
+| --- | --- | --- |
+| Activos y fuentes | Fichas por dominio, dirección y huella. Añadir observaciones RDAP y STIX aportadas por el analista y mostrar cómo se relacionan con DNS, HTTP y hallazgos | Seleccionar un activo y recuperar sus fuentes, fechas, registros exactos y revisiones desde el inspector. |
+| Triaje de binarios | Navegar secciones, cadenas, símbolos disponibles y metadatos con referencias a desplazamientos. Enlazar una observación del binario con indicadores del expediente | Abrir una muestra de prueba, comparar los datos con su archivo y exportar referencias reproducibles por huella y desplazamiento. |
+| Historial HTTP | Añadir filtros por origen, método y periodo. Mostrar el motivo de cada señal desde la fila y enlazarla al registro que usó el informe | Reproducir con HAR y proxy local un caso con respuestas de varias clases y confirmar que cada señal apunta a su evidencia. |
+
 ## Ramas y commits
 
 Usa ramas `blue-team/<capacidad>` para cambios que puedan revisarse por separado. Integra a `main` con la matriz verde. Los mensajes siguen `commit #N` y el número avanza para cada cambio comprobable. Una funcionalidad, una regresión, una mejora de configuración y su documentación pueden merecer commits separados cuando cada uno tiene un motivo propio. La meta de 1,000 commits se mide con `git rev-list --count main`.
