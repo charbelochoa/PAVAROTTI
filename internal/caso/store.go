@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -115,44 +117,87 @@ func (s *Store) Records() ([]Record, error) {
 	if s.db != nil {
 		return s.postgresRecords()
 	}
-	unlock, err := s.lock()
+	records := make([]Record, 0)
+	err := s.walkLocal(context.Background(), true, func(record Record) {
+		records = append(records, record)
+	})
 	if err != nil {
 		return nil, err
+	}
+	slices.SortFunc(records, func(a, b Record) int {
+		keyA, ordinalA, _ := recordPosition(a.ID)
+		keyB, ordinalB, _ := recordPosition(b.ID)
+		if keyA != keyB {
+			return strings.Compare(keyA, keyB)
+		}
+		return ordinalA - ordinalB
+	})
+	return records, nil
+}
+
+func (s *Store) walkLocal(ctx context.Context, withEdits bool, visit func(Record)) error {
+	unlock, err := s.lockContext(ctx)
+	if err != nil {
+		return err
 	}
 	defer unlock()
-	entries, err := os.ReadDir(s.path)
+	folder, err := os.Open(s.path)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	records := make([]Record, 0)
-	for _, entry := range entries {
-		key, isJSON := strings.CutSuffix(entry.Name(), ".json")
-		if !entry.Type().IsRegular() || !isJSON || !isBatchKey(key) {
-			continue
+	defer folder.Close()
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
 		}
-		data, err := os.ReadFile(filepath.Join(s.path, entry.Name()))
+		entries, err := folder.ReadDir(128)
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
 		if err != nil {
-			return nil, err
+			return err
 		}
-		batch, err := decodeBatch(key, data)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", entry.Name(), err)
-		}
-		for i, record := range batch {
-			if record.Kind != "nota" {
+		for _, entry := range entries {
+			key, isJSON := strings.CutSuffix(entry.Name(), ".json")
+			if !entry.Type().IsRegular() || !isJSON || !isBatchKey(key) {
 				continue
 			}
-			edits, err := s.localEdits(record.ID)
+			data, err := os.ReadFile(filepath.Join(s.path, entry.Name()))
 			if err != nil {
-				return nil, err
+				return err
 			}
-			if len(edits) > 0 {
-				batch[i] = edits[len(edits)-1]
+			batch, err := decodeBatch(key, data)
+			if err != nil {
+				return fmt.Errorf("%s: %w", entry.Name(), err)
+			}
+			for _, record := range batch {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				if withEdits {
+					record, err = s.latestLocal(record)
+					if err != nil {
+						return err
+					}
+				}
+				visit(record)
 			}
 		}
-		records = append(records, batch...)
 	}
-	return records, nil
+}
+
+func (s *Store) latestLocal(record Record) (Record, error) {
+	if record.Kind != "nota" {
+		return record, nil
+	}
+	edits, err := s.localEdits(record.ID)
+	if err != nil {
+		return Record{}, err
+	}
+	if len(edits) > 0 {
+		return edits[len(edits)-1], nil
+	}
+	return record, nil
 }
 
 func decodeBatch(key string, data []byte) ([]Record, error) {
@@ -173,7 +218,11 @@ func isBatchKey(key string) bool {
 }
 
 func (s *Store) lock() (func(), error) {
-	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
+	return s.lockContext(context.Background())
+}
+
+func (s *Store) lockContext(ctx context.Context) (func(), error) {
+	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	lock := flock.New(filepath.Join(s.path, ".pavarotti.lock"))
 	acquired, err := lock.TryLockContext(ctx, 25*time.Millisecond)

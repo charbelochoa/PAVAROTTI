@@ -61,7 +61,7 @@
       <section class="record-list">
         <h2>Registros</h2>
         <div class="filters">
-          <input type="search" id="query" aria-label="Buscar en el expediente" placeholder="Buscar texto, origen, ID o SHA-256">
+          <input type="search" id="query" aria-label="Buscar en el expediente" placeholder="Buscar texto, origen, ID o SHA-256" maxlength="256">
           <select id="filter" aria-label="Filtrar por tipo">
             <option value="">Todos los tipos</option>
             <option value="tráfico">Proxy</option>
@@ -74,6 +74,11 @@
           </select>
         </div>
         <div id="records"></div>
+        <div class="pager" aria-label="Paginación de registros">
+          <button id="previous-page" disabled>Anterior</button>
+          <output id="page-state" aria-live="polite">Cargando registros…</output>
+          <button id="next-page" disabled>Siguiente</button>
+        </div>
       </section>
     </div>
     <section aria-label="Detalle de la selección" id="inspector">

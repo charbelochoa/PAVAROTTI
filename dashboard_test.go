@@ -167,6 +167,16 @@ func TestEdicionAnalisisYRevision(t *testing.T) {
 	if !strings.Contains(history, "Una revisión") || strings.Contains(history, "segunda revisión") {
 		t.Fatal(history)
 	}
+	page := call("GET", "/api/registro/pagina?buscar=segunda+revisi%C3%B3n", "", 200).Body.String()
+	if !strings.Contains(page, records[0].ID) || strings.Contains(page, "segunda revisión") {
+		t.Fatalf("la lista debe encontrar el registro sin incluir su detalle: %s", page)
+	}
+	detail := call("GET", "/api/registro/"+records[0].ID, "", 200).Body.String()
+	if !strings.Contains(detail, "segunda revisión") {
+		t.Fatal(detail)
+	}
+	call("GET", "/api/registro/pagina?limite=101", "", 400)
+	call("GET", "/api/registro/pagina?despues=invalido", "", 400)
 	code := "package demo\nimport \"net/http\"\nfunc check() { http.Get(\"https://example.invalid\") }"
 	call("POST", "/api/archivo/codigo", code, 200)
 	data := call("POST", "/api/analisis", "", 200).Body.String()

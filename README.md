@@ -24,6 +24,8 @@ PAVAROTTI es la estación de investigación Blue Team del colectivo. Gestiona ev
 
 La mesa de trabajo mantiene el expediente a la izquierda, los registros al centro y el inspector de evidencia a la derecha. La selección permanece visible al actualizar el expediente.
 
+Usa **Anterior** y **Siguiente** para recorrer los resultados de 50 en 50. La búsqueda y el filtro se aplican al expediente completo. El inspector carga los detalles al seleccionar un registro y los mantiene visibles al cambiar de página.
+
 - **Tráfico.** Proxy inverso HTTP(S) de un solo destino e importación de HAR. El expediente registra origen, estado HTTP, tipo MIME, latencia y señales de configuración. Las señales sirven para priorizar la revisión manual.
 - **Evidencia.** Importación de hallazgos JSON con huella SHA-256 del archivo y búsqueda por texto, origen, ID o huella. También puedes registrar notas manuales.
 - **Binarios.** Triaje estático de cabeceras y secciones PE, ELF y Mach-O con SHA-256.

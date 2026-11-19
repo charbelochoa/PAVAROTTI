@@ -1,7 +1,7 @@
 name: PAVAROTTI
 on:
   push:
-    branches: [main]
+    branches: [main, 'blue-team/**']
   pull_request:
 permissions:
   contents: read

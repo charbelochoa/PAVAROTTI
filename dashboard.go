@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 
 	"pavarotti/internal/analisis"
@@ -57,6 +58,48 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 		}
 		slices.SortStableFunc(records, func(a, b caso.Record) int { return strings.Compare(b.Time, a.Time) })
 		respond(w, records)
+	})
+	mux.HandleFunc("GET /api/registro/pagina", func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		request := caso.PageRequest{Kind: query.Get("tipo"), Search: query.Get("buscar"), After: query.Get("despues")}
+		if size := query.Get("limite"); size != "" {
+			limit, err := strconv.Atoi(size)
+			if err != nil || limit < 1 || limit > 100 {
+				http.Error(w, "El límite debe estar entre 1 y 100", http.StatusBadRequest)
+				return
+			}
+			request.Limit = limit
+		}
+		page, err := store.Page(r.Context(), request)
+		if errors.Is(err, caso.ErrInvalidPage) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err != nil {
+			http.Error(w, "No se pudo consultar la página del expediente", http.StatusInternalServerError)
+			return
+		}
+		respond(w, page)
+	})
+	mux.HandleFunc("GET /api/registro/resumen", func(w http.ResponseWriter, r *http.Request) {
+		stats, err := store.Summary(r.Context())
+		if err != nil {
+			http.Error(w, "No se pudo consultar el resumen del expediente", http.StatusInternalServerError)
+			return
+		}
+		respond(w, stats)
+	})
+	mux.HandleFunc("GET /api/registro/{id}", func(w http.ResponseWriter, r *http.Request) {
+		record, err := store.Record(r.Context(), r.PathValue("id"))
+		if errors.Is(err, caso.ErrNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, "No se pudo consultar el registro", http.StatusInternalServerError)
+			return
+		}
+		respond(w, record)
 	})
 	mux.HandleFunc("POST /api/archivo/{tipo}", func(w http.ResponseWriter, r *http.Request) {
 		records, err := ingesta.Parse(r.PathValue("tipo"), r.Body)

@@ -7,10 +7,17 @@ const element = (tag, text, className) => {
   if (className) node.className = className;
   return node;
 };
-let records = [];
 let selectedKey = "";
 let selectedRecord;
 let editing;
+let pageStarts = [""];
+let pageIndex = 0;
+let nextPage = "";
+let pageFilters = "";
+let pageRequest;
+let inspectorRequest;
+let refreshRequest;
+let searchTimer;
 
 async function request(path, options) {
   const response = await fetch(path, options);
@@ -23,17 +30,13 @@ function formatTime(value) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
-function key(record) {
-  return record.id || JSON.stringify([record.kind, record.time, record.title, record.source_id, record.sha256]);
-}
-
-function inspect(record) {
+function inspect(record, message = "Selecciona un registro para examinarlo.") {
   selectedRecord = record;
   byId("note-tools").hidden = record?.kind !== "nota" || !record.id;
   const view = byId("record-detail");
   view.replaceChildren();
   if (!record) {
-    view.append(element("p", "Selecciona un registro para examinarlo."));
+    view.append(element("p", message));
     return;
   }
   view.append(element("span", record.kind, "type"), element("h3", record.title), element("p", formatTime(record.time)));
@@ -53,71 +56,125 @@ function inspect(record) {
   if (record.details) view.append(element("pre", record.details));
 }
 
+async function loadRecord(id, focus = false) {
+  inspectorRequest?.abort();
+  const controller = new AbortController();
+  inspectorRequest = controller;
+  inspect(undefined, "Consultando evidencia…");
+  if (focus && window.matchMedia("(max-width: 970px)").matches) {
+    byId("inspector").scrollIntoView({block: "nearest"});
+  }
+  try {
+    const record = await request("/api/registro/" + encodeURIComponent(id), {signal: controller.signal});
+    if (!controller.signal.aborted) inspect(record);
+  } catch (error) {
+    if (!controller.signal.aborted) inspect(undefined, error.message);
+  }
+}
+
 function recordNode(record) {
   const row = element("button", "", "record");
   row.type = "button";
   row.setAttribute("aria-controls", "record-detail");
-  row.setAttribute("aria-pressed", String(key(record) === selectedKey));
+  row.setAttribute("aria-pressed", String(record.id === selectedKey));
   row.append(element("span", record.kind, "type"), element("strong", record.title));
   if (record.source) row.append(element("span", record.source, "muted"));
   row.onclick = () => {
     const prior = byId("records").querySelector('[aria-pressed="true"]');
     prior?.setAttribute("aria-pressed", "false");
-    selectedKey = key(record);
+    selectedKey = record.id;
     row.setAttribute("aria-pressed", "true");
-    inspect(record);
-    if (window.matchMedia("(max-width: 970px)").matches) byId("inspector").scrollIntoView({block: "nearest"});
+    loadRecord(record.id, true);
   };
   return row;
 }
 
-function render() {
-  const query = byId("query").value.trim().toLowerCase();
-  const kind = byId("filter").value;
-  const matching = records.filter((entry) =>
-    (!kind || entry.kind === kind) && JSON.stringify(entry).toLowerCase().includes(query));
+function render(rows) {
   const listing = byId("records");
-  const shown = matching.slice(0, 250);
-  inspect(shown.find((record) => key(record) === selectedKey));
-  listing.replaceChildren(...shown.map(recordNode));
-  if (matching.length === 0) listing.append(element("p", "Sin registros para mostrar."));
-  if (matching.length > 250) listing.append(element("p", "Primeros 250 resultados. Usa la búsqueda para acotar."));
+  listing.replaceChildren(...rows.map(recordNode));
+  listing.scrollTop = 0;
+  if (rows.length === 0) listing.append(element("p", "Sin registros para mostrar."));
 }
 
-function summarize() {
-  const traffic = records.filter((record) => record.traffic);
-  byId("total").textContent = records.length;
-  byId("traffic").textContent = traffic.length;
-  byId("signals").textContent = records.reduce((sum, record) => sum + (record.signals?.length || 0), 0);
-  const counts = (category) => {
-    const counter = new Map();
-    for (const {traffic: entry} of traffic) {
-      const group = category(entry);
-      counter.set(group, (counter.get(group) || 0) + 1);
-    }
-    return Array.from(counter).sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => `${name} (${count})`).join(" · ") || "Sin datos";
-  };
+function summarize(summary) {
+  byId("total").textContent = summary.total;
+  byId("traffic").textContent = summary.traffic;
+  byId("signals").textContent = summary.signals;
+  const counts = (category, label = (name) => name) =>
+    Object.entries(category).sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => `${label(name)} (${count})`).join(" · ") || "Sin datos";
   byId("groups").replaceChildren(
-    element("dt", "Estado"), element("dd", counts((entry) => entry.status)),
-    element("dt", "Tipo MIME"), element("dd", counts((entry) => entry.type || "Sin tipo")),
-    element("dt", "Latencia"), element("dd", counts((entry) => entry.bucket ? "< " + entry.bucket + " ms" : "< 1 ms"))
+    element("dt", "Estado"), element("dd", counts(summary.status)),
+    element("dt", "Tipo MIME"), element("dd", counts(summary.mime, (name) => name || "Sin tipo")),
+    element("dt", "Latencia"), element("dd", counts(summary.bucket, (name) => "< " + (name === "0" ? "1" : name) + " ms"))
   );
 }
 
-async function refresh(message = "") {
+function pagingBusy(busy) {
+  byId("records").setAttribute("aria-busy", String(busy));
+  const changed = String(filters()) !== pageFilters;
+  byId("previous-page").disabled = busy || changed || pageIndex === 0;
+  byId("next-page").disabled = busy || changed || nextPage === "";
+}
+
+function filters() {
+  return new URLSearchParams({tipo: byId("filter").value, buscar: byId("query").value.trim()});
+}
+
+async function loadPage(index, starts = pageStarts) {
+  pageRequest?.abort();
+  const controller = new AbortController();
+  pageRequest = controller;
+  pagingBusy(true);
+  byId("page-state").textContent = "Cargando registros…";
+  const search = filters();
+  const currentFilters = String(search);
+  search.set("despues", starts[index]);
   try {
-    records = await request("/api/registro");
-    summarize();
-    render();
-    byId("status").textContent = message;
+    const page = await request("/api/registro/pagina?" + search, {signal: controller.signal});
+    if (controller.signal.aborted) return;
+    pageIndex = index;
+    pageStarts = starts;
+    pageFilters = currentFilters;
+    nextPage = page.next || "";
+    render(page.rows);
+    byId("page-state").textContent = `Página ${pageIndex + 1} · ${page.rows.length} registros`;
   } catch (error) {
-    byId("status").textContent = error.message;
+    if (!controller.signal.aborted) byId("page-state").textContent = error.message;
+  } finally {
+    if (!controller.signal.aborted) pagingBusy(false);
   }
 }
 
-byId("query").addEventListener("input", render);
-byId("filter").addEventListener("change", render);
+async function refresh(message = "", first = false) {
+  clearTimeout(searchTimer);
+  refreshRequest?.abort();
+  const controller = new AbortController();
+  refreshRequest = controller;
+  byId("status").textContent = message;
+  const page = first || String(filters()) !== pageFilters ? loadPage(0, [""]) : loadPage(pageIndex);
+  const detail = selectedKey ? loadRecord(selectedKey) : Promise.resolve();
+  try {
+    const summary = await request("/api/registro/resumen", {signal: controller.signal});
+    if (!controller.signal.aborted) summarize(summary);
+  } catch (error) {
+    if (!controller.signal.aborted) byId("status").textContent = error.message;
+  }
+  await Promise.all([page, detail]);
+}
+
+byId("previous-page").onclick = () => loadPage(pageIndex - 1);
+byId("next-page").onclick = () => loadPage(pageIndex + 1, [...pageStarts.slice(0, pageIndex + 1), nextPage]);
+byId("query").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  pageRequest?.abort();
+  pagingBusy(true);
+  searchTimer = setTimeout(() => loadPage(0, [""]), 230);
+});
+byId("filter").addEventListener("change", () => {
+  clearTimeout(searchTimer);
+  loadPage(0, [""]);
+});
 byId("refresh").addEventListener("click", () => refresh());
 
 byId("upload").addEventListener("submit", async (event) => {
@@ -129,7 +186,7 @@ byId("upload").addEventListener("submit", async (event) => {
     const result = await request("/api/archivo/" + byId("file-kind").value,
       {method: "POST", body: selected, headers: {"Content-Type": "application/octet-stream"}});
     byId("evidence").value = "";
-    await refresh(result.message);
+    await refresh(result.message, true);
   } catch (error) {
     byId("status").textContent = error.message;
   } finally {
