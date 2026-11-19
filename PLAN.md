@@ -45,7 +45,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | Flujo | Disponible | Trabajo pendiente y prueba de cierre |
 | --- | --- | --- |
 | Expedientes, terminal y agentes | Evidencia con procedencia, inventario de activos, cobertura por periodo con citas, cola persistente, revisión de código Go y exportación STIX. | Medir la latencia del inventario y de los informes de cobertura en expedientes grandes. |
-| Inspección estática de binarios | PE, ELF y Mach-O con secciones, cadenas, símbolos y citas por desplazamiento. Ventanas desde símbolos y puntos de entrada, y saltos directos verificados dentro de cada imagen. | Mostrar referencias entrantes encontradas en las ventanas verificadas y abrir la instrucción de origen de cada referencia. |
+| Inspección estática de binarios | PE, ELF y Mach-O con secciones, cadenas, símbolos y citas por desplazamiento. Ventanas verificadas, navegación de saltos directos y consulta de referencias entrantes por imagen. | Exportar las referencias observadas con sus citas y recuperar el conjunto al reabrir un expediente. |
 | Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros, reglas pasivas y comparación de dos periodos con citas a la revisión exacta. | Medir el tiempo de consulta para ventanas acotadas en expedientes con capturas voluminosas. |
 | Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, auditoría y restauración. Se prueban la apertura y la edición de otros expedientes durante una restauración. | Medir la latencia de escritura con carga sostenida y distintos almacenamientos del registro de escritura anticipada de PostgreSQL (WAL). |
 
@@ -86,7 +86,8 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 24. **Navegación de instrucciones.** La 0.4.14 lista secciones ejecutables compatibles de PE, ELF y Mach-O. La mesa filtra por imagen y sección y sigue destinos directos a instrucciones guardadas. Las pruebas comparan bytes, direcciones, desplazamientos y citas. Un análisis nuevo del mismo archivo conserva las referencias anteriores.
 25. **Ventanas desde puntos de entrada y símbolos.** La 0.4.15 verifica el archivo original contra la revisión del expediente y abre hasta 64 instrucciones desde la ubicación. La mesa y la terminal comparan la huella al volver a abrir citas. Las pruebas incluyen una ubicación ELF y PE más allá del listado inicial y un Mach-O universal con dos imágenes.
 26. **Navegación entre ventanas.** La 0.4.16 sigue destinos directos dentro de la misma imagen, comprueba la sección ejecutable y permite volver a la instrucción de origen. Las citas reproducen hasta 32 saltos. Las pruebas cruzan secciones, reabren un recorrido y rechazan destinos ambiguos o de otra imagen.
-27. **Paquetes y capacidad.** Verificar los binarios y sus huellas en cada etiqueta. Repetir la prueba de escritura con carga sostenida y medir el efecto del almacenamiento del WAL.
+27. **Referencias entrantes observadas.** La 0.4.17 reúne el listado guardado y las últimas 64 ventanas verificadas del inspector. Agrupa referencias por imagen y deduplica por dirección y desplazamiento. Reabre cada origen con la cita de su ventana o la instrucción guardada. Al reabrir una cita de recorrido incorpora el último salto verificado.
+28. **Paquetes y capacidad.** Verificar los binarios y sus huellas en cada etiqueta. Repetir la prueba de escritura con carga sostenida y medir el efecto del almacenamiento del WAL.
 
 ## Medición de consultas por fecha
 
@@ -167,7 +168,7 @@ PostgreSQL registró esperas de bloqueo en `CREATE UNIQUE INDEX IF NOT EXISTS` c
 | Vista | Trabajo pendiente | Criterio de cierre |
 | --- | --- | --- |
 | Activos y fuentes | Medir consultas de inventario, red y cobertura con varios miles de observaciones | Medir latencia y memoria para una IP, un rango RDAP y un prefijo STIX y comprobar que devuelven los mismos cruces. |
-| Triaje de binarios | Consultar referencias entrantes de ventanas verificadas | Mostrar dos instrucciones que apuntan al mismo destino y abrir cada origen con su dirección, imagen y desplazamiento verificados. |
+| Triaje de binarios | Conservar referencias entrantes en un informe | Exportar dos referencias de ventanas distintas y recuperar ambas citas en otro equipo con el expediente y el archivo original. |
 | Historial HTTP | Medir las comparaciones con archivos HAR y tráfico de varios orígenes y tamaños | Registrar latencia de consulta, tamaño de entrada y memoria, y repetir con una ventana acotada y otra amplia. |
 
 ## Ramas y commits

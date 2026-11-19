@@ -14,7 +14,7 @@ function validBinaryWindowCitation(citation) {
     location(citation.address) && location(citation.offset);
 }
 
-function binaryWindowPanel(report, record, citation, signal) {
+function binaryWindowPanel(report, record, citation, signal, references, updateReferences) {
   const details = element("details", "", "binary-window");
   details.append(element("summary", "Ventana de instrucciones"));
   const label = element("label", "Archivo binario original", "binary-image");
@@ -30,10 +30,22 @@ function binaryWindowPanel(report, record, citation, signal) {
   let anchor = citation;
   let expected = citation;
   let pending;
+  let focusOnFile;
+  let expectedOrigin;
   if (expected) {
     details.open = true;
     status.textContent = `Selecciona el archivo original para verificar la cita en ${expected.offset}.`;
     requestAnimationFrame(() => { if (!signal.aborted) input.focus(); });
+  }
+
+  const images = Array.isArray(report.images) ? report.images : [];
+  function incoming({instruction, section}) {
+    return references.incoming(section.image || 0, instruction.address, instruction.offset);
+  }
+  function openReference(ref) {
+    const location = ref.citation || ref.anchor || {kind: "instruccion", index: ref.index};
+    open(location, {expected: ref.citation, preserve: true, focus: ref.citation || ref.anchor ? ref.index : 0,
+      origin: ref.instruction});
   }
 
   async function load({preserve = false, focus} = {}) {
@@ -62,10 +74,17 @@ function binaryWindowPanel(report, record, citation, signal) {
       if (expected && Object.entries(data.citation).some(([key, value]) => expected[key] !== value)) {
         throw new Error("La ventana no coincide con la cita guardada.");
       }
-      status.textContent = expected ? `Cita de ventana verificada · ${data.citation.offset}` :
-        `Archivo verificado · ${data.citation.offset}`;
       const location = report.format === "PE" ? "RVA" : "Dirección";
       const {window} = data;
+      if (expectedOrigin) {
+        const actual = window.instructions[focus];
+        const fields = ["address", "offset", "bytes", "target"];
+        if (!actual || fields.some((key) => actual[key] !== expectedOrigin[key])) {
+          throw new Error("La instrucción verificada difiere del origen de la referencia.");
+        }
+      }
+      status.textContent = expectedOrigin ? `Origen verificado · ${expectedOrigin.offset}` :
+        expected ? `Cita de ventana verificada · ${data.citation.offset}` : `Archivo verificado · ${data.citation.offset}`;
       const steps = data.citation.path?.split(".") || [];
       const title = element("p", `${data.name} · ${window.section || "Sin nombre"} · ${window.architecture}`);
       const address = element("p", `${location} ${data.citation.address} · Archivo ${data.citation.offset}`);
@@ -77,19 +96,26 @@ function binaryWindowPanel(report, record, citation, signal) {
       };
       tools.append(save);
       let origin;
+      let verifiedParent;
       if (window.origin && steps.length) {
         origin = element("p", `Origen del salto ${window.origin.address} · Archivo ${window.origin.offset}`);
+        const parent = {kind: data.citation.kind, index: data.citation.index, path: steps.slice(0, -1).join(".")};
+        const position = Number(steps.at(-1));
+        verifiedParent = {instruction: window.origin, section: {image: window.image}, index: position, anchor: parent};
         const back = element("button", `Volver a ${window.origin.address}`);
-        back.onclick = () => open({kind: data.citation.kind, index: data.citation.index, path: steps.slice(0, -1).join(".")},
-          {preserve: true, focus: Number(steps.at(-1))});
+        back.onclick = () => open(parent, {preserve: true, focus: position});
         tools.append(back);
       }
       const follow = steps.length < binaryWindowPathLimit ? (index) => {
         open({kind: data.citation.kind, index: data.citation.index, path: [...steps, index].join(".")}, {preserve: true, focus: 0});
       } : undefined;
-      const listing = binaryInstructionPanel({format: report.format, instructions: window.instructions,
-        instructions_limited: window.limited}, [{name: window.section}], [], undefined, undefined, follow);
-      listing.paintImage(0);
+      const sections = [{name: window.section, image: window.image}];
+      const entries = binaryInstructionEntries(window.instructions, sections);
+      references.observe(data.citation, verifiedParent ? [...entries, verifiedParent] : entries);
+      updateReferences();
+      const listing = binaryInstructionPanel({format: report.format, instructions_limited: window.limited}, sections, images,
+        {entries, follow, incoming, openReference});
+      listing.paintImage(window.image);
       result.replaceChildren(title, address);
       if (origin) result.append(origin);
       if (steps.length === binaryWindowPathLimit) result.append(element("p", "Se alcanzó el límite de 32 saltos en el recorrido."));
@@ -101,23 +127,27 @@ function binaryWindowPanel(report, record, citation, signal) {
   }
 
   function open(location, options) {
-    expected = undefined;
+    expected = options?.expected;
+    focusOnFile = options?.focus;
+    expectedOrigin = options?.origin;
     anchor = location;
     details.open = true;
     details.scrollIntoView({block: "nearest"});
     load(options);
   }
   input.onchange = () => {
-    if (anchor) load();
+    if (anchor) load({focus: focusOnFile});
     else status.textContent = "Elige un símbolo o abre el punto de entrada.";
   };
   entry.onclick = () => open({kind: "entrada", index: image});
-  return {details, openSymbol(index) { open({kind: "simbolo", index}); },
+  return {details, incoming, openReference, openSymbol(index) { open({kind: "simbolo", index}); },
     followInstruction(index) { open({kind: "instruccion", index, path: "0"}, {focus: 0}); }, paintImage(index) {
     if (image !== undefined && image !== index) {
       pending?.abort();
       anchor = undefined;
       expected = undefined;
+      focusOnFile = undefined;
+      expectedOrigin = undefined;
       result.replaceChildren();
       status.textContent = "";
     }

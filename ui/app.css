@@ -81,6 +81,8 @@ footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2re
 .binary-image select { width: 100%; }
 .binary-window input { margin-top: 0; }
 .binary-window > div > .binary-instructions { margin-top: .65rem; }
+.instruction-references { margin-top: .65rem; }
+.instruction-references button { margin-top: 0; }
 .binary-list { display: grid; gap: .35rem; max-height: 19rem; overflow: auto; list-style: none; padding: 0; }
 .binary-list li { border: 1px solid var(--line); border-radius: 3px; padding: .45rem .55rem; }
 .binary-list li.audit-cited { border-color: var(--accent); }

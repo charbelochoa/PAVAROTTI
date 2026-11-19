@@ -45,6 +45,7 @@ jobs:
         env:
           PAVAROTTI_TEST_POSTGRES: postgres://pavarotti:pavarotti-ci@127.0.0.1:${{ job.services.postgres.ports[5432] }}/pavarotti_test?sslmode=disable
           PAVAROTTI_TEST_POSTGRES_RESTORE: postgres://pavarotti:pavarotti-ci@127.0.0.1:${{ job.services.postgres.ports[5432] }}/pavarotti_restore?sslmode=disable
+      - run: node --test .github/scripts/binary_references.test.js
       - run: go vet ./...
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
       - run: CGO_ENABLED=0 go build -trimpath -o PAVAROTTI-Kali-x64 .
