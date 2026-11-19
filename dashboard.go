@@ -19,10 +19,10 @@ import (
 var resources embed.FS
 
 type settings struct {
-	Version string `json:"version"`
-	Proxy   string `json:"proxy,omitempty"`
-	Target  string `json:"target,omitempty"`
-	AnalysisQueue bool `json:"analysis_queue"`
+	Version       string `json:"version"`
+	Proxy         string `json:"proxy,omitempty"`
+	Target        string `json:"target,omitempty"`
+	AnalysisQueue bool   `json:"analysis_queue"`
 }
 
 type noteInput struct {

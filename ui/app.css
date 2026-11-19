@@ -41,6 +41,14 @@ button:disabled { opacity: .6; cursor: wait; }
 .pager { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .45rem; border-top: 1px solid var(--line); margin-top: .65rem; padding-top: .65rem; font-size: .82rem; }
 .pager output { color: var(--dim); flex: 1; text-align: center; }
 .pager button:disabled { cursor: default; }
+.queue-header, .job-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .55rem; }
+.queue-header select { padding: .22rem .45rem; }
+#analysis-jobs { max-height: 20rem; overflow: auto; }
+.analysis-job { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem; padding: .65rem .15rem; border-top: 1px solid var(--line); }
+.analysis-job p { overflow-wrap: anywhere; font-size: .8rem; }
+.job-actions { justify-content: end; }
+.job-actions button { font-size: .78rem; padding: .35rem .55rem; }
+.job-state { color: var(--accent); }
 footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2rem); font-size: .82rem; }
 #records { max-height: 65vh; overflow: auto; }
 .record { display: grid; width: 100%; grid-template-columns: 7rem minmax(0, 1fr); gap: .05rem .7rem; text-align: left; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
@@ -72,4 +80,6 @@ dialog::backdrop { background: #09070ad9; }
   .portrait { height: 140px; }
   .filters { flex-wrap: wrap; }
   .filters input { flex-basis: 100%; }
+  .analysis-job { grid-template-columns: 1fr; }
+  .job-actions { justify-content: start; }
 }
