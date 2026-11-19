@@ -38,8 +38,12 @@ func CiteBinary(ctx context.Context, store *caso.Store, id string, revision int,
 	if !valid || report.Size <= 0 || position >= uint64(report.Size) {
 		return BinaryCitation{}, caso.ErrNotFound
 	}
+	return binaryCitation(record, caso.Hash([]byte(record.Details)), kind, index, offset), nil
+}
+
+func binaryCitation(record caso.Record, inspectionHash, kind string, index int, offset string) BinaryCitation {
 	return BinaryCitation{Schema: BinaryCitationSchema, RecordID: record.ID, Revision: record.Revision, SHA256: record.SHA256,
-		InspectionSHA256: caso.Hash([]byte(record.Details)), Kind: kind, Index: index, Offset: offset}, nil
+		InspectionSHA256: inspectionHash, Kind: kind, Index: index, Offset: offset}
 }
 
 func loadBinaryInspection(ctx context.Context, store *caso.Store, id string, revision int) (caso.Record, triaje.Binary, error) {

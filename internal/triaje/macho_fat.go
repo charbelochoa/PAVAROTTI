@@ -27,10 +27,13 @@ type machOSlice struct {
 	binaryImageRange
 }
 
-func (b *Binary) inspectMachO(data []byte, file *macho.File, image binaryImageRange, remaining int) {
+func (b *Binary) inspectMachO(data []byte, file *macho.File, image binaryImageRange, remaining int, full bool) {
 	sectionBudget := min(len(file.Sections), (maxBinarySections-len(b.Sections))/remaining)
 	instructionBudget := len(b.Instructions) + (maxBinaryInstructions-len(b.Instructions))/remaining
-	decode := machOInstructionDecoder(file)
+	var decode instructionDecoder
+	if full {
+		decode = machOInstructionDecoder(file)
+	}
 	b.SectionCount += len(file.Sections) - sectionBudget
 	for _, section := range file.Sections[:sectionBudget] {
 		size := machOFileSize(section)
@@ -39,7 +42,9 @@ func (b *Binary) inspectMachO(data []byte, file *macho.File, image binaryImageRa
 			b.addInstructions(data, image, index, section.Addr, uint64(section.Offset), codeSize, decode, file.Type != macho.TypeObj, instructionBudget)
 		}
 	}
-	b.machOSymbols(file, image, len(b.Symbols)+(maxBinarySymbols-len(b.Symbols))/remaining)
+	if full {
+		b.machOSymbols(file, image, len(b.Symbols)+(maxBinarySymbols-len(b.Symbols))/remaining)
+	}
 }
 
 type parsedMachOSlice struct {
@@ -61,7 +66,7 @@ func usableMachOSlices(data []byte, headers []machOSlice) []parsedMachOSlice {
 	return usable
 }
 
-func (b *Binary) inspectMachOFat(data []byte) {
+func (b *Binary) inspectMachOFat(data []byte, full bool) {
 	headers := machOFatSlices(data)
 	usable := usableMachOSlices(data, headers)
 	if len(usable) == 0 {
@@ -81,9 +86,11 @@ func (b *Binary) inspectMachOFat(data []byte) {
 		remaining := len(usable) - index
 		b.Images = append(b.Images, BinaryImage{Architecture: header.cpu.String(), Subtype: fmt.Sprintf("0x%x", header.subtype),
 			File: FileRange{Offset: fmt.Sprintf("0x%x", header.offset), Size: header.size}})
-		b.inspectMachO(data, member.file, header.binaryImageRange, remaining)
-		hits := printableStrings(data[header.offset:header.offset+header.size], header.offset, (maxBinaryStrings-len(b.Strings))/remaining)
-		b.Strings = append(b.Strings, hits...)
+		b.inspectMachO(data, member.file, header.binaryImageRange, remaining, full)
+		if full {
+			hits := printableStrings(data[header.offset:header.offset+header.size], header.offset, (maxBinaryStrings-len(b.Strings))/remaining)
+			b.Strings = append(b.Strings, hits...)
+		}
 	}
 }
 

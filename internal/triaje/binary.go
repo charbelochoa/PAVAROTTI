@@ -60,6 +60,14 @@ type binaryImageRange struct {
 }
 
 func Inspect(data []byte) Binary {
+	return inspectBinary(data, true)
+}
+
+func InspectLayout(data []byte) Binary {
+	return inspectBinary(data, false)
+}
+
+func inspectBinary(data []byte, full bool) Binary {
 	result := Binary{SHA256: fmt.Sprintf("%x", sha256.Sum256(data)), Format: "Sin identificar", Size: len(data)}
 	reader := bytes.NewReader(data)
 	image := binaryImageRange{size: uint64(len(data))}
@@ -67,7 +75,10 @@ func Inspect(data []byte) Binary {
 	case bytes.HasPrefix(data, []byte{0x7f, 'E', 'L', 'F'}):
 		if file, err := elf.NewFile(reader); err == nil {
 			result.Format, result.Architecture = "ELF", file.Machine.String()
-			decode := elfInstructionDecoder(file)
+			var decode instructionDecoder
+			if full {
+				decode = elfInstructionDecoder(file)
+			}
 			for _, section := range file.Sections {
 				size := section.FileSize
 				if section.Type == elf.SHT_NOBITS || section.Type == elf.SHT_NULL {
@@ -78,12 +89,17 @@ func Inspect(data []byte) Binary {
 					result.addInstructions(data, image, index, section.Addr, section.Offset, codeSize, decode, file.Type != elf.ET_REL, maxBinaryInstructions)
 				}
 			}
-			result.elfSymbols(file, data)
+			if full {
+				result.elfSymbols(file, data)
+			}
 		}
 	case bytes.HasPrefix(data, []byte("MZ")):
 		if file, err := pe.NewFile(reader); err == nil {
 			result.Format, result.Architecture = "PE", peArchitecture(file.Machine)
-			decode := peInstructionDecoder(file.Machine)
+			var decode instructionDecoder
+			if full {
+				decode = peInstructionDecoder(file.Machine)
+			}
 			for _, section := range file.Sections {
 				size := section.Size
 				if section.Offset == 0 {
@@ -94,18 +110,20 @@ func Inspect(data []byte) Binary {
 					result.addInstructions(data, image, index, uint64(section.VirtualAddress), uint64(section.Offset), codeSize, decode, true, maxBinaryInstructions)
 				}
 			}
-			result.peExports(file, data)
-			result.peSymbols(file)
+			if full {
+				result.peExports(file, data)
+				result.peSymbols(file)
+			}
 		}
 	default:
 		if file, err := macho.NewFile(reader); err == nil {
 			result.Format, result.Architecture = "Mach-O", file.Cpu.String()
-			result.inspectMachO(data, file, image, 1)
+			result.inspectMachO(data, file, image, 1, full)
 		} else {
-			result.inspectMachOFat(data)
+			result.inspectMachOFat(data, full)
 		}
 	}
-	if len(result.Images) == 0 {
+	if full && len(result.Images) == 0 {
 		result.Strings = printableStrings(data, 0, maxBinaryStrings)
 	}
 	return result
