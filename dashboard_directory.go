@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 
 	"pavarotti/internal/caso"
 	"pavarotti/internal/ingesta"
@@ -31,7 +32,12 @@ func directoryRoutes(mux *http.ServeMux, store *caso.Store) {
 				directoryError(w, ingesta.ErrDirectoryPath)
 				return
 			}
-			if err := review.Add(file.FormName(), file); err != nil {
+			name, err := url.PathUnescape(file.FormName())
+			if err != nil {
+				directoryError(w, ingesta.ErrDirectoryPath)
+				return
+			}
+			if err := review.Add(name, file); err != nil {
 				directoryError(w, err)
 				return
 			}

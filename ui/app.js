@@ -14,6 +14,7 @@ let selectedAsset;
 let selectedSTIXPage;
 let returnToEvidence;
 let editing;
+let activeTriage;
 let pageStarts = [""];
 let pageIndex = 0;
 let nextPage = "";
@@ -33,6 +34,8 @@ const assetKinds = {dominio: "Dominio", ipv4: "IPv4", ipv6: "IPv6", red: "Red", 
 const assetKey = ({type, value}) => `${type}/${value}`;
 const assetCount = ({count, indicators}) =>
   `${count} ${count === 1 ? "registro" : "registros"}${indicators ? ` · ${indicators} ${indicators === 1 ? "indicador" : "indicadores"}` : ""}`;
+const triageLabels = {pendiente: "Pendiente", confirmada: "Confirmada", descartada: "Descartada"};
+const findingKey = ({rule, line, column}) => `${line}:${column}:${rule}`;
 
 async function request(path, options) {
   const response = await fetch(path, options);
@@ -82,7 +85,7 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
     const item = record.traffic;
     view.append(element("p", `${item.type || "Tipo desconocido"} · ${item.millis} ms`));
   }
-  if (record.code_review) view.append(codeReviewPanel(record.code_review, citation));
+  if (record.code_review) view.append(codeReviewPanel(record.id, record.code_review, citation));
   if (record.dependencies) view.append(dependencyPanel(record.dependencies, citation));
   if (!record.code_review && record.signals?.length) {
     const list = element("ul");
@@ -97,13 +100,14 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
   }
 }
 
-function codeReviewPanel(review, citation) {
+function codeReviewPanel(id, review, citation) {
   const view = element("div", "", "audit-panel");
   const signals = review.signals || [];
   const count = review.total || signals.length;
   view.append(element("h4", "Revisión estática"), element("p", signals.length < count ?
     `${signals.length} de ${count} señales registradas` : `${count} ${count === 1 ? "señal" : "señales"}`));
   const list = element("div", "", "audit-items");
+  const badges = new Map();
   for (const signal of signals) {
     const row = element("div", "", "audit-item");
     row.dataset.rule = signal.rule;
@@ -115,9 +119,18 @@ function codeReviewPanel(review, citation) {
     }
     row.append(element("strong", `Línea ${signal.line}, columna ${signal.column}`),
       element("span", signal.rule, "type"), element("p", signal.review));
+    const tools = element("div", "", "triage-controls");
+    const action = element("button", "Clasificar");
+    action.setAttribute("aria-label", `Clasificar señal ${signal.rule}, línea ${signal.line}, columna ${signal.column}`);
+    const badge = element("span", "Pendiente", "muted");
+    badges.set(findingKey(signal), badge);
+    action.onclick = () => openCodeTriage(id, signal, badge);
+    tools.append(action, badge);
+    row.append(tools);
     list.append(row);
   }
   view.append(list);
+  if (badges.size) loadCodeBadges(id, badges, inspectorRequest.signal);
   if (review.imports?.length) {
     const imports = element("details");
     imports.append(element("summary", `Importaciones Go · ${review.imports.length}`));
@@ -136,6 +149,98 @@ function codeReviewPanel(review, citation) {
   }
   return view;
 }
+
+function triagePath(id) { return `/api/registro/${encodeURIComponent(id)}/triaje`; }
+
+function updateTriageBadge(badge, entry) {
+  if (badge && entry.revision >= Number(badge.dataset.revision || 0)) {
+    badge.dataset.revision = entry.revision;
+    badge.textContent = triageLabels[entry.status];
+  }
+}
+
+async function loadCodeBadges(id, badges, signal) {
+  try {
+    const entries = await request(triagePath(id), {signal});
+    for (const entry of entries) updateTriageBadge(badges.get(findingKey(entry)), entry);
+  } catch (error) {
+    if (!signal.aborted) byId("status").textContent = error.message;
+  }
+}
+
+function paintTriageHistory(history) {
+  const list = byId("triage-entries");
+  const more = byId("triage-more");
+  list.replaceChildren();
+  if (!history.length) list.append(element("li", "Sin clasificaciones registradas."));
+  let end = history.length;
+  more.onclick = () => {
+    const start = Math.max(0, end - 25);
+    const entries = history.slice(start, end).reverse();
+    for (const entry of entries) {
+      const item = element("li");
+      item.append(element("strong", `Rev. ${entry.revision} · ${triageLabels[entry.status]} · ${formatTime(entry.time)}`),
+        element("p", entry.reason));
+      list.append(item);
+    }
+    end = start;
+    more.hidden = end === 0;
+  };
+  more.onclick();
+}
+
+async function openCodeTriage(id, signal, badge) {
+  const dialog = byId("triage-panel");
+  const errorText = byId("triage-error");
+  const button = byId("triage-save");
+  const action = {id, badge, key: {rule: signal.rule, line: signal.line, column: signal.column}};
+  activeTriage = action;
+  button.disabled = true;
+  byId("triage-form").reset();
+  byId("triage-history").open = false;
+  byId("triage-location").textContent = `${signal.rule} · línea ${signal.line}, columna ${signal.column}`;
+  errorText.textContent = "Consultando clasificación…";
+  paintTriageHistory([]);
+  dialog.showModal();
+  const params = new URLSearchParams({regla: signal.rule, linea: signal.line, columna: signal.column});
+  try {
+    const history = await request(triagePath(id) + "?" + params);
+    if (activeTriage !== action || !dialog.open) return;
+    const last = history.at(-1);
+    if (last) updateTriageBadge(badge, last);
+    action.revision = last?.revision || 0;
+    byId("triage-state").value = last?.status || "pendiente";
+    paintTriageHistory(history);
+    errorText.textContent = "";
+    button.disabled = false;
+  } catch (error) {
+    if (activeTriage === action && dialog.open) errorText.textContent = error.message;
+  }
+}
+
+byId("triage-close").onclick = () => byId("triage-panel").close();
+byId("triage-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const action = activeTriage;
+  if (!Number.isInteger(action?.revision)) return;
+  const button = byId("triage-save");
+  button.disabled = true;
+  byId("triage-error").textContent = "";
+  try {
+    const saved = await request(triagePath(action.id), {
+      method: "PATCH", headers: {"Content-Type": "application/json"}, body: JSON.stringify({
+        ...action.key, revision: action.revision, status: byId("triage-state").value, reason: byId("triage-reason").value
+      })
+    });
+    updateTriageBadge(action.badge, saved);
+    if (activeTriage === action) byId("triage-panel").close();
+    byId("status").textContent = "Clasificación guardada";
+  } catch (error) {
+    if (activeTriage === action) byId("triage-error").textContent = error.message;
+  } finally {
+    if (activeTriage === action) button.disabled = false;
+  }
+};
 
 function dependencyPanel(inventory, citation) {
   const view = element("div", "", "audit-panel");
@@ -526,7 +631,7 @@ byId("directory-form").onsubmit = async (event) => {
     const folders = file.webkitRelativePath.split("/").slice(1);
     if (!folders.length || folders.some((part) => [".git", "node_modules", "vendor"].includes(part.toLowerCase()))) continue;
     if (!/(?:\.go$|^(?:go\.mod|package-lock\.json)$)/i.test(file.name)) continue;
-    payload.append(folders.join("/"), file, file.name);
+    payload.append(encodeURIComponent(folders.join("/")), file, file.name);
     count++;
     bytes += file.size;
   }
@@ -669,7 +774,8 @@ function reportDialog(title, text, report) {
       if (samples?.length) group.append(element("span", "IP citadas · " + samples.join(", "), "muted"));
       for (const item of evidence) {
         const position = item.line ? ` · línea ${item.line}${item.column ? `, columna ${item.column}` : ""}` : item.location ? ` · ${item.location}` : "";
-        const action = element("button", `${item.title || item.kind} · rev. ${item.revision}${position}`);
+        const label = (item.kind === "código" || item.kind === "dependencias") && item.source_id ? item.source_id : (item.title || item.kind);
+        const action = element("button", `${label} · rev. ${item.revision}${position}`);
         action.title = `${item.id} · revisión ${item.revision}`;
         action.onclick = () => {
           byId("report-panel").close();

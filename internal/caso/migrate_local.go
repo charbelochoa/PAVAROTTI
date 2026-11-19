@@ -64,6 +64,22 @@ func (s *Store) ImportLocal(path string) (int, error) {
 			count += len(batch)
 		}
 		for index, record := range batch {
+			if record.StaticReview() != nil {
+				if err := source.walkLocalTriage(record, func(history []CodeDisposition) error {
+					if err := lockCodeBatch(ctx, tx, s.expediente, key); err != nil {
+						return err
+					}
+					for _, item := range history {
+						if err := putCodeTriage(ctx, tx, s.expediente, key, index+1, item); err != nil {
+							return err
+						}
+					}
+					return nil
+				}); err != nil {
+					return 0, err
+				}
+				continue
+			}
 			if record.Kind != "nota" {
 				continue
 			}

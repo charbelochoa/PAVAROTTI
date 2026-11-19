@@ -177,5 +177,26 @@
     <pre id="report-text"></pre>
     <form method="dialog"><button>Cerrar</button></form>
   </dialog>
+  <dialog id="triage-panel" aria-labelledby="triage-title">
+    <h2 id="triage-title">Clasificar señal</h2>
+    <p id="triage-location"></p>
+    <form id="triage-form">
+      <label for="triage-state">Estado</label>
+      <select id="triage-state">
+        <option value="pendiente">Pendiente</option>
+        <option value="confirmada">Confirmada</option>
+        <option value="descartada">Descartada</option>
+      </select>
+      <label for="triage-reason">Justificación</label>
+      <textarea id="triage-reason" maxlength="2000" rows="3" required></textarea>
+      <p id="triage-error" role="alert"></p>
+      <div class="actions"><button id="triage-close" type="button">Cerrar</button><button id="triage-save" class="primary">Guardar clasificación</button></div>
+    </form>
+    <details id="triage-history">
+      <summary>Historial de clasificación</summary>
+      <ol id="triage-entries"></ol>
+      <button id="triage-more" hidden>Mostrar más revisiones</button>
+    </details>
+  </dialog>
 </body>
 </html>
