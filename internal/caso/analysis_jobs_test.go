@@ -160,4 +160,18 @@ func TestAnalysisQueueRecovery(t *testing.T) {
 	if got := claim(second); got.Job.ID != firstIn.ID {
 		t.Fatalf("se reasignó una tarea todavía activa: %+v", got.Job)
 	}
+	old := enqueue("pendiente del ejecutor anterior", 2)
+	newJob, err := second.EnqueueAnalysis(ctx, Hash([]byte("versión actual")), "2", 1, json.RawMessage(`{"records":[]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := second.EnqueueAnalysis(ctx, Hash([]byte("versión futura")), "3", 2, json.RawMessage(`{"records":[]}`)); err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []AnalysisJob{old, newJob} {
+		got, found, err := first.ClaimAnalysis(ctx, "2", "1")
+		if err != nil || !found || got.Job.ID != expected.ID || got.Job.AgentVersion != expected.AgentVersion {
+			t.Fatalf("prioridad entre versiones: %+v, %t, %v", got.Job, found, err)
+		}
+	}
 }
