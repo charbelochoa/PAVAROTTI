@@ -1,7 +1,4 @@
-.build/
 dist/
-__pycache__/
-*.class
-*.gpr
-*.rep/
-*.pavarotti/
+.build/
+*.exe
+*.test
