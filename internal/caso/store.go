@@ -27,6 +27,7 @@ type Record struct {
 	Title        string               `json:"title"`
 	Source       string               `json:"source,omitempty"`
 	SourceID     string               `json:"source_id,omitempty"`
+	Directory    bool                 `json:"directory,omitempty"`
 	SHA256       string               `json:"sha256,omitempty"`
 	Details      string               `json:"details,omitempty"`
 	Network      string               `json:"network,omitempty"`
@@ -112,7 +113,11 @@ func (s *Store) SaveEvidence(ctx context.Context, records []Record) (SaveResult,
 	}
 	hash := Hash(data)
 	if records[0].SHA256 != "" {
-		hash = Hash([]byte(records[0].Kind + ":" + records[0].SHA256))
+		identity := records[0].Kind + ":" + records[0].SHA256
+		if records[0].Directory {
+			identity += ":" + records[0].SourceID
+		}
+		hash = Hash([]byte(identity))
 	}
 	if s.db != nil {
 		ctx, cancel := context.WithTimeout(ctx, operationTimeout)
