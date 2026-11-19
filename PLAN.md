@@ -34,8 +34,17 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 - El historial podía mezclar la versión seleccionada en pantalla con otra lectura del expediente. La vista muestra ahora las versiones anteriores que devolvió el almacén y el inspector muestra la revisión seleccionada.
 - El primer chequeo de persistencia de Compose falló en CI después del reinicio. La verificación ahora espera a la aplicación y compara JSON estructurado.
 - La revisión de dependencias encontró avisos para el controlador de PostgreSQL y dos módulos de Go. Se actualizó a versiones con las correcciones y se fijó Go 1.26.11 en la compilación de CI y Docker.
-- El análisis admite hasta 10,000 registros por ejecución. El almacén y el panel todavía cargan el expediente completo. La paginación, ejecución en segundo plano y métricas de capacidad son requisitos para trabajar con conjuntos mayores.
+- El análisis admite hasta 10,000 registros por ejecución. Desde 0.3.1, el panel consulta 50 registros por página y carga la evidencia completa al seleccionarla. PostgreSQL filtra antes de entregar resultados. El almacén local recorre los lotes y mantiene en memoria la página candidata. Ambos almacenes aún recorren los datos para responder búsquedas amplias.
 - La aplicación aún funciona como estación local. Para uso compartido quedan pendientes los controles de acceso y la auditoría descritos en el hito 6.
+
+## Orden de implementación
+
+1. **Consulta del expediente.** Paginación, búsqueda e inspector bajo demanda. La prueba de cierre comprueba que fechas iguales y notas editadas no duplican ni ocultan resultados al cambiar de página.
+2. **Entrada de análisis acotada.** Preparar una instantánea con los campos que usan los agentes, las revisiones de evidencia y una huella de entrada. Cortar la lectura al exceder la capacidad y probar el comportamiento con más de 10,000 registros.
+3. **Cola persistente.** Guardar estado y resultado del análisis por expediente. Implementar recuperación, cancelación y política de reintentos. Verificar con dos ejecutores y un reinicio entre la asignación y el resultado.
+4. **Ingesta y correlación.** Añadir DNS, RDAP y STIX por separado. Usar muestras aportadas y versionadas. Conectar cada coincidencia con su registro en el inspector y comprobar que las exportaciones mantienen la procedencia.
+5. **Revisión y operación compartida.** Extender las reglas estáticas. Añadir autenticación, permisos, auditoría y restauración antes de abrir el acceso a otros equipos.
+6. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
 
 ## Ramas y commits
 
