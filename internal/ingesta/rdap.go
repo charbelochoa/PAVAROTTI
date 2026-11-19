@@ -85,14 +85,14 @@ func (object rdapObject) record(path, hash, stamp string) (caso.Record, error) {
 	}
 	switch object.Class {
 	case "domain":
-		name, ok := normalizedDNSName(object.LDHName)
+		name, ok := caso.NormalizeDNSName(object.LDHName)
 		if !ok || name == "." || strings.Contains(name, "_") {
 			return caso.Record{}, errors.New("ldhName RDAP inválido")
 		}
 		title = "Dominio · " + name
 		sources = append(sources, name)
 		for _, server := range object.Nameservers {
-			name, ok := normalizedDNSName(server.LDHName)
+			name, ok := caso.NormalizeDNSName(server.LDHName)
 			if !ok || name == "." || strings.Contains(name, "_") {
 				return caso.Record{}, errors.New("nombre de servidor RDAP inválido")
 			}

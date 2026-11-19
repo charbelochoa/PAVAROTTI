@@ -80,7 +80,7 @@ func parseDNS(data []byte) ([]caso.Record, error) {
 			base += "\nRespuesta truncada"
 		}
 		for questionIndex, question := range capture.Question {
-			name, valid := normalizedDNSName(question.Name)
+			name, valid := caso.NormalizeDNSName(question.Name)
 			if !valid || question.Type < 1 || question.Type > 65535 {
 				return nil, fmt.Errorf("respuesta %d, pregunta %d: nombre o tipo DNS inválido", idx+1, questionIndex+1)
 			}
@@ -93,7 +93,7 @@ func parseDNS(data []byte) ([]caso.Record, error) {
 			}
 		}
 		for answerIndex, answer := range capture.Answer {
-			name, valid := normalizedDNSName(answer.Name)
+			name, valid := caso.NormalizeDNSName(answer.Name)
 			if !valid || answer.Type < 1 || answer.Type > 65535 {
 				return nil, fmt.Errorf("respuesta %d, registro %d: nombre o tipo DNS inválido", idx+1, answerIndex+1)
 			}
@@ -126,28 +126,6 @@ func dnsType(code int) string {
 	return fmt.Sprintf("TYPE%d", code)
 }
 
-func normalizedDNSName(raw string) (string, bool) {
-	raw = strings.ToLower(strings.TrimSpace(raw))
-	if raw == "." {
-		return raw, true
-	}
-	name := strings.TrimSuffix(raw, ".")
-	if len(name) == 0 || len(name) > 253 {
-		return "", false
-	}
-	for label := range strings.SplitSeq(name, ".") {
-		if len(label) < 1 || len(label) > 63 || strings.HasPrefix(label, "-") || strings.HasSuffix(label, "-") {
-			return "", false
-		}
-		for _, c := range label {
-			if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
-				return "", false
-			}
-		}
-	}
-	return name, true
-}
-
 func dnsData(rr int, raw string) (string, string, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" || len(value) > 4096 || strings.ContainsRune(value, 0) {
@@ -161,7 +139,7 @@ func dnsData(rr int, raw string) (string, string, error) {
 		}
 		return address.String(), address.String(), nil
 	case 2, 5, 12:
-		target, valid := normalizedDNSName(value)
+		target, valid := caso.NormalizeDNSName(value)
 		if !valid {
 			return "", "", errors.New("destino DNS inválido")
 		}
@@ -182,7 +160,7 @@ func dnsData(rr int, raw string) (string, string, error) {
 			}
 			fields[i] = strconv.FormatUint(n, 10)
 		}
-		target, valid := normalizedDNSName(fields[prefix])
+		target, valid := caso.NormalizeDNSName(fields[prefix])
 		if !valid {
 			return "", "", errors.New("destino DNS inválido")
 		}

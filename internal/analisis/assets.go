@@ -286,6 +286,19 @@ func recordAssets(record caso.Record, network assetNetwork, kind string, visit f
 		}
 	}
 	if withHosts {
+		if record.Kind == "dns" && (strings.Contains(record.SourceID, "/respuesta/") || strings.Contains(record.SourceID, "/pregunta/")) {
+			if len(record.Source) <= 512 {
+				first, last, _ := strings.Cut(record.Source, ",")
+				owner, valid := normalizeAsset(hostAsset(strings.TrimSpace(first)))
+				if valid {
+					visit(owner, role)
+				}
+				if target, valid := normalizeAsset(hostAsset(strings.TrimSpace(last))); valid && target != owner {
+					visit(target, role)
+				}
+			}
+			return
+		}
 		for _, host := range sourceHosts(record.Source, record.Kind == "rdap") {
 			visit(hostAsset(host), role)
 		}
@@ -316,7 +329,8 @@ func normalizeAsset(key AssetKey) (AssetKey, bool) {
 	case "dominio", "ipv4", "ipv6":
 		kind := hostAsset(value)
 		if kind.Type == "dominio" {
-			kind.Value = namedHost(value)
+			name, valid := caso.NormalizeDNSName(value)
+			return AssetKey{Type: "dominio", Value: name}, key.Type == "dominio" && valid && name != "."
 		}
 		return kind, kind.Type == key.Type && kind.Value != ""
 	case "md5", "sha1", "sha256":
