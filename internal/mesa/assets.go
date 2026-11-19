@@ -84,6 +84,23 @@ func assetRoutes(mux *http.ServeMux, store *caso.Store) {
 		}
 		respond(w, report)
 	})
+	mux.HandleFunc("GET /api/activos/relaciones", func(w http.ResponseWriter, r *http.Request) {
+		params, err := url.ParseQuery(r.URL.RawQuery)
+		if err != nil {
+			assetError(w, analisis.ErrAssetQuery)
+			return
+		}
+		criteria := analisis.AssetRelationCriteria{
+			AssetKey: analisis.AssetKey{Type: params.Get("tipo"), Value: params.Get("valor")},
+			From:     params.Get("desde"), To: params.Get("hasta"),
+		}
+		report, err := analisis.RelateAsset(r.Context(), store, criteria)
+		if err != nil {
+			assetError(w, err)
+			return
+		}
+		respond(w, report)
+	})
 }
 
 func assetError(w http.ResponseWriter, err error) {
@@ -94,7 +111,7 @@ func assetError(w http.ResponseWriter, err error) {
 		http.Error(w, "Activo inexistente en el expediente", http.StatusNotFound)
 	case errors.Is(err, analisis.ErrLimit):
 		http.Error(w, "La consulta de activos supera el límite de 10000 registros", http.StatusUnprocessableEntity)
-	case errors.Is(err, analisis.ErrSnapshotBytes):
+	case errors.Is(err, analisis.ErrSnapshotBytes), errors.Is(err, analisis.ErrAssetRelationLimit):
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 	default:
 		http.Error(w, "No se pudo consultar el inventario", http.StatusInternalServerError)

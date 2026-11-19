@@ -29,6 +29,7 @@ Uso: pavarotti [opciones globales] <comando> [argumentos]
   activos   Busca dominios, direcciones, redes y huellas y abre sus fichas.
   seguimiento Organiza activos en listas y consulta sus fuentes en el expediente.
   cobertura-activo Guarda las fuentes y observaciones de un activo por periodo UTC.
+  relaciones-activo Exporta relaciones de un activo con sus citas de evidencia.
   importar  Incorpora evidencia, código Go o manifiestos de dependencias.
   revisar   Revisa código Go y manifiestos de un directorio local.
   triaje    Consulta o clasifica señales de código con su justificación.
@@ -81,6 +82,8 @@ func Run(args []string, stdout, stderr io.Writer, open func() (*caso.Store, erro
 		err = terminalWatchlists(args[1:], stdout, stderr, open)
 	case "cobertura-activo":
 		err = terminalAssetCoverage(args[1:], stdout, stderr, open)
+	case "relaciones-activo":
+		err = terminalAssetRelations(args[1:], stdout, stderr, open)
 	case "importar":
 		err = terminalImport(args[1:], stdout, stderr, open)
 	case "revisar":
