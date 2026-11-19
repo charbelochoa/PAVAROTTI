@@ -36,7 +36,8 @@ func TestSTIXCorrelatesIndicatorAndDNS(t *testing.T) {
 		}
 	}
 	if records[0].Indicator == nil || records[0].Source != "" || records[1].Source != "b.example.invalid" ||
-		records[2].Time != "2024-01-01T02:00:00Z" || !strings.Contains(records[3].Details, domainID) {
+		records[2].Time != "2024-01-01T02:00:00Z" || !strings.Contains(records[3].Details, domainID) ||
+		len(records[2].STIX.Refs) != 1 || records[2].STIX.Refs[0].ID != domainID || len(records[3].STIX.Refs) != 2 {
 		t.Fatal(records)
 	}
 	store, err := caso.Open(t.TempDir())

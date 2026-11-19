@@ -65,6 +65,7 @@ footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2re
 #record-detail p { margin-top: .4rem; }
 .asset-sources { display: grid; gap: .4rem; margin-top: .8rem; }
 .asset-sources button { display: grid; gap: .15rem; text-align: left; overflow-wrap: anywhere; }
+.stix-links { margin-top: .8rem; }
 .tools { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .6rem; }
 .tools[hidden] { display: none; }
 #report-panel { width: min(840px, calc(100vw - 2rem)); }

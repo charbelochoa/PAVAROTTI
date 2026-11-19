@@ -64,7 +64,7 @@ func ListAssets(ctx context.Context, store *caso.Store, query AssetQuery) (Asset
 		}
 	}
 	rows := make(map[AssetKey]AssetRow)
-	err := walkAssetRecords(ctx, store, func(record caso.Record) {
+	err := walkEvidence(ctx, store, func(record caso.Record) {
 		recordAssets(record, recordNetwork(record), func(key AssetKey, role string) {
 			if (query.Type != "" && key.Type != query.Type) || (term != "" && !strings.Contains(key.Value, term)) ||
 				(query.After != "" && key.cursor() <= query.After) {
@@ -105,7 +105,7 @@ func DescribeAsset(ctx context.Context, store *caso.Store, query AssetQuery) (As
 	detail := AssetDetail{AssetRow: AssetRow{AssetKey: key}}
 	rows := make([]AssetReference, 0)
 	address, _ := netip.ParseAddr(key.Value)
-	err := walkAssetRecords(ctx, store, func(record caso.Record) {
+	err := walkEvidence(ctx, store, func(record caso.Record) {
 		network := recordNetwork(record)
 		direct := false
 		recordAssets(record, network, func(candidate AssetKey, role string) {
@@ -150,7 +150,7 @@ func DescribeAsset(ctx context.Context, store *caso.Store, query AssetQuery) (As
 	return detail, nil
 }
 
-func walkAssetRecords(ctx context.Context, store *caso.Store, visit func(caso.Record)) error {
+func walkEvidence(ctx context.Context, store *caso.Store, visit func(caso.Record)) error {
 	count := 0
 	return store.Walk(ctx, func(record caso.Record) error {
 		if count == RecordLimit {
