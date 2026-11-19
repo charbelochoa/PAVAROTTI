@@ -88,6 +88,57 @@ func TestNotesAndEvidencePostgres(t *testing.T) {
 	if err != nil || len(records) != 0 {
 		t.Fatalf("aislamiento de expedientes: %+v, %v", records, err)
 	}
+	checkMigration(t, first)
+}
+
+func checkMigration(t *testing.T, destination *Store) {
+	t.Helper()
+	path := t.TempDir()
+	source, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := source.Save([]Record{{Kind: "nota", Time: Now(), Title: "Migrar", Details: "Original local"}}); err != nil {
+		t.Fatal(err)
+	}
+	records, err := source.Records()
+	if err != nil || len(records) != 1 {
+		t.Fatalf("expediente de origen: %+v, %v", records, err)
+	}
+	id := records[0].ID
+	if _, err := source.Edit(id, 1, "Migrada", "", "Revisión local"); err != nil {
+		t.Fatal(err)
+	}
+	if count, err := destination.ImportLocal(path); err != nil || count != 1 {
+		t.Fatalf("primera importación: %d, %v", count, err)
+	}
+	if count, err := destination.ImportLocal(path); err != nil || count != 0 {
+		t.Fatalf("reimportación: %d, %v", count, err)
+	}
+	history, err := destination.History(id)
+	if err != nil || len(history) != 1 || history[0].Details != "Original local" {
+		t.Fatalf("historial migrado: %+v, %v", history, err)
+	}
+	if _, err := destination.Edit(id, 2, "Destino", "", "Revisión de destino"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.Edit(id, 2, "Origen", "", "Revisión local en conflicto"); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.Save([]Record{{Kind: "nota", Time: Now(), Title: "Sujeta al rollback", Details: "No debe copiarse"}}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := destination.Records()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count, err := destination.ImportLocal(path); count != 0 || !errors.Is(err, ErrMigrationConflict) {
+		t.Fatalf("conflicto de migración: %d, %v", count, err)
+	}
+	after, err := destination.Records()
+	if err != nil || len(after) != len(before) {
+		t.Fatalf("estado tras conflicto: %+v, %v", after, err)
+	}
 }
 
 func randBytes(t *testing.T) []byte {
