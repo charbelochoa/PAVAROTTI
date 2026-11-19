@@ -185,6 +185,11 @@ func TestEdicionAnalisisYRevision(t *testing.T) {
 	call("GET", "/api/registro/pagina?despues=invalido", "", 400)
 	code := "package demo\nimport \"net/http\"\nfunc check() { http.Get(\"https://example.invalid\") }"
 	call("POST", "/api/archivo/codigo", code, 200)
+	call("POST", "/api/archivo/gomod", "module sample.invalid/app\nrequire sample.invalid/module v1.2.3\n", 200)
+	deps := call("GET", "/api/registro/pagina?tipo=dependencias&buscar=sample.invalid%2Fmodule", "", 200).Body.String()
+	if !strings.Contains(deps, "go.mod") {
+		t.Fatal(deps)
+	}
 	dns := `{"Status":0,"Answer":[{"name":"example.invalid.","type":1,"TTL":120,"data":"192.0.2.17"}]}`
 	for _, expected := range []caso.SaveResult{{Imported: 1}, {Duplicates: 1}} {
 		var result caso.SaveResult

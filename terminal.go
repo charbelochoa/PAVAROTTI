@@ -27,7 +27,7 @@ Uso: pavarotti [opciones globales] <comando> [argumentos]
 
   listar    Consulta el expediente con filtros por tipo y texto.
   activos   Busca dominios, direcciones, redes y huellas y abre sus fichas.
-  importar  Incorpora HAR, DNS, RDAP, STIX, hallazgos, binarios, código Go o indicadores.
+  importar  Incorpora evidencia, código Go o manifiestos de dependencias.
   nota      Registra una nota del analista.
   editar    Actualiza una nota con su revisión actual.
   historial Consulta las versiones previas de una nota.
@@ -119,12 +119,12 @@ func terminalFlags(name, usage string, stderr io.Writer) *flag.FlagSet {
 }
 
 func terminalImport(args []string, stdout, stderr io.Writer, open openExpediente) error {
-	flags := terminalFlags("importar", "importar <har|hallazgos|binario|codigo|indicadores|dns|rdap|stix> <archivo>", stderr)
+	flags := terminalFlags("importar", "importar <har|hallazgos|binario|codigo|gomod|npmlock|indicadores|dns|rdap|stix> <archivo>", stderr)
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 2 {
-		return errors.New("uso: pavarotti importar <har|hallazgos|binario|codigo|indicadores|dns|rdap|stix> <archivo>")
+		return errors.New("usa pavarotti importar --help")
 	}
 	path := flags.Arg(1)
 	info, err := os.Stat(path)
@@ -186,7 +186,7 @@ func terminalNote(args []string, stdout, stderr io.Writer, open openExpediente) 
 
 func terminalRecords(command string, args []string, stdout, stderr io.Writer, open openExpediente) error {
 	flags := terminalFlags(command, command+" [opciones]", stderr)
-	kind := flags.String("tipo", "", "filtra por tipo: har, hallazgo, tráfico, binario, código, indicador, dns, rdap, stix, nota")
+	kind := flags.String("tipo", "", "filtra por tipo: har, hallazgo, tráfico, binario, código, dependencias, indicador, dns, rdap, stix, nota")
 	query := flags.String("buscar", "", "busca texto en el título, origen, ID, huella y detalle")
 	format := "tabla"
 	var output string
@@ -259,7 +259,7 @@ func recordKind(kind string) (string, error) {
 		return "hallazgo", nil
 	case "codigo", "código":
 		return "código", nil
-	case "", "binario", "nota", "indicador", "dns", "rdap", "stix":
+	case "", "binario", "nota", "dependencias", "indicador", "dns", "rdap", "stix":
 		return strings.ToLower(strings.TrimSpace(kind)), nil
 	default:
 		return "", fmt.Errorf("tipo desconocido %q", kind)
@@ -287,6 +287,9 @@ func matchesExportFilter(record caso.Record, kind, query string) bool {
 		return false
 	}
 	if query == "" {
+		return true
+	}
+	if record.MatchesDependency(query) {
 		return true
 	}
 	text := strings.Join([]string{record.ID, record.Title, record.Source, record.SourceID, record.SHA256,

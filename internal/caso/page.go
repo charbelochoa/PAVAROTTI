@@ -136,6 +136,9 @@ func matches(record Record, term string) bool {
 	if term == "" {
 		return true
 	}
+	if record.MatchesDependency(term) {
+		return true
+	}
 	fields := []string{record.ID, record.Kind, record.Time, record.Title, record.Source, record.SourceID, record.SHA256, record.Details}
 	fields = append(fields, record.Signals...)
 	if record.Traffic != nil {

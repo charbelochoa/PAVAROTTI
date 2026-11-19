@@ -18,8 +18,8 @@ import (
 const MaxBytes = 32 << 20
 
 var (
-	ErrKind = errors.New("tipo de archivo desconocido, usa har, hallazgos, binario, codigo, indicadores, dns, rdap o stix")
-	ErrSize = errors.New("el archivo supera el límite de 32 MiB")
+	ErrKind = errors.New("tipo de archivo desconocido, usa har, hallazgos, binario, codigo, gomod, npmlock, indicadores, dns, rdap o stix")
+	ErrSize = errors.New("el archivo supera el límite")
 )
 
 func Parse(kind string, reader io.Reader) ([]caso.Record, error) {
@@ -27,18 +27,23 @@ func Parse(kind string, reader io.Reader) ([]caso.Record, error) {
 }
 
 func ParseNamed(kind string, reader io.Reader, name string) ([]caso.Record, error) {
+	limit := MaxBytes
 	switch kind {
-	case "har", "hallazgos", "binario", "codigo", "indicadores", "dns", "rdap", "stix":
+	case "har", "hallazgos", "binario", "indicadores", "dns", "rdap", "stix":
+	case "codigo":
+		limit = revision.MaxSource
+	case "gomod", "npmlock":
+		limit = revision.MaxManifest
 	default:
 		return nil, ErrKind
 	}
 
-	data, err := io.ReadAll(io.LimitReader(reader, MaxBytes+1))
+	data, err := io.ReadAll(io.LimitReader(reader, int64(limit)+1))
 	if err != nil {
 		return nil, fmt.Errorf("leer archivo: %w", err)
 	}
-	if len(data) > MaxBytes {
-		return nil, ErrSize
+	if len(data) > limit {
+		return nil, fmt.Errorf("%w de %d MiB", ErrSize, limit>>20)
 	}
 	if len(data) == 0 {
 		return nil, errors.New("el archivo está vacío")
@@ -72,6 +77,21 @@ func ParseNamed(kind string, reader io.Reader, name string) ([]caso.Record, erro
 		}
 		return []caso.Record{{Kind: "código", Time: caso.Now(), Title: "Revisión Go · " + report.Package,
 			SHA256: caso.Hash(data), SourceID: sourceName(name), Details: string(details), Signals: signals, Review: &report}}, nil
+	case "gomod", "npmlock":
+		inventory, err := revision.Inventory(kind, data)
+		if err != nil {
+			return nil, err
+		}
+		label := sourceName(name)
+		if label == "" {
+			label = inventory.Manifest
+		}
+		title := "Dependencias · " + inventory.Manifest
+		if inventory.Project != "" {
+			title += " · " + inventory.Project
+		}
+		return []caso.Record{{Kind: "dependencias", Time: caso.Now(), Title: title, SourceID: label,
+			SHA256: caso.Hash(data), Dependencies: &inventory}}, nil
 	default:
 		result := triaje.Inspect(data)
 		details, err := json.MarshalIndent(result, "", "  ")

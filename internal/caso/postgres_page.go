@@ -45,7 +45,15 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 		       current_record->>'signals', current_record->'traffic'->>'method',
 		       current_record->'traffic'->>'type', current_record->'traffic'->>'status',
 		       current_record->'traffic'->>'millis', current_record->'traffic'->>'bucket')),
-		       'ÁÉÍÓÚÜÑ', 'áéíóúüñ'), $5) > 0)
+		       'ÁÉÍÓÚÜÑ', 'áéíóúüñ'), $5) > 0 OR EXISTS (
+			SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(current_record->'dependencies'->'entries') = 'array'
+				THEN current_record->'dependencies'->'entries' ELSE '[]'::jsonb END) AS component(item)
+			WHERE strpos(lower(COALESCE(item->>'name', '')), $5) > 0 OR
+			      strpos(lower(COALESCE(item->>'version', '')), $5) > 0 OR
+			      strpos(lower(COALESCE(item->>'installed_as', '')), $5) > 0 OR
+			      strpos(lower(COALESCE(item->'replacement'->>'name', '')), $5) > 0 OR
+			      strpos(lower(COALESCE(item->'replacement'->>'version', '')), $5) > 0
+		  ))
 		ORDER BY stamp DESC, id COLLATE "C" DESC LIMIT $6
 	`, s.expediente, request.Kind, after.ID, after.Stamp, strings.ToLower(request.Search), limit, request.HTTPClass)
 	if err != nil {
