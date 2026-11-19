@@ -38,7 +38,7 @@ button:disabled { opacity: .6; cursor: wait; }
 .primary { background: #552e31; border-color: #a05b5d; }
 .filters { align-items: stretch; margin: .65rem 0; flex-wrap: wrap; gap: .45rem; }
 .filters input { flex: 1; }
-.views { display: flex; gap: .35rem; border-bottom: 1px solid var(--line); padding-bottom: .45rem; }
+.views { display: flex; flex-wrap: wrap; gap: .35rem; border-bottom: 1px solid var(--line); padding-bottom: .45rem; }
 .views button { background: transparent; }
 .views button[aria-pressed="true"] { background: #39272b; border-color: var(--accent); }
 .pager { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .45rem; border-top: 1px solid var(--line); margin-top: .65rem; padding-top: .65rem; font-size: .82rem; }
@@ -63,6 +63,8 @@ footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2re
 #record-detail { max-height: 75vh; overflow: auto; margin-top: .6rem; overflow-wrap: anywhere; }
 #record-detail h3 { margin: .4rem 0; }
 #record-detail p { margin-top: .4rem; }
+.asset-sources { display: grid; gap: .4rem; margin-top: .8rem; }
+.asset-sources button { display: grid; gap: .15rem; text-align: left; overflow-wrap: anywhere; }
 .tools { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .6rem; }
 .tools[hidden] { display: none; }
 #report-panel { width: min(840px, calc(100vw - 2rem)); }
