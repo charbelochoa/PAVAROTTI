@@ -179,9 +179,15 @@ func TestEdicionAnalisisYRevision(t *testing.T) {
 	call("GET", "/api/registro/pagina?despues=invalido", "", 400)
 	code := "package demo\nimport \"net/http\"\nfunc check() { http.Get(\"https://example.invalid\") }"
 	call("POST", "/api/archivo/codigo", code, 200)
+	dns := `{"Status":0,"Answer":[{"name":"example.invalid.","type":1,"TTL":120,"data":"192.0.2.17"}]}`
+	call("POST", "/api/archivo/dns", dns, 200)
+	dnsPage := call("GET", "/api/registro/pagina?tipo=dns&buscar=192.0.2.17", "", 200).Body.String()
+	if !strings.Contains(dnsPage, "A example.invalid") {
+		t.Fatal(dnsPage)
+	}
 	call("POST", "/api/analisis/tareas", `{"priority":1}`, 409)
 	data := call("POST", "/api/analisis", "", 200).Body.String()
-	if !strings.Contains(data, "example.invalid") || !strings.Contains(data, records[0].ID) {
+	if !strings.Contains(data, "example.invalid") || !strings.Contains(data, records[0].ID) || !strings.Contains(data, "192.0.2.17") {
 		t.Fatal(data)
 	}
 }

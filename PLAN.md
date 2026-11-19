@@ -42,13 +42,13 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 1. **Consulta del expediente.** Paginación, búsqueda e inspector bajo demanda. La prueba de cierre comprueba que fechas iguales y notas editadas no duplican ni ocultan resultados al cambiar de página.
 2. **Entrada de análisis acotada.** La interfaz y el CLI preparan la misma instantánea con los campos que usan los agentes y los IDs y revisiones de evidencia. El informe incluye su SHA-256 y la versión de los agentes. La lectura se detiene al exceder 10,000 registros o 32 MiB de metadatos. Las pruebas cubren el exceso de registros, la cancelación y un cambio de revisión.
 3. **Cola persistente.** Desde 0.3.2, PostgreSQL guarda instantáneas, estados y resultados por expediente. Dos ejecutores pueden compartir una cola con prioridades, cancelación y hasta tres intentos. La prueba interrumpe un proceso después de que obtiene la asignación y verifica que otro recupera la misma tarea y guarda un único informe.
-4. **Ingesta y correlación.** Añadir DNS, RDAP y STIX por separado. Usar muestras aportadas y versionadas. Conectar cada coincidencia con su registro en el inspector y comprobar que las exportaciones mantienen la procedencia.
+4. **Ingesta y correlación.** 0.3.3 incorpora archivos de respuestas DNS JSON. Cada registro conserva su posición y huella, y el inventario usa los nombres y destinos aportados. Quedan RDAP, STIX, los enlaces directos al inspector y la verificación de procedencia en exportaciones.
 5. **Revisión y operación compartida.** Extender las reglas estáticas. Añadir autenticación, permisos, auditoría y restauración antes de abrir el acceso a otros equipos.
 6. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
 
 ## Flujo de trabajo OSINT
 
-1. **Incorporar.** Un expediente reúne indicadores, capturas HTTP y binarios. Los importadores DNS, RDAP y STIX pendientes añadirán observaciones con sus referencias y fechas de origen.
+1. **Incorporar.** Un expediente reúne indicadores, capturas HTTP, binarios y respuestas DNS aportadas. Los importadores RDAP y STIX añadirán observaciones con sus referencias y fechas de origen.
 2. **Examinar.** La mesa de trabajo conserva la lista central, el inspector y las tareas. El siguiente recorrido de interfaz enlazará la cronología y las coincidencias con la evidencia concreta y añadirá una vista de historial HTTP.
 3. **Correlacionar.** Los agentes agrupan la evidencia por activo, respuesta HTTP e indicador. Los resultados quedan asociados a la versión del agente y a la huella de entrada.
 4. **Entregar.** El analista verifica coincidencias, añade notas y exporta el expediente. Los créditos del binario quedan accesibles en su panel propio.
