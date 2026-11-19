@@ -43,8 +43,24 @@ jobs:
       - run: go vet ./...
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
       - run: CGO_ENABLED=0 go build -trimpath -o PAVAROTTI-Kali-x64 .
-      - run: docker run --rm -v "$PWD/PAVAROTTI-Kali-x64:/opt/pavarotti:ro" kalilinux/kali-rolling /opt/pavarotti -version
-      - run: docker run --rm -v "$PWD/PAVAROTTI-Kali-x64:/opt/pavarotti:ro" archlinux:base /opt/pavarotti -version
+      - name: Ingesta OSINT con el binario de Kali y Arch
+        run: |
+          samples=$(mktemp -d)
+          cat > "$samples/rdap.json" <<'JSON'
+          {"objectClassName":"domain","ldhName":"evidencia.example.invalid","status":["active"]}
+          JSON
+          cat > "$samples/stix.json" <<'JSON'
+          {"type":"bundle","id":"bundle--b451dd1c-4321-4bee-99b7-7dcaf8148f8f","objects":[{"type":"indicator","spec_version":"2.1","id":"indicator--9324a333-6a0b-4df1-8fdb-d266df2800ea","pattern_type":"stix","pattern":"[domain-name:value = 'evidencia.example.invalid']"}]}
+          JSON
+          for image in kalilinux/kali-rolling archlinux:base; do
+            docker run --rm --network none -v "$PWD/PAVAROTTI-Kali-x64:/opt/pavarotti:ro" -v "$samples:/samples:ro" "$image" /bin/sh -ec '
+              /opt/pavarotti -version >&2
+              /opt/pavarotti -datos /tmp/expediente importar rdap /samples/rdap.json >&2
+              /opt/pavarotti -datos /tmp/expediente importar stix /samples/stix.json >&2
+              /opt/pavarotti -datos /tmp/expediente analizar --json
+            ' > "$samples/report.json"
+            python3 -c 'import json, sys; report = json.load(open(sys.argv[1])); assert report["records"] == 2; match, = report["matches"]; assert match["value"] == "evidencia.example.invalid"; assert {item["kind"] for item in match["evidence"]} == {"rdap", "stix"}' "$samples/report.json"
+          done
   compose:
     runs-on: ubuntu-24.04
     env:
