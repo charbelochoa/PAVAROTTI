@@ -24,7 +24,8 @@ const terminalUsage = `PAVAROTTI · expediente Blue Team
 Uso: pavarotti [opciones globales] <comando> [argumentos]
 
   listar    Consulta el expediente con filtros por tipo y texto.
-  importar  Incorpora capturas HAR o DNS JSON, hallazgos, binarios, código Go o indicadores.
+  activos   Busca dominios, direcciones, redes y huellas y abre sus fichas.
+  importar  Incorpora HAR, DNS, RDAP, STIX, hallazgos, binarios, código Go o indicadores.
   nota      Registra una nota del analista.
   editar    Actualiza una nota con su revisión actual.
   historial Consulta las versiones previas de una nota.
@@ -57,6 +58,8 @@ func terminal(args []string, stdout, stderr io.Writer, open func() (*caso.Store,
 		_, err = io.WriteString(stdout, terminalUsage)
 	case "listar":
 		err = terminalRecords("listar", args[1:], stdout, stderr, open)
+	case "activos":
+		err = terminalAssets(args[1:], stdout, stderr, open)
 	case "importar":
 		err = terminalImport(args[1:], stdout, stderr, open)
 	case "nota":

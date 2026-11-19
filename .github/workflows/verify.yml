@@ -57,9 +57,25 @@ jobs:
               /opt/pavarotti -version >&2
               /opt/pavarotti -datos /tmp/expediente importar rdap /samples/rdap.json >&2
               /opt/pavarotti -datos /tmp/expediente importar stix /samples/stix.json >&2
+              /opt/pavarotti -datos /tmp/expediente activos --tipo dominio --valor evidencia.example.invalid --json
               /opt/pavarotti -datos /tmp/expediente analizar --json
-            ' > "$samples/report.json"
-            python3 -c 'import json, sys; report = json.load(open(sys.argv[1])); assert report["records"] == 2; match, = report["matches"]; assert match["value"] == "evidencia.example.invalid"; assert {item["kind"] for item in match["evidence"]} == {"rdap", "stix"}' "$samples/report.json"
+            ' > "$samples/resultados.json"
+            python3 - "$samples/resultados.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          payload = Path(sys.argv[1]).read_text(encoding="utf-8")
+          asset, offset = json.JSONDecoder().raw_decode(payload)
+          report = json.loads(payload[offset:])
+          assert asset["value"] == "evidencia.example.invalid"
+          assert asset["count"] == 2 and asset["indicators"] == 1
+          assert {row["role"] for row in asset["rows"]} == {"registro", "indicador"}
+          assert all(row["id"] and row["revision"] == 1 for row in asset["rows"])
+          assert report["records"] == 2
+          match, = report["matches"]
+          assert match["value"] == asset["value"]
+          assert {item["kind"] for item in match["evidence"]} == {"rdap", "stix"}
+          PY
           done
   compose:
     runs-on: ubuntu-24.04
