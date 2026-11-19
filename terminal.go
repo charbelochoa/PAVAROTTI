@@ -24,8 +24,11 @@ const terminalUsage = `PAVAROTTI · expediente Blue Team
 Uso: pavarotti [opciones globales] <comando> [argumentos]
 
   listar    Consulta el expediente con filtros por tipo y texto.
-  importar  Importa un HAR, hallazgos JSON o un binario local.
+  importar  Incorpora un HAR, hallazgos JSON, un binario o código Go local.
   nota      Registra una nota del analista.
+  editar    Actualiza una nota con su revisión actual.
+  historial Consulta las versiones previas de una nota.
+  analizar  Correlaciona la evidencia del expediente.
   exportar  Exporta el expediente como JSON o CSV.
   ayuda     Muestra esta ayuda.
 
@@ -52,6 +55,12 @@ func terminal(args []string, stdout, stderr io.Writer, open func() (*caso.Store,
 		err = terminalImport(args[1:], stdout, stderr, open)
 	case "nota":
 		err = terminalNote(args[1:], stdout, stderr, open)
+	case "editar":
+		err = terminalEdit(args[1:], stdout, stderr, open)
+	case "historial":
+		err = terminalHistory(args[1:], stdout, stderr, open)
+	case "analizar":
+		err = terminalAnalyze(args[1:], stdout, stderr, open)
 	case "exportar":
 		err = terminalRecords("exportar", args[1:], stdout, stderr, open)
 	default:
@@ -74,12 +83,12 @@ func terminalFlags(name, usage string, stderr io.Writer) *flag.FlagSet {
 }
 
 func terminalImport(args []string, stdout, stderr io.Writer, open openExpediente) error {
-	flags := terminalFlags("importar", "importar <har|hallazgos|binario> <archivo>", stderr)
+	flags := terminalFlags("importar", "importar <har|hallazgos|binario|codigo> <archivo>", stderr)
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 2 {
-		return errors.New("uso: pavarotti importar <har|hallazgos|binario> <archivo>")
+		return errors.New("uso: pavarotti importar <har|hallazgos|binario|codigo> <archivo>")
 	}
 	path := flags.Arg(1)
 	info, err := os.Stat(path)
@@ -103,6 +112,7 @@ func terminalImport(args []string, stdout, stderr io.Writer, open openExpediente
 	if err != nil {
 		return err
 	}
+	defer store.Close()
 	if err := store.Save(records); err != nil {
 		return err
 	}
@@ -129,6 +139,7 @@ func terminalNote(args []string, stdout, stderr io.Writer, open openExpediente) 
 	if err != nil {
 		return err
 	}
+	defer store.Close()
 	if err := store.Save([]caso.Record{record}); err != nil {
 		return err
 	}
@@ -138,7 +149,7 @@ func terminalNote(args []string, stdout, stderr io.Writer, open openExpediente) 
 
 func terminalRecords(command string, args []string, stdout, stderr io.Writer, open openExpediente) error {
 	flags := terminalFlags(command, command+" [opciones]", stderr)
-	kind := flags.String("tipo", "", "filtra por tipo: har, hallazgo, tráfico, binario, nota")
+	kind := flags.String("tipo", "", "filtra por tipo: har, hallazgo, tráfico, binario, código, nota")
 	query := flags.String("buscar", "", "busca texto en el título, origen, ID, huella y detalle")
 	format := "tabla"
 	var output string
@@ -172,6 +183,7 @@ func terminalRecords(command string, args []string, stdout, stderr io.Writer, op
 	if err != nil {
 		return err
 	}
+	defer store.Close()
 	records, err := store.Records()
 	if err != nil {
 		return err
@@ -191,6 +203,8 @@ func recordKind(kind string) (string, error) {
 		return "tráfico", nil
 	case "hallazgo", "hallazgos":
 		return "hallazgo", nil
+	case "codigo", "código":
+		return "código", nil
 	case "", "binario", "nota":
 		return strings.ToLower(strings.TrimSpace(kind)), nil
 	default:
@@ -205,7 +219,7 @@ func filterRecords(records []caso.Record, kind string, query string) []caso.Reco
 		if kind != "" && record.Kind != kind {
 			continue
 		}
-		text := strings.Join([]string{record.Title, record.Source, record.SourceID, record.SHA256,
+		text := strings.Join([]string{record.ID, record.Title, record.Source, record.SourceID, record.SHA256,
 			record.Details, strings.Join(record.Signals, "\n")}, "\n")
 		if query == "" || strings.Contains(strings.ToLower(text), query) {
 			results = append(results, record)
@@ -248,25 +262,25 @@ func encodeRecords(output io.Writer, format string, records []caso.Record) error
 		return err
 	}
 	table := tabwriter.NewWriter(output, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(table, "FECHA\tTIPO\tID DE ORIGEN\tTÍTULO\tORIGEN")
+	fmt.Fprintln(table, "ID\tREV\tFECHA\tTIPO\tTÍTULO\tORIGEN")
 	for _, record := range records {
-		fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\n", terminalText(record.Time), terminalText(record.Kind),
-			terminalText(record.SourceID), terminalText(record.Title), terminalText(record.Source))
+		fmt.Fprintf(table, "%s\t%d\t%s\t%s\t%s\t%s\n", terminalText(record.ID), record.Revision,
+			terminalText(record.Time), terminalText(record.Kind), terminalText(record.Title), terminalText(record.Source))
 	}
 	return table.Flush()
 }
 
 func encodeCSV(output io.Writer, records []caso.Record) error {
 	writer := csv.NewWriter(output)
-	if err := writer.Write([]string{"fecha", "tipo", "id_origen", "titulo", "origen", "sha256", "detalle",
+	if err := writer.Write([]string{"id", "revision", "fecha", "tipo", "id_origen", "titulo", "origen", "sha256", "detalle",
 		"senales", "metodo", "estado_http", "tipo_contenido", "duracion_ms"}); err != nil {
 		return err
 	}
 	for _, record := range records {
-		row := []string{record.Time, record.Kind, record.SourceID, record.Title, record.Source,
+		row := []string{record.ID, strconv.Itoa(record.Revision), record.Time, record.Kind, record.SourceID, record.Title, record.Source,
 			record.SHA256, record.Details, strings.Join(record.Signals, "\n"), "", "", "", ""}
 		if traffic := record.Traffic; traffic != nil {
-			row[8], row[9], row[10], row[11] = traffic.Method, strconv.Itoa(traffic.Status), traffic.Type,
+			row[10], row[11], row[12], row[13] = traffic.Method, strconv.Itoa(traffic.Status), traffic.Type,
 				strconv.FormatInt(traffic.Millis, 10)
 		}
 		for i, cell := range row {

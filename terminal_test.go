@@ -44,7 +44,7 @@ func TestTerminalExpediente(t *testing.T) {
 	}
 	export := call("exportar", "--formato", "csv", "--tipo", "nota")
 	rows, err := csv.NewReader(strings.NewReader(export)).ReadAll()
-	if err != nil || len(rows) != 2 || rows[1][3] != "'=1+2" {
+	if err != nil || len(rows) != 2 || rows[1][5] != "'=1+2" {
 		t.Fatalf("CSV: %q (%v)", export, err)
 	}
 }
@@ -64,5 +64,55 @@ func TestTerminalArchivoExportadoNoSeSobrescribe(t *testing.T) {
 	data, err := os.ReadFile(output)
 	if err != nil || !bytes.Equal(data, original) {
 		t.Fatalf("contenido original: %q (%v)", data, err)
+	}
+}
+
+func TestTerminalEditaConHistorial(t *testing.T) {
+	directory := t.TempDir()
+	open := func() (*caso.Store, error) { return caso.Open(directory) }
+	call := func(args ...string) (string, error) {
+		t.Helper()
+		var stdout, stderr bytes.Buffer
+		handled, err := terminal(args, &stdout, &stderr, open)
+		if !handled {
+			t.Fatalf("comando sin registrar: %v", args)
+		}
+		return stdout.String(), err
+	}
+	if _, err := call("nota", "--titulo", "Registro inicial", "--texto", "Parte inicial", "--origen", "inventario"); err != nil {
+		t.Fatal(err)
+	}
+	result, err := call("listar", "--tipo", "nota", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var notes []caso.Record
+	if err := json.Unmarshal([]byte(result), &notes); err != nil || len(notes) != 1 ||
+		notes[0].ID == "" || notes[0].Revision != 1 {
+		t.Fatalf("nota inicial: %s (%v)", result, err)
+	}
+	id := notes[0].ID
+	if _, err := call("editar", "--id", id, "--revision", "1", "--texto", "Parte revisada"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := call("editar", "--id", id, "--revision", "1", "--texto", "No sobrescribir"); err == nil {
+		t.Fatal("aceptó una revisión vencida")
+	}
+	result, err = call("listar", "--buscar", id, "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(result), &notes); err != nil || len(notes) != 1 ||
+		notes[0].Revision != 2 || notes[0].Title != "Registro inicial" ||
+		notes[0].Source != "inventario" || notes[0].Details != "Parte revisada" {
+		t.Fatalf("nota revisada: %s (%v)", result, err)
+	}
+	result, err = call("historial", "--id", id)
+	if err != nil || !strings.Contains(result, "Parte inicial") || strings.Contains(result, "Parte revisada") {
+		t.Fatalf("historial: %s (%v)", result, err)
+	}
+	result, err = call("analizar", "--json")
+	if err != nil || !json.Valid([]byte(result)) {
+		t.Fatalf("informe: %s (%v)", result, err)
 	}
 }
