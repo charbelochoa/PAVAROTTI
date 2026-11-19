@@ -4,6 +4,10 @@ const binaryReferenceWindowLimit = 64;
 const binaryReferenceReportSchema = "pavarotti.binary-references.v1";
 const binaryReferenceReportBytes = 4 * 1024 * 1024;
 
+function binaryHexLocation(value) {
+  return typeof value === "string" && /^0x(?:0|[1-9a-f][a-f0-9]{0,15})$/.test(value);
+}
+
 function binaryReferenceLocation(ref) {
   const anchor = ref.citation || ref.anchor;
   const location = {kind: anchor?.kind || "instruccion", index: anchor?.index ?? ref.index, row: anchor ? ref.index : 0,
@@ -16,12 +20,11 @@ function binaryReferenceLocation(ref) {
 
 function binaryInstructionEntries(instructions, sections) {
   if (!Array.isArray(instructions)) return [];
-  const hex = (value) => typeof value === "string" && /^0x(?:0|[1-9a-f][a-f0-9]{0,15})$/.test(value);
   const entries = [];
   for (const [index, instruction] of instructions.entries()) {
     const section = Number.isInteger(instruction?.section) && sections[instruction.section];
-    if (!section || !hex(instruction.address) || !hex(instruction.offset) || typeof instruction.bytes !== "string" ||
-      typeof instruction.text !== "string" || (instruction.target !== undefined && !hex(instruction.target))) continue;
+    if (!section || !binaryHexLocation(instruction.address) || !binaryHexLocation(instruction.offset) || typeof instruction.bytes !== "string" ||
+      typeof instruction.text !== "string" || (instruction.target !== undefined && !binaryHexLocation(instruction.target))) continue;
     entries.push({instruction, index, section, bytes: instruction.bytes.match(/.{1,2}/g)?.join(" ")});
   }
   return entries;
@@ -53,6 +56,23 @@ function binaryReferenceIndex(saved) {
   }
 
   const recorded = group(saved);
+  function incoming(image, address, offset) {
+    const target = byAddress(image, address);
+    const refs = new Map();
+    const sources = restored ? [recorded, restored, ...windows.values()] : [recorded, ...windows.values()];
+    for (const source of sources) {
+      const offsets = source.locations.get(target) || [];
+      for (const location of offsets) {
+        if (location !== offset) return {ambiguous: true, rows: []};
+      }
+      for (const ref of source.targets.get(target) || []) {
+        const key = `${ref.instruction.address}:${ref.instruction.offset}`;
+        if (rank(ref) >= rank(refs.get(key))) refs.set(key, ref);
+      }
+    }
+    return {ambiguous: false, rows: Array.from(refs.values()).sort((a, b) =>
+      sortLocation(a.instruction.address, b.instruction.address) || sortLocation(a.instruction.offset, b.instruction.offset))};
+  }
   return {
     observe(citation, entries) {
       const key = `${citation.image}:${citation.address}:${citation.offset}`;
@@ -64,22 +84,13 @@ function binaryReferenceIndex(saved) {
       restored = group(report.origins.map((anchor, index) => ({instruction: instructions[index],
         section: {image: report.image}, index: anchor.row, anchor, windowHash: anchor.window_sha256})));
     },
-    incoming(image, address, offset) {
-      const target = byAddress(image, address);
-      const refs = new Map();
-      const sources = restored ? [recorded, restored, ...windows.values()] : [recorded, ...windows.values()];
-      for (const source of sources) {
-        const offsets = source.locations.get(target) || [];
-        for (const location of offsets) {
-          if (location !== offset) return {ambiguous: true, rows: []};
-        }
-        for (const ref of source.targets.get(target) || []) {
-          const key = `${ref.instruction.address}:${ref.instruction.offset}`;
-          if (rank(ref) >= rank(refs.get(key))) refs.set(key, ref);
-        }
+    incoming,
+    forSymbol(symbol) {
+      const image = symbol.image ?? 0;
+      if (!Number.isInteger(image) || image < 0 || symbol.forwarder || !binaryHexLocation(symbol.address) || !binaryHexLocation(symbol.offset)) {
+        return {ambiguous: false, rows: []};
       }
-      return {ambiguous: false, rows: Array.from(refs.values()).sort((a, b) =>
-        sortLocation(a.instruction.address, b.instruction.address) || sortLocation(a.instruction.offset, b.instruction.offset))};
+      return incoming(image, symbol.address, symbol.offset);
     }
   };
 }
