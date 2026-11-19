@@ -114,12 +114,12 @@ func terminalFlags(name, usage string, stderr io.Writer) *flag.FlagSet {
 }
 
 func terminalImport(args []string, stdout, stderr io.Writer, open openExpediente) error {
-	flags := terminalFlags("importar", "importar <har|hallazgos|binario|codigo|indicadores|dns> <archivo>", stderr)
+	flags := terminalFlags("importar", "importar <har|hallazgos|binario|codigo|indicadores|dns|rdap> <archivo>", stderr)
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 2 {
-		return errors.New("uso: pavarotti importar <har|hallazgos|binario|codigo|indicadores|dns> <archivo>")
+		return errors.New("uso: pavarotti importar <har|hallazgos|binario|codigo|indicadores|dns|rdap> <archivo>")
 	}
 	path := flags.Arg(1)
 	info, err := os.Stat(path)
@@ -180,7 +180,7 @@ func terminalNote(args []string, stdout, stderr io.Writer, open openExpediente) 
 
 func terminalRecords(command string, args []string, stdout, stderr io.Writer, open openExpediente) error {
 	flags := terminalFlags(command, command+" [opciones]", stderr)
-	kind := flags.String("tipo", "", "filtra por tipo: har, hallazgo, tráfico, binario, código, indicador, dns, nota")
+	kind := flags.String("tipo", "", "filtra por tipo: har, hallazgo, tráfico, binario, código, indicador, dns, rdap, nota")
 	query := flags.String("buscar", "", "busca texto en el título, origen, ID, huella y detalle")
 	format := "tabla"
 	var output string
@@ -236,7 +236,7 @@ func recordKind(kind string) (string, error) {
 		return "hallazgo", nil
 	case "codigo", "código":
 		return "código", nil
-	case "", "binario", "nota", "indicador", "dns":
+	case "", "binario", "nota", "indicador", "dns", "rdap":
 		return strings.ToLower(strings.TrimSpace(kind)), nil
 	default:
 		return "", fmt.Errorf("tipo desconocido %q", kind)
