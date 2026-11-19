@@ -124,6 +124,8 @@ PAVAROTTI_POSTGRES="$PG_DESTINO" pavarotti -expediente incidente-restaurado rest
 
 El destino debe ser un expediente vacío. La restauración conserva IDs, revisiones y citas y registra la huella del respaldo en **Actividad**. Las tareas que estaban en ejecución vuelven a la cola con los intentos disponibles. Si agotaron sus intentos, quedan registradas como fallidas. Aprovisiona las cuentas de acceso en el destino con `usuarios`.
 
+La restauración valida la copia completa y guarda la evidencia en una sola transacción. La mesa reconstruye en segundo plano los índices de búsqueda e historial HTTP al consultarlos por primera vez en el destino. Las consultas pueden abrir la evidencia durante la reconstrucción.
+
 Guarda la copia en el almacenamiento privado del expediente. El archivo contiene la evidencia y el historial de operaciones.
 
 ### Retener actividad
