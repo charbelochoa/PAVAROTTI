@@ -95,8 +95,9 @@ func identifier(raw json.RawMessage) string {
 }
 
 type HARItem struct {
-	Time float64 `json:"time"`
-	Req  struct {
+	Time            float64 `json:"time"`
+	StartedDateTime string  `json:"startedDateTime"`
+	Req             struct {
 		Method string `json:"method"`
 		URL    string `json:"url"`
 	} `json:"request"`

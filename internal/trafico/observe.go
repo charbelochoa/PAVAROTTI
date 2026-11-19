@@ -63,6 +63,9 @@ func ImportHAR(input []byte) ([]caso.Record, error) {
 		}
 		elapsed := time.Duration(min(max(item.Time, 0), 86_400_000) * float64(time.Millisecond))
 		entry := Observe(origin, item.Req.Method, item.Resp.Status, elapsed, headers)
+		if started, err := time.Parse(time.RFC3339Nano, item.StartedDateTime); err == nil {
+			entry.Time = started.UTC().Format(time.RFC3339Nano)
+		}
 		entry.Kind, entry.SHA256, entry.SourceID = "archivo HAR", hash, fmt.Sprint(index+1)
 		records = append(records, entry)
 	}

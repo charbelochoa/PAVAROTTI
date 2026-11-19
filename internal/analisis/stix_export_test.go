@@ -22,6 +22,7 @@ func TestSTIXExchangeRoundTripPreservesProvenanceAndObservableLinks(t *testing.T
 		{"binario", sample},
 		{"indicadores", sha},
 		{"rdap", `{"objectClassName":"ip network","ipVersion":"v4","startAddress":"192.0.2.3","endAddress":"192.0.2.8"}`},
+		{"har", `{"log":{"entries":[{"startedDateTime":"2025-01-03T10:11:12.034+02:00","request":{"method":"GET","url":"https://localhost/private?session=prueba-privada"},"response":{"status":200}}]}}`},
 		{"stix", `{"type":"bundle","id":"bundle--b451dd1c-4321-4bee-99b7-7dcaf8148f8f","objects":[
 			{"type":"domain-name","id":"domain-name--3c34246b-46a3-5daf-82e8-002ea3559f71","value":"source.invalid","resolves_to_refs":["ipv4-addr--115280b5-64c0-5b55-aa96-d23276647c09"]},
 			{"type":"ipv4-addr","id":"ipv4-addr--115280b5-64c0-5b55-aa96-d23276647c09","value":"192.0.2.5"},
@@ -37,13 +38,8 @@ func TestSTIXExchangeRoundTripPreservesProvenanceAndObservableLinks(t *testing.T
 			t.Fatal(err)
 		}
 	}
-	for _, record := range []caso.Record{
-		{Kind: "archivo HAR", Time: caso.Now(), Source: "https://localhost/private?session=prueba-privada", Traffic: &caso.Traffic{Status: 200}},
-		{Kind: "nota", Time: caso.Now(), Title: "Nota privada", Details: "texto libre de la nota"},
-	} {
-		if err := origin.Save([]caso.Record{record}); err != nil {
-			t.Fatal(err)
-		}
+	if err := origin.Save([]caso.Record{{Kind: "nota", Time: caso.Now(), Title: "Nota privada", Details: "texto libre de la nota"}}); err != nil {
+		t.Fatal(err)
 	}
 	data, stats, err := analisis.ExportSTIX(ctx, origin, nil)
 	if err != nil || stats.Exported != 8 || stats.Excluded != 1 || bytes.Contains(data, []byte(sample)) ||
@@ -69,7 +65,7 @@ func TestSTIXExchangeRoundTripPreservesProvenanceAndObservableLinks(t *testing.T
 		t.Fatal(err)
 	}
 	networks := make(map[string]bool)
-	var relationship, linksFromObservable, countPreserved, hashPreserved, identityPreserved bool
+	var relationship, linksFromObservable, countPreserved, hashPreserved, identityPreserved, harTimePreserved bool
 	for _, row := range stored {
 		object := row.STIXObject()
 		if strings.HasPrefix(object.ID, "relationship--") {
@@ -85,6 +81,9 @@ func TestSTIXExchangeRoundTripPreservesProvenanceAndObservableLinks(t *testing.T
 		if object.Observation != nil && object.Observation.Count == 7 {
 			countPreserved = object.Observation.First == "2025-01-01T00:00:00Z" && object.Observation.Last == "2025-01-02T00:00:00Z"
 		}
+		if object.Observation != nil && object.Observation.Count == 1 && object.Observation.First == "2025-01-03T08:11:12.034Z" {
+			harTimePreserved = object.Observation.First == object.Observation.Last
+		}
 		if len(row.FileHashes) == 1 && row.FileHashes[0].Value == sha && row.SHA256 != sha {
 			hashPreserved = true
 		}
@@ -96,9 +95,9 @@ func TestSTIXExchangeRoundTripPreservesProvenanceAndObservableLinks(t *testing.T
 		}
 		networks[row.Network] = true
 	}
-	if !relationship || !linksFromObservable || !countPreserved || !hashPreserved || !identityPreserved ||
+	if !relationship || !linksFromObservable || !countPreserved || !hashPreserved || !identityPreserved || !harTimePreserved ||
 		!networks["192.0.2.3/32"] || !networks["192.0.2.4/30"] || !networks["192.0.2.8/32"] {
-		t.Fatalf("datos reimportados: relación=%t enlaces=%t recuento=%t huella=%t origen=%t redes=%v",
-			relationship, linksFromObservable, countPreserved, hashPreserved, identityPreserved, networks)
+		t.Fatalf("datos reimportados: relación=%t enlaces=%t recuento=%t huella=%t origen=%t fecha HAR=%t redes=%v",
+			relationship, linksFromObservable, countPreserved, hashPreserved, identityPreserved, harTimePreserved, networks)
 	}
 }
