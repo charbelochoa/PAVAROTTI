@@ -95,14 +95,14 @@ func decodeCursor(raw string) (pageCursor, error) {
 func (s *Store) localPage(ctx context.Context, request PageRequest, after pageCursor, limit int) ([]RecordRow, error) {
 	rows := make(rowHeap, 0, limit)
 	term := strings.ToLower(request.Search)
-	err := s.walkLocal(ctx, true, func(record Record) {
+	err := s.walkLocal(ctx, true, func(record Record) error {
 		cursor := pageCursor{Stamp: strings.TrimSuffix(record.Time, "Z"), ID: record.ID}
 		if (request.Kind != "" && record.Kind != request.Kind) ||
 			(after.ID != "" && compareCursor(cursor, after) >= 0) || !matches(record, term) {
-			return
+			return nil
 		}
 		if len(rows) == limit && compareCursor(cursor, rowCursor(rows[0])) <= 0 {
-			return
+			return nil
 		}
 		row := RecordRow{ID: record.ID, Kind: record.Kind, Time: record.Time,
 			Title: clipRow(record.Title, 240), Source: clipRow(record.Source, 360)}
@@ -112,6 +112,7 @@ func (s *Store) localPage(ctx context.Context, request PageRequest, after pageCu
 			rows[0] = row
 			heap.Fix(&rows, 0)
 		}
+		return nil
 	})
 	slices.SortFunc(rows, func(a, b RecordRow) int { return compareCursor(rowCursor(b), rowCursor(a)) })
 	return rows, err

@@ -40,7 +40,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 ## Orden de implementación
 
 1. **Consulta del expediente.** Paginación, búsqueda e inspector bajo demanda. La prueba de cierre comprueba que fechas iguales y notas editadas no duplican ni ocultan resultados al cambiar de página.
-2. **Entrada de análisis acotada.** Preparar una instantánea con los campos que usan los agentes, las revisiones de evidencia y una huella de entrada. Cortar la lectura al exceder la capacidad y probar el comportamiento con más de 10,000 registros.
+2. **Entrada de análisis acotada.** La interfaz y el CLI preparan la misma instantánea con los campos que usan los agentes y los IDs y revisiones de evidencia. El informe incluye su SHA-256 y la versión de los agentes. La lectura se detiene al exceder 10,000 registros o 32 MiB de metadatos. Las pruebas cubren el exceso de registros, la cancelación y un cambio de revisión.
 3. **Cola persistente.** Guardar estado y resultado del análisis por expediente. Implementar recuperación, cancelación y política de reintentos. Verificar con dos ejecutores y un reinicio entre la asignación y el resultado.
 4. **Ingesta y correlación.** Añadir DNS, RDAP y STIX por separado. Usar muestras aportadas y versionadas. Conectar cada coincidencia con su registro en el inspector y comprobar que las exportaciones mantienen la procedencia.
 5. **Revisión y operación compartida.** Extender las reglas estáticas. Añadir autenticación, permisos, auditoría y restauración antes de abrir el acceso a otros equipos.

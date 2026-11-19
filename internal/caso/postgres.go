@@ -74,8 +74,8 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	return tx.Commit()
 }
 
-func (s *Store) postgresRecords() ([]Record, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
+func (s *Store) postgresWalk(ctx context.Context, visit func(Record) error) error {
+	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT b.batch_key, b.payload, COALESCE((
@@ -90,23 +90,22 @@ func (s *Store) postgresRecords() ([]Record, error) {
 		FROM pavarotti_evidence_batches b
 		WHERE b.expediente = $1 ORDER BY b.batch_key`, s.expediente)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer rows.Close()
-	records := make([]Record, 0)
 	for rows.Next() {
 		var key string
 		var data, overlays []byte
 		if err := rows.Scan(&key, &data, &overlays); err != nil {
-			return nil, err
+			return err
 		}
 		batch, err := decodeBatch(key, data)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		var edited []Record
 		if err := json.Unmarshal(overlays, &edited); err != nil {
-			return nil, err
+			return err
 		}
 		for _, record := range edited {
 			_, ordinal, valid := recordPosition(record.ID)
@@ -114,7 +113,14 @@ func (s *Store) postgresRecords() ([]Record, error) {
 				batch[ordinal-1] = record
 			}
 		}
-		records = append(records, batch...)
+		for _, record := range batch {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := visit(record); err != nil {
+				return err
+			}
+		}
 	}
-	return records, rows.Err()
+	return rows.Err()
 }

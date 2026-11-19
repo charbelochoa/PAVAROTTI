@@ -28,11 +28,12 @@ func terminalAnalyze(args []string, stdout, stderr io.Writer, open openExpedient
 		return err
 	}
 	defer store.Close()
-	records, err := store.Records()
+	ctx := context.Background()
+	snapshot, err := analisis.Prepare(ctx, store)
 	if err != nil {
 		return err
 	}
-	report, err := analisis.Analyze(context.Background(), records)
+	report, err := snapshot.Analyze(ctx)
 	if err != nil {
 		return err
 	}
