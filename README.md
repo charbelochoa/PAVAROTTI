@@ -126,6 +126,8 @@ El destino debe ser un expediente vacío. La restauración conserva IDs, revisio
 
 La restauración valida la copia completa y guarda la evidencia en una sola transacción. La mesa reconstruye en segundo plano los índices de búsqueda e historial HTTP al consultarlos por primera vez en el destino. Las consultas pueden abrir la evidencia durante la reconstrucción.
 
+Durante una restauración se pueden abrir, consultar y editar otros expedientes de la misma base. Si coinciden varias restauraciones, las escrituras pueden tardar más por la carga de disco de PostgreSQL.
+
 Guarda la copia en el almacenamiento privado del expediente. El archivo contiene la evidencia y el historial de operaciones.
 
 ### Retener actividad
