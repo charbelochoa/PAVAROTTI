@@ -156,10 +156,31 @@ func checkStore(t *testing.T, first, second *Store) {
 	origNote := Record{Kind: "nota", Time: originalTime, Title: "Nota", Details: "Dato original"}
 	imported := Record{Kind: "hallazgo", Time: originalTime, Title: "Hallazgo", Source: "Fuente de prueba",
 		SourceID: "37", SHA256: Hash([]byte("fuente original"))}
-	for _, row := range []Record{origNote, imported, imported} {
-		if err := first.Save([]Record{row}); err != nil {
-			t.Fatal(err)
+	if err := first.Save([]Record{origNote}); err != nil {
+		t.Fatal(err)
+	}
+	type importOutcome struct {
+		result SaveResult
+		err    error
+	}
+	imports := make(chan importOutcome, 2)
+	for _, handle := range []*Store{first, second} {
+		go func() {
+			result, err := handle.SaveEvidence(t.Context(), []Record{imported})
+			imports <- importOutcome{result, err}
+		}()
+	}
+	var totals SaveResult
+	for range 2 {
+		outcome := <-imports
+		if outcome.err != nil {
+			t.Fatal(outcome.err)
 		}
+		totals.Imported += outcome.result.Imported
+		totals.Duplicates += outcome.result.Duplicates
+	}
+	if totals != (SaveResult{Imported: 1, Duplicates: 1}) {
+		t.Fatalf("recuento de importación: %+v", totals)
 	}
 	records, err := second.Records()
 	if err != nil || len(records) != 2 {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
@@ -147,10 +148,11 @@ func terminalImport(args []string, stdout, stderr io.Writer, open openExpediente
 		return err
 	}
 	defer store.Close()
-	if err := store.Save(records); err != nil {
+	result, err := store.SaveEvidence(context.Background(), records)
+	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(stdout, "Importación registrada · %d registro(s)\n", len(records))
+	_, err = fmt.Fprintln(stdout, result.Message())
 	return err
 }
 

@@ -186,7 +186,12 @@ func TestEdicionAnalisisYRevision(t *testing.T) {
 	code := "package demo\nimport \"net/http\"\nfunc check() { http.Get(\"https://example.invalid\") }"
 	call("POST", "/api/archivo/codigo", code, 200)
 	dns := `{"Status":0,"Answer":[{"name":"example.invalid.","type":1,"TTL":120,"data":"192.0.2.17"}]}`
-	call("POST", "/api/archivo/dns", dns, 200)
+	for _, expected := range []caso.SaveResult{{Imported: 1}, {Duplicates: 1}} {
+		var result caso.SaveResult
+		if err := json.Unmarshal(call("POST", "/api/archivo/dns", dns, 200).Body.Bytes(), &result); err != nil || result != expected {
+			t.Fatalf("importación: %+v, %v, se esperaba %+v", result, err, expected)
+		}
+	}
 	dnsPage := call("GET", "/api/registro/pagina?tipo=dns&buscar=192.0.2.17", "", 200).Body.String()
 	if !strings.Contains(dnsPage, "A example.invalid") {
 		t.Fatal(dnsPage)

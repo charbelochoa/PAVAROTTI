@@ -132,7 +132,15 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		save(w, store, records)
+		result, err := store.SaveEvidence(r.Context(), records)
+		if err != nil {
+			http.Error(w, "No se pudo guardar el expediente", http.StatusInternalServerError)
+			return
+		}
+		respond(w, struct {
+			caso.SaveResult
+			Message string `json:"message"`
+		}{result, result.Message()})
 	})
 	mux.HandleFunc("POST /api/nota", func(w http.ResponseWriter, r *http.Request) {
 		var note noteInput
