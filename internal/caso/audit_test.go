@@ -32,6 +32,7 @@ func openAuditTestAt(t *testing.T, dsn string) *Store {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		for _, query := range []string{
+			"DELETE FROM pavarotti_watchlists WHERE expediente = $1",
 			"DELETE FROM pavarotti_audit_events WHERE expediente = $1",
 			"DELETE FROM pavarotti_audit_heads WHERE expediente = $1",
 			"DELETE FROM pavarotti_analysis_jobs WHERE expediente = $1",

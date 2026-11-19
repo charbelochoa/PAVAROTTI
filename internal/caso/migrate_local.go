@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -31,6 +32,10 @@ func (s *Store) ImportLocal(path string) (int, error) {
 		return 0, err
 	}
 	defer unlock()
+	watches, err := source.localWatchState()
+	if err != nil {
+		return 0, err
+	}
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		return 0, err
@@ -105,7 +110,11 @@ func (s *Store) ImportLocal(path string) (int, error) {
 			}
 		}
 	}
-	if imported.Count+imported.NoteRevisions+imported.TriageRevisions > 0 {
+	imported.Watchlists, err = mergeLocalWatchlists(ctx, tx, s.expediente, watches)
+	if err != nil {
+		return 0, err
+	}
+	if imported.Count+imported.NoteRevisions+imported.TriageRevisions+imported.Watchlists > 0 {
 		if err := s.appendAudit(ctx, tx, AuditImport, "", imported); err != nil {
 			return 0, err
 		}
@@ -114,6 +123,36 @@ func (s *Store) ImportLocal(path string) (int, error) {
 		return 0, err
 	}
 	return imported.Count, nil
+}
+
+func mergeLocalWatchlists(ctx context.Context, tx *sql.Tx, expediente string, source watchState) (int, error) {
+	if len(source) == 0 {
+		return 0, nil
+	}
+	destination, err := lockWatchState(ctx, tx, expediente)
+	if err != nil {
+		return 0, err
+	}
+	added := 0
+	for name, assets := range source {
+		if current, exists := destination[name]; exists {
+			if !slices.Equal(current, assets) {
+				return 0, fmt.Errorf("lista %q: %w", name, ErrMigrationConflict)
+			}
+			continue
+		}
+		destination[name] = assets
+		added++
+	}
+	if len(destination) > maxWatchlists {
+		return 0, ErrWatchlistLimit
+	}
+	if added > 0 {
+		if err := writeWatchState(ctx, tx, expediente, destination); err != nil {
+			return 0, err
+		}
+	}
+	return added, nil
 }
 
 func putLocalBatch(ctx context.Context, tx *sql.Tx, expediente, key string, data []byte) (bool, error) {

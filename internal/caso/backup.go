@@ -18,7 +18,8 @@ import (
 
 const (
 	caseBackupFormat  = "pavarotti.case-backup"
-	caseBackupVersion = 1
+	caseBackupVersion = 2
+	backupWatchlists  = "watchlists"
 	maxBackupLine     = 256 << 20
 )
 
@@ -62,9 +63,14 @@ func (s *Store) BackupCase(ctx context.Context, destination io.Writer) (BackupSu
 		return BackupSummary{}, err
 	}
 	defer tx.Rollback()
-	manifest := BackupManifest{Format: caseBackupFormat, Version: caseBackupVersion, SourceCase: s.expediente}
-	if err := tx.QueryRowContext(ctx, `SELECT transaction_timestamp()`).Scan(&manifest.CreatedAt); err != nil {
+	manifest := BackupManifest{Format: caseBackupFormat, Version: 1, SourceCase: s.expediente}
+	var hasWatchlists bool
+	if err := tx.QueryRowContext(ctx, `SELECT transaction_timestamp(),
+		EXISTS (SELECT 1 FROM pavarotti_watchlists WHERE expediente = $1)`, s.expediente).Scan(&manifest.CreatedAt, &hasWatchlists); err != nil {
 		return BackupSummary{}, err
+	}
+	if hasWatchlists {
+		manifest.Version = caseBackupVersion
 	}
 	manifest.CreatedAt = manifest.CreatedAt.UTC()
 	digest := sha256.New()
@@ -73,8 +79,9 @@ func (s *Store) BackupCase(ctx context.Context, destination io.Writer) (BackupSu
 	if err := encodeBackupFrame(writer, "header", manifest); err != nil {
 		return BackupSummary{}, err
 	}
-	counts := newBackupCounts()
-	for _, table := range caseBackupTables {
+	tables := backupTables(manifest.Version)
+	counts := newBackupCounts(tables)
+	for _, table := range tables {
 		count, err := table.export(ctx, tx, s.expediente, writer)
 		if err != nil {
 			return BackupSummary{}, fmt.Errorf("respaldar %s: %w", table.kind, err)
@@ -94,9 +101,16 @@ func (s *Store) BackupCase(ctx context.Context, destination io.Writer) (BackupSu
 	return BackupSummary{BackupManifest: manifest, SHA256: sum, Rows: counts}, nil
 }
 
-func newBackupCounts() map[string]int {
-	counts := make(map[string]int, len(caseBackupTables))
-	for _, table := range caseBackupTables {
+func backupTables(version int) []caseBackupTable {
+	if version == 1 {
+		return caseBackupTables[:len(caseBackupTables)-1]
+	}
+	return caseBackupTables
+}
+
+func newBackupCounts(tables []caseBackupTable) map[string]int {
+	counts := make(map[string]int, len(tables))
+	for _, table := range tables {
 		counts[table.kind] = 0
 	}
 	return counts
@@ -143,7 +157,7 @@ func openBackup(ctx context.Context, source io.Reader) (*backupReader, error) {
 		reader.manifest.SourceCase == "" || len(reader.manifest.SourceCase) > 120 || reader.manifest.CreatedAt.IsZero() {
 		return nil, ErrBackupIntegrity
 	}
-	if reader.manifest.Format != caseBackupFormat || reader.manifest.Version != caseBackupVersion {
+	if reader.manifest.Format != caseBackupFormat || reader.manifest.Version < 1 || reader.manifest.Version > caseBackupVersion {
 		return nil, ErrBackupVersion
 	}
 	return reader, nil
@@ -181,7 +195,8 @@ func (reader *backupReader) next(ctx context.Context) (backupFrame, error) {
 }
 
 func (reader *backupReader) readRows(ctx context.Context, apply func(caseBackupTable, json.RawMessage) error) (BackupSummary, error) {
-	counts := newBackupCounts()
+	tables := backupTables(reader.manifest.Version)
+	counts := newBackupCounts(tables)
 	lastTable := 0
 	for {
 		frame, err := reader.next(ctx)
@@ -189,15 +204,29 @@ func (reader *backupReader) readRows(ctx context.Context, apply func(caseBackupT
 			return BackupSummary{}, err
 		}
 		if frame.Type == "end" {
+			if reader.manifest.Version == caseBackupVersion && counts[backupWatchlists] != 1 {
+				return BackupSummary{}, ErrBackupIntegrity
+			}
 			return reader.finish(frame.Data, counts)
 		}
-		for lastTable < len(caseBackupTables) && caseBackupTables[lastTable].kind != frame.Type {
+		for lastTable < len(tables) && tables[lastTable].kind != frame.Type {
 			lastTable++
 		}
-		if lastTable == len(caseBackupTables) {
+		if lastTable == len(tables) {
 			return BackupSummary{}, ErrBackupIntegrity
 		}
-		if err := apply(caseBackupTables[lastTable], frame.Data); err != nil {
+		if frame.Type == backupWatchlists {
+			var item struct {
+				State json.RawMessage `json:"state"`
+			}
+			if counts[backupWatchlists] != 0 || json.Unmarshal(frame.Data, &item) != nil {
+				return BackupSummary{}, ErrBackupIntegrity
+			}
+			if state, err := decodeWatchState(item.State); err != nil || len(state) == 0 {
+				return BackupSummary{}, ErrBackupIntegrity
+			}
+		}
+		if err := apply(tables[lastTable], frame.Data); err != nil {
 			return BackupSummary{}, err
 		}
 		counts[frame.Type]++

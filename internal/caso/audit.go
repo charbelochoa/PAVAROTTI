@@ -26,6 +26,7 @@ const (
 	AuditStart     = "tarea.iniciada"
 	AuditFinish    = "tarea.finalizada"
 	AuditCancel    = "tarea.cancelada"
+	AuditWatchlist = "seguimiento.cambiado"
 )
 
 type AuditDetails struct {
@@ -37,6 +38,7 @@ type AuditDetails struct {
 	Attempt         int         `json:"attempt,omitempty"`
 	NoteRevisions   int         `json:"note_revisions,omitempty"`
 	TriageRevisions int         `json:"triage_revisions,omitempty"`
+	Watchlists      int         `json:"watchlists,omitempty"`
 	BackupSHA256    string      `json:"backup_sha256,omitempty"`
 	RetentionBefore string      `json:"retention_before,omitempty"`
 	RemovedEvents   int64       `json:"removed_events,omitempty"`
