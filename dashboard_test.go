@@ -179,6 +179,7 @@ func TestEdicionAnalisisYRevision(t *testing.T) {
 	call("GET", "/api/registro/pagina?despues=invalido", "", 400)
 	code := "package demo\nimport \"net/http\"\nfunc check() { http.Get(\"https://example.invalid\") }"
 	call("POST", "/api/archivo/codigo", code, 200)
+	call("POST", "/api/analisis/tareas", `{"priority":1}`, 409)
 	data := call("POST", "/api/analisis", "", 200).Body.String()
 	if !strings.Contains(data, "example.invalid") || !strings.Contains(data, records[0].ID) {
 		t.Fatal(data)

@@ -48,21 +48,35 @@ func Prepare(ctx context.Context, store *caso.Store) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	slices.SortFunc(snapshot.Records, func(a, b caso.Record) int { return strings.Compare(a.ID, b.ID) })
+	fingerprint, err := snapshot.checksum(ctx)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	snapshot.Fingerprint = fingerprint
+	return snapshot, nil
+}
+
+func (snapshot Snapshot) checksum(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if len(snapshot.Records) > RecordLimit {
+		return "", ErrLimit
+	}
 	hash := sha256.New()
 	encoder := json.NewEncoder(hash)
 	if err := encoder.Encode(snapshot.AgentVersion); err != nil {
-		return Snapshot{}, err
+		return "", err
 	}
 	for _, record := range snapshot.Records {
 		if err := ctx.Err(); err != nil {
-			return Snapshot{}, err
+			return "", err
 		}
 		if err := encoder.Encode(record); err != nil {
-			return Snapshot{}, err
+			return "", err
 		}
 	}
-	snapshot.Fingerprint = hex.EncodeToString(hash.Sum(nil))
-	return snapshot, nil
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func analysisRecord(base caso.Record) caso.Record {

@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"pavarotti/internal/analisis"
 	"pavarotti/internal/caso"
 	"pavarotti/internal/trafico"
 )
@@ -33,6 +34,7 @@ func main() {
 	proxyPort := flag.Int("puerto-proxy", 0, "puerto local del proxy")
 	uiPort := flag.Int("puerto-app", 0, "puerto local de la interfaz")
 	noBrowser := flag.Bool("sin-navegador", false, "muestra la URL local en la terminal")
+	noWorker := flag.Bool("sin-ejecutor", false, "separa el servidor web del ejecutor de análisis")
 	showVersion := flag.Bool("version", false, "muestra la versión")
 	args := os.Args[1:]
 	if len(args) > 0 && args[0] == "servir" {
@@ -80,7 +82,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = run(store, *upstream, *uiPort, *proxyPort, *publishPort, !*noBrowser)
+	err = run(store, *upstream, *uiPort, *proxyPort, *publishPort, !*noBrowser, !*noWorker)
 	if err := errors.Join(err, store.Close()); err != nil {
 		log.Fatal(err)
 	}
@@ -99,7 +101,7 @@ func databaseURL(dsn, password string) (string, error) {
 	return parsed.String(), nil
 }
 
-func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int, browser bool) error {
+func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int, browser, worker bool) error {
 	var target *url.URL
 	if upstream != "" {
 		var err error
@@ -124,7 +126,7 @@ func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int,
 	if publishPort != 0 {
 		appAddress = net.JoinHostPort("127.0.0.1", strconv.Itoa(publishPort))
 	}
-	config := settings{Version: version}
+	config := settings{Version: version, AnalysisQueue: store.HasAnalysisQueue()}
 	servers := make(map[net.Listener]*http.Server)
 	if target != nil {
 		proxy, err := listen("127.0.0.1", proxyPort)
@@ -142,6 +144,19 @@ func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int,
 	servers[app] = newServer(dashboard(appAddress, config, store))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if worker && config.AnalysisQueue {
+		workerDone := make(chan struct{})
+		go func() {
+			defer close(workerDone)
+			if err := analisis.RunQueue(ctx, store); err != nil {
+				log.Printf("Ejecutor de análisis: %v", err)
+			}
+		}()
+		defer func() {
+			stop()
+			<-workerDone
+		}()
+	}
 	completed := make(chan error, len(servers))
 	for listener, server := range servers {
 		go func() { completed <- server.Serve(listener) }()
