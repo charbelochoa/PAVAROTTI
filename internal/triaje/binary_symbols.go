@@ -24,6 +24,7 @@ type Symbol struct {
 	Offset    string  `json:"offset,omitempty"`
 	Ordinal   *uint32 `json:"ordinal,omitempty"`
 	Forwarder string  `json:"forwarder,omitempty"`
+	Image     int     `json:"image,omitempty"`
 }
 
 func (b *Binary) addSymbol(symbol Symbol, address uint64) bool {
@@ -149,7 +150,7 @@ func (b *Binary) peSymbols(file *pe.File) {
 	}
 }
 
-func (b *Binary) machOSymbols(file *macho.File) {
+func (b *Binary) machOSymbols(file *macho.File, image binaryImageRange, limit int) {
 	if file.Symtab == nil {
 		return
 	}
@@ -163,16 +164,20 @@ func (b *Binary) machOSymbols(file *macho.File) {
 		if symbol.Type&debugSymbol != 0 || symbol.Type&symbolType != defined || symbol.Sect == 0 || int(symbol.Sect) > len(file.Sections) {
 			continue
 		}
+		if len(b.Symbols) >= limit && symbol.Name != "" && symbolLabel(symbol.Name) {
+			b.SymbolsLimited = true
+			return
+		}
 		section := file.Sections[symbol.Sect-1]
 		offset := ""
 		if symbol.Value >= section.Addr {
-			offset = b.fileOffset(uint64(section.Offset), machOFileSize(section), symbol.Value-section.Addr)
+			offset = image.fileOffset(uint64(section.Offset), machOFileSize(section), symbol.Value-section.Addr)
 		}
 		kind := "Local"
 		if symbol.Type&external != 0 {
 			kind = "Externo"
 		}
-		if !b.addSymbol(Symbol{Name: symbol.Name, Kind: kind, Section: section.Seg + "/" + section.Name, Offset: offset}, symbol.Value) {
+		if !b.addSymbol(Symbol{Name: symbol.Name, Kind: kind, Section: section.Seg + "/" + section.Name, Offset: offset, Image: image.index}, symbol.Value) {
 			return
 		}
 	}

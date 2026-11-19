@@ -10,15 +10,25 @@ import (
 )
 
 type Binary struct {
-	SHA256         string    `json:"sha256"`
-	Format         string    `json:"format"`
-	Architecture   string    `json:"architecture,omitempty"`
-	Size           int       `json:"size"`
-	Sections       []Section `json:"sections"`
-	SectionCount   int       `json:"section_count,omitempty"`
-	Strings        []TextHit `json:"strings,omitempty"`
-	Symbols        []Symbol  `json:"symbols,omitempty"`
-	SymbolsLimited bool      `json:"symbols_limited,omitempty"`
+	SHA256           string        `json:"sha256"`
+	Format           string        `json:"format"`
+	Architecture     string        `json:"architecture,omitempty"`
+	Size             int           `json:"size"`
+	Sections         []Section     `json:"sections"`
+	SectionCount     int           `json:"section_count,omitempty"`
+	Strings          []TextHit     `json:"strings,omitempty"`
+	Symbols          []Symbol      `json:"symbols,omitempty"`
+	SymbolsLimited   bool          `json:"symbols_limited,omitempty"`
+	Images           []BinaryImage `json:"images,omitempty"`
+	UnreadableImages int           `json:"unreadable_images,omitempty"`
+}
+
+const maxBinarySections = 256
+
+type BinaryImage struct {
+	Architecture string    `json:"architecture"`
+	Subtype      string    `json:"subtype"`
+	File         FileRange `json:"file"`
 }
 
 type Section struct {
@@ -26,6 +36,7 @@ type Section struct {
 	Address string     `json:"address"`
 	Size    uint64     `json:"size"`
 	File    *FileRange `json:"file,omitempty"`
+	Image   int        `json:"image,omitempty"`
 }
 
 type FileRange struct {
@@ -38,9 +49,15 @@ type TextHit struct {
 	Text   string `json:"text"`
 }
 
+type binaryImageRange struct {
+	index        int
+	offset, size uint64
+}
+
 func Inspect(data []byte) Binary {
 	result := Binary{SHA256: fmt.Sprintf("%x", sha256.Sum256(data)), Format: "Sin identificar", Size: len(data)}
 	reader := bytes.NewReader(data)
+	image := binaryImageRange{size: uint64(len(data))}
 	switch {
 	case bytes.HasPrefix(data, []byte{0x7f, 'E', 'L', 'F'}):
 		if file, err := elf.NewFile(reader); err == nil {
@@ -50,7 +67,7 @@ func Inspect(data []byte) Binary {
 				if section.Type == elf.SHT_NOBITS || section.Type == elf.SHT_NULL {
 					size = 0
 				}
-				result.add(section.Name, section.Addr, section.Size, section.Offset, size)
+				result.add(image, section.Name, section.Addr, section.Size, section.Offset, size)
 			}
 			result.elfSymbols(file, data)
 		}
@@ -63,7 +80,7 @@ func Inspect(data []byte) Binary {
 				if section.Offset == 0 {
 					size = 0
 				}
-				result.add(section.Name, uint64(section.VirtualAddress), uint64(section.VirtualSize), uint64(section.Offset), uint64(size))
+				result.add(image, section.Name, uint64(section.VirtualAddress), uint64(section.VirtualSize), uint64(section.Offset), uint64(size))
 			}
 			result.peExports(file, data)
 			result.peSymbols(file)
@@ -71,10 +88,9 @@ func Inspect(data []byte) Binary {
 	default:
 		if file, err := macho.NewFile(reader); err == nil {
 			result.Format, result.Architecture = "Mach-O", file.Cpu.String()
-			for _, section := range file.Sections {
-				result.add(section.Seg+"/"+section.Name, section.Addr, section.Size, uint64(section.Offset), machOFileSize(section))
-			}
-			result.machOSymbols(file)
+			result.inspectMachO(file, image, 1)
+		} else {
+			result.inspectMachOFat(data)
 		}
 	}
 	result.Strings = printableStrings(data)
@@ -107,22 +123,25 @@ func ascii(value byte) bool {
 	return value >= ' ' && value <= '~' || value == '\r' || value == '\n' || value == '\t'
 }
 
-func (b *Binary) add(name string, address, size, offset, fileSize uint64) {
-	const maxSections = 256
+func (b *Binary) add(image binaryImageRange, name string, address, size, offset, fileSize uint64) {
 	b.SectionCount++
-	if len(b.Sections) == maxSections {
+	if len(b.Sections) == maxBinarySections {
 		return
 	}
-	section := Section{Name: name, Address: fmt.Sprintf("0x%x", address), Size: size}
-	if physical := b.fileOffset(offset, fileSize, 0); physical != "" {
+	section := Section{Name: name, Address: fmt.Sprintf("0x%x", address), Size: size, Image: image.index}
+	if physical := image.fileOffset(offset, fileSize, 0); physical != "" {
 		section.File = &FileRange{Offset: physical, Size: fileSize}
 	}
 	b.Sections = append(b.Sections, section)
 }
 
 func (b *Binary) fileOffset(offset, size, delta uint64) string {
-	if offset >= uint64(b.Size) || size > uint64(b.Size)-offset || delta >= size {
+	return (binaryImageRange{size: uint64(b.Size)}).fileOffset(offset, size, delta)
+}
+
+func (image binaryImageRange) fileOffset(offset, size, delta uint64) string {
+	if offset >= image.size || size > image.size-offset || delta >= size {
 		return ""
 	}
-	return fmt.Sprintf("0x%x", offset+delta)
+	return fmt.Sprintf("0x%x", image.offset+offset+delta)
 }
