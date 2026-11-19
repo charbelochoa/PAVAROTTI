@@ -24,7 +24,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | PostgreSQL | Inicio de esquema, credenciales inválidas, aislamiento por expediente, edición concurrente, migración idempotente e historial. |
 | Docker Compose | Puerto alterno en loopback, espera de salud, registro por CLI y persistencia después de reiniciar. |
 | Proxy y HAR | Destino fijo local, redirecciones, captura de metadatos, protección de datos sensibles y distinción entre fallo de conexión y señales de cabeceras. |
-| Navegador | Selección e inspector, búsqueda, historial, carga de informes y uso con ancho móvil. Abrir una cita de un informe guardado tras editar la evidencia y comprobar su revisión. |
+| Navegador | Selección e inspector, búsqueda, historial, carga de informes y uso con ancho móvil. Abrir una cita de un informe guardado tras editar la evidencia y comprobar su revisión. Desde una ficha de activo, abrir fuentes DNS, HTTP, RDAP y STIX. |
 
 `go test -count=1 ./...` ejecuta la suite local. Para incluir PostgreSQL, configura `PAVAROTTI_TEST_POSTGRES` con un servidor de pruebas separado. `go vet ./...` completa la revisión estática. CI construye y prueba las configuraciones de la matriz y comprueba avisos de dependencias con `govulncheck`.
 
@@ -43,9 +43,10 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 2. **Entrada de análisis acotada.** La interfaz y el CLI preparan la misma instantánea con los campos que usan los agentes y los IDs y revisiones de evidencia. El informe incluye su SHA-256 y la versión de los agentes. La lectura se detiene al exceder 10,000 registros o 32 MiB de metadatos. Las pruebas cubren el exceso de registros, la cancelación y un cambio de revisión.
 3. **Cola persistente.** Desde 0.3.2, PostgreSQL guarda instantáneas, estados y resultados por expediente. Dos ejecutores pueden compartir una cola con prioridades, cancelación y hasta tres intentos. La prueba interrumpe un proceso después de que obtiene la asignación y verifica que otro recupera la misma tarea y guarda un único informe.
 4. **Ingesta y citas.** 0.3.4 importa DNS, RDAP y STIX 2.1 desde archivos, cruza indicadores STIX con dominios e IP observados y abre las revisiones citadas desde informes locales y guardados. El inspector conserva la posición y huella del archivo. La cobertura actual de STIX se limita a metadatos y comparaciones literales.
-5. **Activos y exportación.** Añadir fichas navegables de activos y fuentes, cruces de huellas y prefijos y exportación STIX con vínculos reproducibles para los hallazgos. Verificar la procedencia en los formatos exportados y mostrar cuántos registros se importaron y cuántos eran duplicados.
-6. **Revisión y operación compartida.** Extender las reglas estáticas. Añadir autenticación, permisos, auditoría y restauración antes de abrir el acceso a otros equipos.
-7. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
+5. **Inventario de activos.** 0.3.5 añade fichas navegables en la mesa y el comando `activos` del CLI. Las fichas de huella enlazan muestras e indicadores SHA-256. Las fichas de IP muestran cobertura por rango RDAP o prefijo STIX y conservan el recuento de observaciones directas. La consulta recorre hasta 10,000 registros y pagina resultados.
+6. **Relaciones y exportación.** Resolver las referencias entre objetos STIX, llevar los cruces de huellas y prefijos a los informes guardados y exportar STIX con vínculos reproducibles. Verificar la procedencia en los formatos exportados y mostrar cuántos registros se importaron y cuántos eran duplicados.
+7. **Revisión y operación compartida.** Extender las reglas estáticas. Añadir autenticación, permisos, auditoría y restauración antes de abrir el acceso a otros equipos.
+8. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
 
 ## Flujo de trabajo OSINT
 
@@ -58,7 +59,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 
 | Vista | Trabajo pendiente | Criterio de cierre |
 | --- | --- | --- |
-| Activos y fuentes | Fichas por dominio, dirección y huella. Mostrar las relaciones entre fuentes y resolver referencias internas de STIX | Seleccionar un activo y recuperar sus fuentes DNS, RDAP, STIX y HTTP con fechas, registros exactos y revisiones desde el inspector. |
+| Activos y fuentes | Resolver referencias internas de STIX y mostrar desde una red las IP ya registradas en el expediente | Desde una relación o red, abrir los registros correspondientes con fechas, referencias de origen y revisiones desde el inspector. |
 | Triaje de binarios | Navegar secciones, cadenas, símbolos disponibles y metadatos con referencias a desplazamientos. Enlazar una observación del binario con indicadores del expediente | Abrir una muestra de prueba, comparar los datos con su archivo y exportar referencias reproducibles por huella y desplazamiento. |
 | Historial HTTP | Añadir filtros por origen, método y periodo. Mostrar el motivo de cada señal desde la fila y enlazarla al registro que usó el informe | Reproducir con HAR y proxy local un caso con respuestas de varias clases y confirmar que cada señal apunta a su evidencia. |
 
