@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"pavarotti/internal/caso"
+	"pavarotti/internal/revision"
 	"pavarotti/internal/trafico"
 	"pavarotti/internal/triaje"
 )
@@ -15,13 +16,13 @@ import (
 const MaxBytes = 32 << 20
 
 var (
-	ErrKind = errors.New("tipo de archivo desconocido, usa har, hallazgos o binario")
+	ErrKind = errors.New("tipo de archivo desconocido, usa har, hallazgos, binario o codigo")
 	ErrSize = errors.New("el archivo supera el límite de 32 MiB")
 )
 
 func Parse(kind string, reader io.Reader) ([]caso.Record, error) {
 	switch kind {
-	case "har", "hallazgos", "binario":
+	case "har", "hallazgos", "binario", "codigo":
 	default:
 		return nil, ErrKind
 	}
@@ -42,6 +43,21 @@ func Parse(kind string, reader io.Reader) ([]caso.Record, error) {
 		return trafico.ImportHAR(data)
 	case "hallazgos":
 		return caso.Findings(data)
+	case "codigo":
+		report, err := revision.ReviewGo(data)
+		if err != nil {
+			return nil, err
+		}
+		details, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		signals := make([]string, 0, len(report.Signals))
+		for _, signal := range report.Signals {
+			signals = append(signals, fmt.Sprintf("Línea %d · %s", signal.Line, signal.Review))
+		}
+		return []caso.Record{{Kind: "código", Time: caso.Now(), Title: "Revisión Go · " + report.Package,
+			SHA256: caso.Hash(data), Details: string(details), Signals: signals}}, nil
 	default:
 		result := triaje.Inspect(data)
 		details, err := json.MarshalIndent(result, "", "  ")
