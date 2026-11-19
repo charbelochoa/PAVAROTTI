@@ -76,8 +76,25 @@ func (s *Store) Close() error {
 }
 
 func (s *Store) Save(records []Record) error {
+	_, err := s.SaveEvidence(context.Background(), records)
+	return err
+}
+
+type SaveResult struct {
+	Imported   int `json:"imported"`
+	Duplicates int `json:"duplicates"`
+}
+
+func (result SaveResult) Message() string {
+	return fmt.Sprintf("Importados %d · duplicados %d", result.Imported, result.Duplicates)
+}
+
+func (s *Store) SaveEvidence(ctx context.Context, records []Record) (SaveResult, error) {
+	if err := ctx.Err(); err != nil {
+		return SaveResult{}, err
+	}
 	if len(records) == 0 {
-		return nil
+		return SaveResult{}, nil
 	}
 	initial := make([]Record, len(records))
 	copy(initial, records)
@@ -88,31 +105,49 @@ func (s *Store) Save(records []Record) error {
 	}
 	data, err := json.Marshal(initial)
 	if err != nil {
-		return err
+		return SaveResult{}, err
 	}
 	hash := Hash(data)
 	if records[0].SHA256 != "" {
 		hash = Hash([]byte(records[0].Kind + ":" + records[0].SHA256))
 	}
 	if s.db != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
+		ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 		defer cancel()
-		_, err = s.db.ExecContext(ctx, `
+		result, err := s.db.ExecContext(ctx, `
 			INSERT INTO pavarotti_evidence_batches (expediente, batch_key, payload)
 			VALUES ($1, $2, $3) ON CONFLICT (expediente, batch_key) DO NOTHING`,
 			s.expediente, hash, data)
-		return err
+		if err != nil {
+			return SaveResult{}, err
+		}
+		inserted, err := result.RowsAffected()
+		if err != nil {
+			return SaveResult{}, err
+		}
+		if inserted == 0 {
+			return SaveResult{Duplicates: len(records)}, nil
+		}
+		return SaveResult{Imported: len(records)}, nil
 	}
-	unlock, err := s.lock()
+	unlock, err := s.lockContext(ctx)
 	if err != nil {
-		return err
+		return SaveResult{}, err
 	}
 	defer unlock()
 	name := filepath.Join(s.path, hash+".json")
-	if _, err := os.Stat(name); !errors.Is(err, os.ErrNotExist) {
-		return err
+	if info, err := os.Stat(name); err == nil {
+		if !info.Mode().IsRegular() {
+			return SaveResult{}, errors.New("el destino de la evidencia no es un archivo")
+		}
+		return SaveResult{Duplicates: len(records)}, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return SaveResult{}, err
 	}
-	return atomicWrite(name, data)
+	if err := atomicWrite(name, data); err != nil {
+		return SaveResult{}, err
+	}
+	return SaveResult{Imported: len(records)}, nil
 }
 
 func (s *Store) Records() ([]Record, error) {
