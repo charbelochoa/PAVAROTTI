@@ -46,7 +46,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | Flujo | Disponible | Trabajo pendiente y prueba de cierre |
 | --- | --- | --- |
 | Expedientes, terminal y agentes | Evidencia con procedencia, inventario y fichas por página en expedientes de 50,000 observaciones, relaciones y listas de seguimiento con citas, cobertura por periodo, cola persistente, revisión de código Go y exportación STIX. | Reducir el trabajo por página en fichas cuyos activos aparecen en pocos lotes y medir consultas concurrentes. |
-| Inspección estática de binarios | PE, ELF y Mach-O con ventanas verificadas, referencias entrantes por símbolo e imagen y comparación de informes por destino con citas de ambos lados. | Medir el tiempo de verificación y la memoria para informes cercanos al límite admitido. |
+| Inspección estática de binarios | PE, ELF y Mach-O con ventanas verificadas, referencias por símbolo e imagen y comparación de informes y secciones con citas de ambos lados. | Medir tiempo y memoria en comparaciones de archivos e informes cercanos a sus límites. |
 | Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros, reglas pasivas y comparación de hasta 50,000 observaciones con citas a la revisión exacta. | Medir latencia y memoria con varias comparaciones simultáneas y verificar la cancelación de las consultas. |
 | Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, auditoría y restauración. Se prueban la apertura y la edición de otros expedientes durante una restauración. | Medir la latencia de escritura con carga sostenida y distintos almacenamientos del registro de escritura anticipada de PostgreSQL (WAL). |
 
@@ -96,7 +96,8 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 33. **Comparaciones HTTP amplias.** La 0.4.23 admite 50,000 observaciones distintas con el límite de 32 MiB. Conserva la huella y el formato de las comparaciones de hasta 10,000 observaciones y abre informes de ambos formatos. PostgreSQL reutiliza el índice del historial para localizar lotes de ventanas que suman hasta siete días. Las pruebas cubren periodos superpuestos, lotes por indexar y fechas con desfase UTC.
 34. **Paquetes nativos y portátiles.** La 0.4.24 genera paquetes para Kali, Arch y uso portátil en Windows y Linux. El manifiesto registra el commit, los módulos de Go y la huella de cada binario. La matriz comprueba las sumas, instala y retira los paquetes nativos y vuelve a abrir el expediente creado por el ZIP de Windows.
 35. **Relaciones de activos.** La 0.4.25 abre relaciones de DNS, RDAP, redes y huellas STIX desde el inspector y desde el CLI. El informe ordena por registros de soporte, conserva las citas y permite acotar por las fechas guardadas. Las pruebas cubren la dirección del vínculo, el orden de las citas, los nombres de servicio DNS, las relaciones omitidas y la paridad tras migrar a PostgreSQL.
-36. **Capacidad de escritura.** Repetir la prueba con carga sostenida y medir el efecto del almacenamiento del WAL.
+36. **Comparación de secciones binarias.** La 0.4.26 confronta los inventarios completos de dos originales verificados contra las revisiones guardadas. Distingue movimiento, cambios de bytes y tamaño, altas, ausencias y coincidencias ambiguas. La mesa abre ambas secciones y exporta el mismo resultado que el CLI. Las pruebas incluyen archivos invertidos, inspecciones alteradas y reordenamiento de imágenes Mach-O universales.
+37. **Capacidad de escritura.** Repetir la prueba con carga sostenida y medir el efecto del almacenamiento del WAL.
 
 ## Medición de consultas por fecha
 
