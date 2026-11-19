@@ -76,8 +76,8 @@ func Nota(title, source, details string) (caso.Record, error) {
 	if title == "" || details == "" {
 		return caso.Record{}, errors.New("introduce un título y una nota")
 	}
-	if len(title) > 160 || len(source)+len(details) > 60<<10 {
-		return caso.Record{}, errors.New("la nota supera el tamaño permitido")
+	if len(title) > 160 || len(source) > 512 || len(details) > 8000 {
+		return caso.Record{}, caso.ErrInvalidEdit
 	}
 	return caso.Record{Kind: "nota", Time: caso.Now(), Title: title, Source: source, Details: details}, nil
 }
