@@ -110,6 +110,19 @@ El destino debe ser un expediente vacío. La restauración conserva IDs, revisio
 
 Guarda la copia en el almacenamiento privado del expediente. El archivo contiene la evidencia y el historial de operaciones.
 
+### Retener actividad
+
+`retener-actividad` muestra cuántos eventos de auditoría son anteriores a una fecha. El corte es a las 00:00 UTC y conserva los eventos con la hora exacta del corte. Para aplicar la política, usa una copia del mismo expediente que incluya esos eventos.
+
+```sh
+pavarotti -expediente incidente retener-actividad --antes 2026-10-01
+pavarotti -expediente incidente respaldar --salida antes-de-retener.jsonl
+pavarotti -expediente incidente retener-actividad --antes 2026-10-01 \
+  --aplicar --respaldo antes-de-retener.jsonl
+```
+
+La operación conserva la evidencia, sus IDs, las revisiones y las tareas. **Actividad** registra cuántos eventos se retiraron, la fecha de corte y la huella de la copia. Puedes restaurar esa copia en un expediente vacío para recuperar la actividad archivada. El operador conserva el archivo durante el plazo de custodia del expediente.
+
 ### Acceso al expediente por HTTPS
 
 Con PostgreSQL, un operador puede crear cuentas desde la terminal. `lector` consulta evidencia, historial e informes y exporta STIX. `analista` también incorpora archivos, registra notas, clasifica señales y gestiona tareas. La cuenta pertenece al expediente indicado en `-expediente`. Cambiar el rol o la contraseña cierra las sesiones vigentes de esa cuenta.
