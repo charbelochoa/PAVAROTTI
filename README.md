@@ -42,6 +42,7 @@ Usa **Exportar JSON** para conservar los criterios, resultados, citas y la huell
 - **RDAP.** Importa archivos JSON de dominio, resultados de búsqueda de dominios y rangos IP. El inspector conserva la posición en el archivo, su huella, servidores de nombre, estados y fechas del registro. La importación omite las fichas de contacto y los enlaces del archivo.
 - **STIX 2.1.** Importa paquetes JSON con dominios, direcciones, prefijos IP, relaciones y periodos de observación. Reconoce indicadores por igualdad simple de dominio, IP o huella. El informe cruza dominios y direcciones exactas con el expediente. Los patrones complejos se conservan por ID para revisión en el archivo de origen.
 - **Activos.** Busca dominios, direcciones, redes y huellas. Cada ficha muestra las fechas y distingue observaciones de tráfico o DNS, registros RDAP, declaraciones STIX, indicadores y referencias manuales. Las fichas de IP muestran los rangos RDAP y prefijos STIX que las cubren. Abre desde la ficha la revisión de evidencia que sustenta cada fuente.
+- **Cobertura por periodo.** Desde una ficha de red, abre **IP observadas** para navegar las direcciones registradas en respuestas DNS o HTTP, en orden numérico y con sus citas. **Cobertura por periodo** usa las fechas guardadas en el expediente y guarda las fuentes, las coincidencias y la huella de entrada en un informe JSON. Las fechas UTC son inclusivas. Puedes reabrir el informe en el expediente original o en su restauración. El informe muestra hasta 100 fuentes, 100 direcciones y cinco citas por dirección e indica cuántas filas adicionales existen.
 - **Relaciones STIX.** El inspector recorre enlaces entrantes y salientes de relaciones, observaciones y observables importados. La referencia indica si procede del mismo paquete, de otro paquete del expediente o si falta importar el objeto.
 - **Intercambio STIX 2.1.** Usa **Exportar STIX** para descargar observaciones DNS y HTTP, dominios, IP, prefijos, huellas, indicadores literales y relaciones compatibles con citas de origen. El resultado indica cuántos registros representa. La importación muestra cuántos registros guardó y cuántos pertenecían a un archivo ya registrado.
 - **Análisis.** Los agentes de inventario, señales HTTP, cronología y correlación trabajan en paralelo sobre la evidencia del expediente. El revisor de código Go añade señales con línea y columna sin compilar ni ejecutar la fuente.
@@ -89,6 +90,8 @@ pavarotti -datos ./expediente nota --titulo "Turno de revisión" --texto "Valida
 pavarotti -datos ./expediente listar --buscar "validación" --json
 pavarotti -datos ./expediente activos --tipo dominio --buscar example.invalid
 pavarotti -datos ./expediente activos --tipo ipv4 --valor 192.0.2.17 --json
+pavarotti -datos ./expediente activos --tipo red --valor 192.0.2.0/24 --observadas --json
+pavarotti -datos ./expediente cobertura-activo --tipo red --valor 192.0.2.0/24 --desde 2026-11-01 --hasta 2026-11-30 --salida cobertura.json
 pavarotti -datos ./expediente analizar --json
 pavarotti -datos ./expediente exportar --formato csv --salida expediente.csv
 pavarotti -datos ./expediente exportar --formato stix --salida expediente-stix.json

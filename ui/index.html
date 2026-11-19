@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/app.css">
   <script src="/app.js" defer></script>
   <script src="/http-comparison.js" defer></script>
+  <script src="/asset-coverage.js" defer></script>
 </head>
 <body>
   <header>
@@ -113,6 +114,7 @@
             <option value="sha1">SHA-1</option>
             <option value="md5">MD5</option>
           </select>
+          <button id="open-asset-coverage" hidden>Cobertura por periodo</button>
           <button id="open-binary-citation" hidden>Abrir cita JSON</button>
           <input id="binary-citation-file" type="file" accept=".json,application/json" aria-label="Cita de binario" hidden>
         </div>
@@ -256,6 +258,38 @@
     </form>
     <p id="http-compare-status" role="status"></p>
     <div id="http-compare-result" hidden></div>
+  </dialog>
+  <dialog id="asset-coverage" aria-labelledby="asset-coverage-title">
+    <div class="comparison-heading">
+      <h2 id="asset-coverage-title">Cobertura de un activo</h2>
+      <form method="dialog"><button>Cerrar</button></form>
+    </div>
+    <form id="asset-coverage-form">
+      <div class="coverage-fields">
+        <label>Tipo de activo
+          <select name="tipo">
+            <option value="dominio">Dominio</option>
+            <option value="ipv4">IPv4</option>
+            <option value="ipv6">IPv6</option>
+            <option value="red">Red</option>
+            <option value="sha256">SHA-256</option>
+            <option value="sha1">SHA-1</option>
+            <option value="md5">MD5</option>
+          </select>
+        </label>
+        <label>Activo exacto<input name="valor" type="text" maxlength="254" required></label>
+        <label>Desde (UTC)<input name="desde" type="date" required></label>
+        <label>Hasta (UTC)<input name="hasta" type="date" required></label>
+      </div>
+      <div class="tools">
+        <button class="primary" id="asset-coverage-run">Generar informe</button>
+        <button type="button" id="asset-coverage-open-file">Abrir informe JSON</button>
+        <button type="button" id="asset-coverage-export" hidden>Exportar JSON</button>
+      </div>
+    </form>
+    <input type="file" id="asset-coverage-file" accept=".json,application/json" aria-label="Informe de cobertura de activos" hidden>
+    <p id="asset-coverage-status" role="status"></p>
+    <div id="asset-coverage-result" hidden></div>
   </dialog>
   <dialog id="triage-panel" aria-labelledby="triage-title">
     <h2 id="triage-title">Clasificar señal</h2>
