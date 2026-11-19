@@ -104,6 +104,35 @@ footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2re
 #report-evidence { margin-top: .75rem; }
 #report-evidence label { margin: .65rem 0 .35rem; }
 #report-references { max-height: 31vh; overflow: auto; }
+#http-comparison { width: min(920px, calc(100vw - 1.5rem)); max-height: calc(100dvh - 1.5rem); overflow-wrap: anywhere; }
+.comparison-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.comparison-heading form { margin: 0; }
+.comparison-windows, .comparison-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
+.comparison-windows fieldset { display: grid; min-width: 0; gap: .32rem; margin: 0; border: 1px solid var(--line); padding: .5rem .65rem .65rem; }
+.comparison-windows legend { padding: 0 .3rem; }
+.comparison-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; }
+.comparison-dates label { display: grid; gap: .15rem; }
+.comparison-dates input { width: 100%; }
+#http-compare-status { margin: .65rem 0; }
+.comparison-summary article { border: 1px solid var(--line); margin-bottom: .6rem; padding: .45rem .65rem; }
+.comparison-summary dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; font-size: .85rem; gap: .2rem .5rem; margin: .4rem 0 0; }
+.comparison-summary dd { margin: 0; text-align: end; }
+.comparison-source { font-size: .85rem; }
+.comparison-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.comparison-table col:first-child { width: 44%; }
+.comparison-table col:last-child { width: 14%; }
+.comparison-table th, .comparison-table td { padding: .35rem .4rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.comparison-table th[scope="row"] { font-weight: 400; }
+.comparison-cite { display: block; margin-top: .25rem; padding: .18rem .38rem; font-size: .78rem; }
+.comparison-citations > td { background: #211e20; padding: .6rem; }
+.comparison-citations .asset-sources { margin-top: .35rem; }
+.comparison-hash { font-size: .8rem; margin-top: .65rem; }
+@media (max-width: 610px) {
+  .comparison-windows, .comparison-summary { grid-template-columns: minmax(0, 1fr); }
+  .comparison-table { font-size: .83rem; }
+  .comparison-table th, .comparison-table td { padding: .3rem .25rem; }
+  .comparison-cite { padding: .15rem .22rem; font-size: .72rem; }
+}
 .reference-group { display: grid; gap: .4rem; margin-top: .55rem; }
 .reference-group + .reference-group { border-top: 1px solid var(--line); padding-top: .55rem; }
 .reference-group button { text-align: left; overflow-wrap: anywhere; }

@@ -40,7 +40,7 @@ func Handler(host string, config Settings, store *caso.Store, resources fs.FS) h
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFileFS(w, r, resources, "ui/index.html")
 	})
-	for _, name := range []string{"app.css", "app.js", "mascara.svg", "icono.png", "credits.json"} {
+	for _, name := range []string{"app.css", "app.js", "http-comparison.js", "mascara.svg", "icono.png", "credits.json"} {
 		mux.HandleFunc("GET /"+name, func(w http.ResponseWriter, r *http.Request) {
 			http.ServeFileFS(w, r, resources, "ui/"+name)
 		})
@@ -220,6 +220,7 @@ func Handler(host string, config Settings, store *caso.Store, resources fs.FS) h
 	codeTriageRoutes(mux, store)
 	binaryCitationRoute(mux, store)
 	activityRoute(mux, store)
+	httpComparisonRoute(mux, store)
 	var handler http.Handler = mux
 	origin := "http://" + host
 	if config.Shared {

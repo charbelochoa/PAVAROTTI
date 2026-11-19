@@ -33,6 +33,7 @@ type Record struct {
 	Network      string               `json:"network,omitempty"`
 	Signals      []string             `json:"signals,omitempty"`
 	HTTPFindings []HTTPFinding        `json:"http_findings,omitempty"`
+	HTTPRuleSet  int                  `json:"http_rule_set,omitempty"`
 	Traffic      *Traffic             `json:"traffic,omitempty"`
 	Indicator    *Indicator           `json:"indicator,omitempty"`
 	FileHashes   []Indicator          `json:"file_hashes,omitempty"`
@@ -60,6 +61,8 @@ type HTTPFinding struct {
 	Header      string `json:"header,omitempty"`
 	Observation string `json:"observation,omitempty"`
 }
+
+const ProxyNoResponseSignal = "El proxy no recibió respuesta del destino"
 
 type Store struct {
 	path       string

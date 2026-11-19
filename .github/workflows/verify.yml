@@ -129,6 +129,36 @@ jobs:
           assert dependency["value"] == "sample.invalid/catalog" and dependency["evidence"][0]["line"] == 2
           PY
           done
+      - name: Comparación de capturas en Kali y Arch
+        run: |
+          samples=$(mktemp -d)
+          cat > "$samples/captura.har" <<'JSON'
+          {"log":{"entries":[
+            {"startedDateTime":"2026-11-01T00:00:00Z","request":{"method":"GET","url":"https://example.invalid/"},
+             "response":{"status":200,"headers":[{"name":"Content-Type","value":"text/html"}]}},
+            {"startedDateTime":"2026-11-02T00:00:00Z","request":{"method":"GET","url":"https://example.invalid:443/"},
+             "response":{"status":502,"headers":[{"name":"Strict-Transport-Security","value":"max-age=3600"}]}}
+          ]}}
+          JSON
+          for image in kalilinux/kali-rolling archlinux:base; do
+            docker run --rm --network none -v "$PWD/PAVAROTTI-Kali-x64:/opt/pavarotti:ro" -v "$samples:/samples:ro" "$image" /bin/sh -ec '
+              /opt/pavarotti -datos /tmp/expediente importar har /samples/captura.har >&2
+              /opt/pavarotti -datos /tmp/expediente comparar-http --origen-a https://example.invalid \
+                --desde-a 2026-11-01 --hasta-a 2026-11-01 --captura-b har --desde-b 2026-11-02 --hasta-b 2026-11-02
+            ' > "$samples/comparacion.json"
+            python3 - "$samples/comparacion.json" <<'PY'
+          import json
+          import sys
+          with open(sys.argv[1], encoding="utf-8") as source:
+              report = json.load(source)
+          assert report["schema"] == "pavarotti.http-comparison.v1"
+          assert report["baseline"] == report["current"] == dict(observations=1, responses=1, transport_failures=0, assessed=1)
+          rows = {row["code"]: row for row in report["rows"]}
+          assert rows["2xx"]["baseline"]["count"] == rows["5xx"]["current"]["count"] == 1
+          assert rows["nosniff-ausente"]["baseline"]["evidence"][0]["http_rule"] == "nosniff-ausente"
+          assert rows["nosniff-ausente"]["current"]["count"] == 0
+          PY
+          done
   compose:
     runs-on: ubuntu-24.04
     env:

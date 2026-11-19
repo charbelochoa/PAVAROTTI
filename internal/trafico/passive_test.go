@@ -43,12 +43,30 @@ func TestPassiveSignalsDistinguishHeaderEvidence(t *testing.T) {
 		t.Run(fixture.name, func(t *testing.T) {
 			observed := Observe(source, fixture.method, fixture.status, 12*time.Millisecond, fixture.headers)
 			assertPassiveRules(t, observed, fixture.want)
+			if (observed.HTTPRuleSet == 1) != (fixture.status >= 200 && fixture.headers != nil) {
+				t.Fatalf("versión de reglas inesperada: %d", observed.HTTPRuleSet)
+			}
 			encoded, err := json.Marshal(observed)
 			if err != nil || strings.Contains(string(encoded), "synthetic-secret") || strings.Contains(string(encoded), "/private") {
 				t.Fatalf("contenido conservado: %s, %v", encoded, err)
 			}
 		})
 	}
+}
+
+func TestHARAssessmentRequiresRecordedHeaders(t *testing.T) {
+	const har = `{"log":{"entries":[
+		{"request":{"method":"GET","url":"http://lab.invalid"},"response":{"status":200}},
+		{"request":{"method":"GET","url":"http://lab.invalid"},"response":{"status":200,"headers":[]}}
+	]}}`
+	records, err := ImportHAR([]byte(har))
+	if err != nil || len(records) != 2 {
+		t.Fatalf("HAR: %d, %v", len(records), err)
+	}
+	if records[0].HTTPRuleSet != 0 || len(records[0].HTTPFindings) != 0 || records[1].HTTPRuleSet != 1 {
+		t.Fatalf("cobertura HAR: %+v", records)
+	}
+	assertPassiveRules(t, records[1], []string{"mime-ausente"})
 }
 
 func TestPassiveHARKeepsCookieValuesAndLocationsPrivate(t *testing.T) {
