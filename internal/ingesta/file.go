@@ -29,7 +29,9 @@ func Parse(kind string, reader io.Reader) ([]caso.Record, error) {
 func ParseNamed(kind string, reader io.Reader, name string) ([]caso.Record, error) {
 	limit := MaxBytes
 	switch kind {
-	case "har", "hallazgos", "binario", "indicadores", "dns", "rdap", "stix":
+	case "har", "hallazgos", "indicadores", "dns", "rdap", "stix":
+	case "binario":
+		limit = triaje.MaxBinaryBytes
 	case "codigo":
 		limit = revision.MaxSource
 	case "gomod", "npmlock":

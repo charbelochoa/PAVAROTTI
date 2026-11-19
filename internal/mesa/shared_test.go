@@ -164,6 +164,11 @@ func TestSharedDashboard(t *testing.T) {
 	if err := json.Unmarshal(earlier.Body.Bytes(), &history); err != nil || len(history.Events) != 1 || history.Events[0].Action != caso.AuditNote {
 		t.Fatalf("actividad anterior: %+v, %v", history, err)
 	}
+	sample, id := saveWindowFixture(t, store)
+	window := "/api/registro/" + id + "/ventana-binaria?revision=1&tipo=entrada&indice=0"
+	call("POST", window, origin, string(sample), nil, 401)
+	call("POST", window, "https://otro.invalid", string(sample), reader, 403)
+	call("POST", window, origin, string(sample), reader, 200)
 	call("POST", "/api/acceso/salir", origin, "", analyst, 204)
 	call("GET", "/api/app", "", "", analyst, 401)
 }

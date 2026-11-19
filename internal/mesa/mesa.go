@@ -220,6 +220,7 @@ func Handler(host string, config Settings, store *caso.Store, resources fs.FS) h
 	directoryRoutes(mux, store)
 	codeTriageRoutes(mux, store)
 	binaryCitationRoute(mux, store)
+	binaryWindowRoute(mux, store)
 	activityRoute(mux, store)
 	httpComparisonRoute(mux, store)
 	var handler http.Handler = mux

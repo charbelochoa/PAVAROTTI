@@ -5,8 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"strconv"
-	"strings"
 
 	"pavarotti/internal/caso"
 	"pavarotti/internal/triaje"
@@ -31,21 +29,29 @@ func CiteBinary(ctx context.Context, store *caso.Store, id string, revision int,
 	if id == "" || revision < 1 || index < 0 || (kind != "seccion" && kind != "cadena" && kind != "simbolo" && kind != "instruccion") {
 		return BinaryCitation{}, ErrBinaryCitation
 	}
-	record, err := store.RecordRevision(ctx, id, revision)
+	record, report, err := loadBinaryInspection(ctx, store, id, revision)
 	if err != nil {
 		return BinaryCitation{}, err
 	}
-	var report triaje.Binary
-	if record.Kind != "binario" || record.SHA256 == "" || json.Unmarshal([]byte(record.Details), &report) != nil || report.SHA256 != record.SHA256 {
-		return BinaryCitation{}, caso.ErrNotFound
-	}
 	offset := binaryCitationOffset(report, kind, index)
-	position, valid := parseBinaryHex(offset)
+	position, valid := triaje.ParseBinaryHex(offset)
 	if !valid || report.Size <= 0 || position >= uint64(report.Size) {
 		return BinaryCitation{}, caso.ErrNotFound
 	}
 	return BinaryCitation{Schema: BinaryCitationSchema, RecordID: record.ID, Revision: record.Revision, SHA256: record.SHA256,
 		InspectionSHA256: caso.Hash([]byte(record.Details)), Kind: kind, Index: index, Offset: offset}, nil
+}
+
+func loadBinaryInspection(ctx context.Context, store *caso.Store, id string, revision int) (caso.Record, triaje.Binary, error) {
+	record, err := store.RecordRevision(ctx, id, revision)
+	if err != nil {
+		return caso.Record{}, triaje.Binary{}, err
+	}
+	var report triaje.Binary
+	if record.Kind != "binario" || record.SHA256 == "" || json.Unmarshal([]byte(record.Details), &report) != nil || report.SHA256 != record.SHA256 {
+		return caso.Record{}, triaje.Binary{}, caso.ErrNotFound
+	}
+	return record, report, nil
 }
 
 func binaryCitationOffset(report triaje.Binary, kind string, index int) string {
@@ -81,10 +87,10 @@ func instructionCitationOffset(report triaje.Binary, index int) string {
 		return ""
 	}
 	code, err := hex.DecodeString(inst.Bytes)
-	position, validPosition := parseBinaryHex(inst.Offset)
-	start, validStart := parseBinaryHex(section.File.Offset)
-	address, validAddress := parseBinaryHex(inst.Address)
-	base, validBase := parseBinaryHex(section.Address)
+	position, validPosition := triaje.ParseBinaryHex(inst.Offset)
+	start, validStart := triaje.ParseBinaryHex(section.File.Offset)
+	address, validAddress := triaje.ParseBinaryHex(inst.Address)
+	base, validBase := triaje.ParseBinaryHex(section.Address)
 	if err != nil || !validPosition || !validStart || !validAddress || !validBase ||
 		position < start || start >= uint64(report.Size) || section.File.Size > uint64(report.Size)-start || address < base {
 		return ""
@@ -94,13 +100,4 @@ func instructionCitationOffset(report triaje.Binary, index int) string {
 		return ""
 	}
 	return inst.Offset
-}
-
-func parseBinaryHex(value string) (uint64, bool) {
-	digits, ok := strings.CutPrefix(value, "0x")
-	if !ok {
-		return 0, false
-	}
-	position, err := strconv.ParseUint(digits, 16, 64)
-	return position, err == nil
 }

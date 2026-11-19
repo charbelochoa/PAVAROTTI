@@ -24,7 +24,7 @@ func terminalBackup(command string, args []string, stdout, stderr io.Writer, ope
 	if flags.NArg() != 0 || *path == "" {
 		return errors.New("indica el archivo mediante --archivo")
 	}
-	file, err := openBackupFile(*path)
+	file, err := openRegularFile(*path)
 	if err != nil {
 		return err
 	}
@@ -48,7 +48,7 @@ func terminalBackup(command string, args []string, stdout, stderr io.Writer, ope
 	return printBackupSummary(stdout, summary)
 }
 
-func openBackupFile(path string) (*os.File, error) {
+func openRegularFile(path string) (*os.File, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, err

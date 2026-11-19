@@ -138,8 +138,10 @@ func sharedDashboard(mux *http.ServeMux, store *caso.Store, origin string, resou
 			return
 		}
 		if dashboardMutation(r.Method) && account.Role != caso.SharedAnalyst {
-			http.Error(w, "Este expediente requiere permisos de analista para guardar cambios", http.StatusForbidden)
-			return
+			if _, pattern := mux.Handler(r); pattern != binaryWindowPattern {
+				http.Error(w, "Este expediente requiere permisos de analista para guardar cambios", http.StatusForbidden)
+				return
+			}
 		}
 		ctx := context.WithValue(r.Context(), sharedAccountKey{}, account)
 		mux.ServeHTTP(w, r.WithContext(store.AuditContext(ctx, account)))

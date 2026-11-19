@@ -37,7 +37,7 @@ func terminalAuditRetention(args []string, stdout, stderr io.Writer, open openEx
 	defer stop()
 	var result caso.AuditRetentionResult
 	if *apply {
-		file, err := openBackupFile(*archive)
+		file, err := openRegularFile(*archive)
 		if err != nil {
 			return err
 		}
