@@ -7,9 +7,23 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pageCursor, limit int) ([]RecordRow, error) {
+	if request.Kind == "http" && request.Search == "" {
+		indexContext, cancelIndex := context.WithTimeout(ctx, 8*time.Second)
+		ready, err := s.prepareHTTPPageIndex(indexContext)
+		cancelIndex()
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if err == nil && ready {
+			ctx, cancel := context.WithTimeout(ctx, operationTimeout)
+			defer cancel()
+			return s.postgresIndexedHTTPPage(ctx, request, after, limit)
+		}
+	}
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	result, err := s.db.QueryContext(ctx, `
@@ -66,6 +80,10 @@ func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pag
 	if err != nil {
 		return nil, err
 	}
+	return scanPostgresPage(result, limit)
+}
+
+func scanPostgresPage(result *sql.Rows, limit int) ([]RecordRow, error) {
 	defer result.Close()
 	rows := make([]RecordRow, 0, limit)
 	for result.Next() {

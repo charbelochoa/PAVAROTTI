@@ -79,7 +79,8 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 17. **Exportaciones e imágenes binarias.** La 0.4.7 añade exportaciones PE por nombre y ordinal y lee contenedores FAT y FAT64 de Mach-O universal. Verifica que una cita a una imagen abra su arquitectura y el desplazamiento absoluto guardado, incluso cuando dos imágenes tengan el mismo símbolo en la misma dirección virtual.
 18. **Cobertura de activos por periodo.** La 0.4.8 permite navegar desde una red hacia las IP observadas en DNS y HTTP. La mesa y el CLI generan el mismo informe con fechas UTC inclusivas y citas de origen. La prueba reabre el JSON en un expediente restaurado y confirma la huella y las revisiones.
 19. **Consultas por ventanas.** Desde 0.4.9 PostgreSQL descarta las fechas ajenas antes de entregar registros al análisis. El almacén local conserva en memoria los límites de fecha de los lotes ya leídos. La comparación y la cobertura acotan los registros que coinciden. Las pruebas conservan los nanosegundos, las fechas con desfase y las revisiones citadas.
-20. **Paquetes y capacidad.** Medir historial, búsqueda amplia y operaciones de respaldo con expedientes de distintos tamaños. Añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
+20. **Paginación de expedientes.** Desde 0.4.10 el almacén local reutiliza un resumen de los lotes para la navegación sin búsqueda de texto. PostgreSQL mantiene un índice derivado de las capturas HTTP, rellena los lotes antiguos por partes y reconstruye el índice al restaurar. Las pruebas comprueban el orden, los cursores y las citas durante la actualización y después de restaurar.
+21. **Paquetes y capacidad.** Medir búsqueda de texto y operaciones de respaldo con expedientes de distintos tamaños. Añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
 
 ## Medición de consultas por fecha
 
@@ -94,6 +95,20 @@ Se midieron expedientes de 1,000, 10,000 y 50,000 registros en Windows x64 con a
 Las 34 respuestas exitosas de la versión anterior coincidieron byte a byte con la nueva versión. En el expediente mayor el pico de memoria del ejecutable fue de 39.9 MiB con archivos y 38.1 MiB con PostgreSQL. La medida corresponde al proceso de la aplicación. El historial HTTP sin acotar tomó unos 690 ms con archivos y 208 ms con PostgreSQL en la misma prueba.
 
 Repite la medición local de los informes con `go test ./internal/analisis -run '^$' -bench '^BenchmarkEvidenceWindows$' -benchtime=5x -benchmem`.
+
+## Medición del historial HTTP
+
+Se probaron los mismos tamaños y se compararon 24 respuestas completas entre 0.4.9 y 0.4.10. Cada mediana usa siete peticiones después de una inicial. PostgreSQL recibió los lotes desde la versión anterior antes de instalar el índice.
+
+| Expediente de 50,000 registros | Local 0.4.9 | Local 0.4.10 | PostgreSQL 0.4.9 | PostgreSQL 0.4.10 |
+| --- | --- | --- | --- | --- |
+| Primera página después de cargar el índice | 674 ms | 0.70 ms | 201 ms | 1.29 ms |
+| Segunda página | 672 ms | 0.83 ms | 243 ms | 1.34 ms |
+| Fecha y regla HTTP | 677 ms | 7.16 ms | 76 ms | 2.34 ms |
+
+La primera apertura local creó la caché en 589 ms y el pico de memoria del proceso llegó a 58 MiB. La primera consulta del expediente anterior en PostgreSQL tardó 2.9 s al rellenar el índice. La búsqueda de texto en esa base tardó unos 942 ms y queda pendiente de optimización.
+
+Repite la medición local de paginación con `go test ./internal/caso -run '^$' -bench '^BenchmarkHistoryPages$' -benchtime=5x -benchmem`.
 
 ## Flujo de trabajo OSINT
 

@@ -71,6 +71,8 @@ func (s *Store) Page(ctx context.Context, request PageRequest) (Page, error) {
 	var rows []RecordRow
 	if s.db != nil {
 		rows, err = s.postgresPage(ctx, request, after, limit)
+	} else if request.Search == "" {
+		rows, err = s.indexedLocalPage(ctx, request, after, limit)
 	} else {
 		rows, err = s.localPage(ctx, request, after, limit)
 	}
@@ -162,12 +164,7 @@ func (s *Store) localPage(ctx context.Context, request PageRequest, after pageCu
 		if request.Kind == "http" {
 			row.Traffic, row.SignalCount = record.Traffic, len(record.Signals)
 		}
-		if len(rows) < limit {
-			heap.Push(&rows, row)
-		} else {
-			rows[0] = row
-			heap.Fix(&rows, 0)
-		}
+		rows.include(row, limit)
 		return nil
 	})
 	slices.SortFunc(rows, func(a, b RecordRow) int { return compareCursor(rowCursor(b), rowCursor(a)) })
@@ -175,17 +172,21 @@ func (s *Store) localPage(ctx context.Context, request PageRequest, after pageCu
 }
 
 func matchesView(record Record, request PageRequest) bool {
+	return request.matchesRow(record.Kind, record.Time, record.Traffic, record.MatchesHTTPRule(request.HTTPRule))
+}
+
+func (request PageRequest) matchesRow(kind, stamp string, traffic *Traffic, ruleMatch bool) bool {
 	if request.Kind == "http" {
-		if record.Traffic == nil || (request.HTTPClass != 0 && record.Traffic.Status/100 != request.HTTPClass) ||
-			(request.HTTPSource != "" && record.Kind != request.HTTPSource) ||
-			(request.HTTPMethod != "" && record.Traffic.Method != request.HTTPMethod) || !record.MatchesHTTPRule(request.HTTPRule) {
+		if traffic == nil || (request.HTTPClass != 0 && traffic.Status/100 != request.HTTPClass) ||
+			(request.HTTPSource != "" && kind != request.HTTPSource) ||
+			(request.HTTPMethod != "" && traffic.Method != request.HTTPMethod) || !ruleMatch {
 			return false
 		}
-		date := record.Time[:min(len(record.Time), len(time.DateOnly))]
+		date := stamp[:min(len(stamp), len(time.DateOnly))]
 		return (request.HTTPFrom == "" || date >= request.HTTPFrom) &&
 			(request.HTTPTo == "" || (len(date) == len(time.DateOnly) && date <= request.HTTPTo))
 	}
-	return request.Kind == "" || request.Kind == record.Kind
+	return request.Kind == "" || request.Kind == kind
 }
 
 func matches(record Record, term string) bool {
@@ -228,6 +229,15 @@ func compareCursor(a, b pageCursor) int {
 }
 
 type rowHeap []RecordRow
+
+func (h *rowHeap) include(row RecordRow, limit int) {
+	if len(*h) < limit {
+		heap.Push(h, row)
+	} else {
+		(*h)[0] = row
+		heap.Fix(h, 0)
+	}
+}
 
 func (h rowHeap) Len() int           { return len(h) }
 func (h rowHeap) Less(i, j int) bool { return compareCursor(rowCursor(h[i]), rowCursor(h[j])) < 0 }
