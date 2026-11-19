@@ -41,6 +41,11 @@ func Reverse(target *url.URL, listener string, store *caso.Store) http.Handler {
 			req.SetURL(target)
 		},
 		ModifyResponse: func(resp *http.Response) error {
+			if location, err := url.Parse(resp.Header.Get("Location")); err == nil && location.IsAbs() &&
+				location.Host == target.Host && location.Scheme == target.Scheme {
+				location.Host, location.Scheme = listener, "http"
+				resp.Header.Set("Location", location.String())
+			}
 			record(resp.Request, resp.StatusCode, resp.Header)
 			return nil
 		},
