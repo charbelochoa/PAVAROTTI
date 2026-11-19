@@ -17,17 +17,18 @@ import (
 )
 
 type Record struct {
-	ID       string   `json:"id,omitempty"`
-	Revision int      `json:"revision,omitempty"`
-	Kind     string   `json:"kind"`
-	Time     string   `json:"time"`
-	Title    string   `json:"title"`
-	Source   string   `json:"source,omitempty"`
-	SourceID string   `json:"source_id,omitempty"`
-	SHA256   string   `json:"sha256,omitempty"`
-	Details  string   `json:"details,omitempty"`
-	Signals  []string `json:"signals,omitempty"`
-	Traffic  *Traffic `json:"traffic,omitempty"`
+	ID        string   `json:"id,omitempty"`
+	Revision  int      `json:"revision,omitempty"`
+	UpdatedAt string   `json:"updated_at,omitempty"`
+	Kind      string   `json:"kind"`
+	Time      string   `json:"time"`
+	Title     string   `json:"title"`
+	Source    string   `json:"source,omitempty"`
+	SourceID  string   `json:"source_id,omitempty"`
+	SHA256    string   `json:"sha256,omitempty"`
+	Details   string   `json:"details,omitempty"`
+	Signals   []string `json:"signals,omitempty"`
+	Traffic   *Traffic `json:"traffic,omitempty"`
 }
 
 type Traffic struct {
@@ -73,6 +74,7 @@ func (s *Store) Save(records []Record) error {
 	for i := range initial {
 		initial[i].ID = ""
 		initial[i].Revision = 0
+		initial[i].UpdatedAt = ""
 	}
 	data, err := json.Marshal(initial)
 	if err != nil {
@@ -129,6 +131,18 @@ func (s *Store) Records() ([]Record, error) {
 		batch, err := decodeBatch(key, data)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", entry.Name(), err)
+		}
+		for i, record := range batch {
+			if record.Kind != "nota" {
+				continue
+			}
+			edits, err := s.localEdits(record.ID)
+			if err != nil {
+				return nil, err
+			}
+			if len(edits) > 0 {
+				batch[i] = edits[len(edits)-1]
+			}
 		}
 		records = append(records, batch...)
 	}

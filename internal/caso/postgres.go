@@ -3,6 +3,7 @@ package caso
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -57,6 +58,19 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		)`); err != nil {
 		return err
 	}
+	if _, err := tx.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS pavarotti_note_revisions (
+			expediente TEXT NOT NULL,
+			batch_key TEXT NOT NULL,
+			ordinal BIGINT NOT NULL CHECK (ordinal > 0),
+			revision BIGINT NOT NULL CHECK (revision >= 2),
+			snapshot JSONB NOT NULL CHECK (jsonb_typeof(snapshot) = 'object'),
+			PRIMARY KEY (expediente, batch_key, ordinal, revision),
+			FOREIGN KEY (expediente, batch_key)
+				REFERENCES pavarotti_evidence_batches (expediente, batch_key)
+		)`); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -64,8 +78,17 @@ func (s *Store) postgresRecords() ([]Record, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
 	defer cancel()
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT batch_key, payload FROM pavarotti_evidence_batches
-		WHERE expediente = $1 ORDER BY batch_key`, s.expediente)
+		SELECT b.batch_key, b.payload, COALESCE((
+			SELECT jsonb_agg(latest.snapshot)
+			FROM (
+				SELECT DISTINCT ON (r.ordinal) r.snapshot
+				FROM pavarotti_note_revisions r
+				WHERE r.expediente = b.expediente AND r.batch_key = b.batch_key
+				ORDER BY r.ordinal, r.revision DESC
+			) latest
+		), '[]'::jsonb)
+		FROM pavarotti_evidence_batches b
+		WHERE b.expediente = $1 ORDER BY b.batch_key`, s.expediente)
 	if err != nil {
 		return nil, err
 	}
@@ -73,13 +96,23 @@ func (s *Store) postgresRecords() ([]Record, error) {
 	records := make([]Record, 0)
 	for rows.Next() {
 		var key string
-		var data []byte
-		if err := rows.Scan(&key, &data); err != nil {
+		var data, overlays []byte
+		if err := rows.Scan(&key, &data, &overlays); err != nil {
 			return nil, err
 		}
 		batch, err := decodeBatch(key, data)
 		if err != nil {
 			return nil, err
+		}
+		var edited []Record
+		if err := json.Unmarshal(overlays, &edited); err != nil {
+			return nil, err
+		}
+		for _, record := range edited {
+			_, ordinal, valid := recordPosition(record.ID)
+			if valid && ordinal <= len(batch) && batch[ordinal-1].ID == record.ID {
+				batch[ordinal-1] = record
+			}
 		}
 		records = append(records, batch...)
 	}
