@@ -35,6 +35,7 @@ type Record struct {
 	Indicator  *Indicator  `json:"indicator,omitempty"`
 	FileHashes []Indicator `json:"file_hashes,omitempty"`
 	STIX       *STIXObject `json:"stix,omitempty"`
+	Review     *CodeReview `json:"code_review,omitempty"`
 }
 
 type Indicator struct {

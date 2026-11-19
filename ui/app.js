@@ -56,7 +56,7 @@ function inspect(record, message = "Selecciona un registro para examinarlo.") {
   }
   view.append(element("span", record.kind, "type"), element("h3", record.title), element("p", formatTime(record.time)));
   if (record.source) view.append(element("p", record.source));
-  if (record.source_id) view.append(element("p", "ID · " + record.source_id));
+  if (record.source_id) view.append(element("p", (record.code_review ? "Archivo · " : "ID · ") + record.source_id));
   if (selectedRevision) {
     view.append(element("p", "Revisión citada " + record.revision));
   } else if (record.id && record.kind === "nota") {
@@ -82,12 +82,50 @@ function inspect(record, message = "Selecciona un registro para examinarlo.") {
     const item = record.traffic;
     view.append(element("p", `${item.type || "Tipo desconocido"} · ${item.millis} ms`));
   }
-  if (record.signals?.length) {
+  if (record.code_review) view.append(codeReviewPanel(record.code_review));
+  if (!record.code_review && record.signals?.length) {
     const list = element("ul");
     for (const signal of record.signals) list.append(element("li", signal));
     view.append(list);
   }
-  if (record.details) view.append(element("pre", record.details));
+  if (!record.code_review && record.details) view.append(element("pre", record.details));
+}
+
+function codeReviewPanel(review) {
+  const view = element("div", "", "audit-panel");
+  const signals = review.signals || [];
+  const count = review.total || signals.length;
+  view.append(element("h4", "Revisión estática"), element("p", signals.length < count ?
+    `${signals.length} de ${count} señales registradas` : `${count} ${count === 1 ? "señal" : "señales"}`));
+  const list = element("div", "", "audit-items");
+  for (const signal of signals) {
+    const row = element("div", "", "audit-item");
+    row.dataset.rule = signal.rule;
+    row.dataset.line = signal.line;
+    row.dataset.column = signal.column;
+    row.tabIndex = -1;
+    row.append(element("strong", `Línea ${signal.line}, columna ${signal.column}`),
+      element("span", signal.rule, "type"), element("p", signal.review));
+    list.append(row);
+  }
+  view.append(list);
+  if (review.imports?.length) {
+    const imports = element("details");
+    imports.append(element("summary", `Importaciones Go · ${review.imports.length}`));
+    const modules = element("ul");
+    let offset = 0;
+    const more = element("button", "Mostrar más importaciones");
+    more.onclick = () => {
+      const batch = review.imports.slice(offset, offset + 100);
+      modules.append(...batch.map((name) => element("li", name)));
+      offset += batch.length;
+      more.hidden = offset >= review.imports.length;
+    };
+    imports.append(modules, more);
+    imports.ontoggle = () => { if (imports.open && !offset) more.onclick(); };
+    view.append(imports);
+  }
+  return view;
 }
 
 function selectRecord(id, revision = 0, back, stixPage) {
@@ -433,7 +471,9 @@ byId("upload").addEventListener("submit", async (event) => {
   const selected = byId("evidence").files[0];
   try {
     const result = await request("/api/archivo/" + byId("file-kind").value,
-      {method: "POST", body: selected, headers: {"Content-Type": "application/octet-stream"}});
+      {method: "POST", body: selected, headers: {
+        "Content-Type": "application/octet-stream", "X-Pavarotti-Filename": encodeURIComponent(selected.name)
+      }});
     byId("evidence").value = "";
     await refresh(result.message, true);
   } catch (error) {
