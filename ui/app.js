@@ -111,7 +111,7 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
   }
   if (record.code_review) view.append(codeReviewPanel(record.id, record.code_review, citation));
   if (record.dependencies) view.append(dependencyPanel(record.dependencies, citation));
-  const binary = record.kind === "binario" && binaryPanel(record, citation?.binary, citation?.binaryWindow, citation?.binaryReferences);
+  const binary = record.kind === "binario" && binaryPanel(record, citation || {});
   if (binary) view.append(binary);
   if (!record.code_review && !record.traffic && record.signals?.length) {
     const list = element("ul");
@@ -192,7 +192,7 @@ function markBinaryCitation(row, citation, kind, index) {
   }
 }
 
-function binaryPanel(record, citation, windowCitation, referenceReport) {
+function binaryPanel(record, {binary: citation, binaryWindow: windowCitation, binaryReferences: referenceReport, binaryReferenceOrigin}) {
   let report;
   try {
     report = JSON.parse(record.details);
@@ -208,6 +208,8 @@ function binaryPanel(record, citation, windowCitation, referenceReport) {
 
   const sections = Array.isArray(report.sections) ? report.sections : [];
   const images = Array.isArray(report.images) ? report.images : [];
+  const verifiedOrigin = binaryReferenceOrigin?.sha256 === record.sha256 && binaryReferenceOrigin.revision === record.revision ?
+    binaryReferenceOrigin : undefined;
   const count = report.section_count || sections.length;
   const names = element("details");
   const sectionTitle = element("summary");
@@ -261,7 +263,7 @@ function binaryPanel(record, citation, windowCitation, referenceReport) {
       () => {
         instructions.refreshIncoming?.();
         symbols.refreshReferences?.();
-      }) : undefined;
+      }, verifiedOrigin) : undefined;
   const instructions = binaryInstructionPanel(report, sections, images, {entries, citation,
     cite: (index) => binaryCitationButton(record, "instruccion", index), follow: binaryWindow?.followInstruction,
     incoming: binaryWindow?.incoming, openReference: binaryWindow?.openReference, exportReferences: binaryWindow?.exportReferences});
@@ -330,6 +332,7 @@ function binaryPanel(record, citation, windowCitation, referenceReport) {
     if (citation?.kind === "instruccion") selectedImage = sections[report.instructions?.[citation.index]?.section]?.image || 0;
     if (windowCitation?.image > 0 && windowCitation.image <= images.length) selectedImage = windowCitation.image;
     if (referenceReport?.image > 0 && referenceReport.image <= images.length) selectedImage = referenceReport.image;
+    if (verifiedOrigin?.image > 0 && verifiedOrigin.image <= images.length) selectedImage = verifiedOrigin.image;
     if (citation?.kind === "cadena") {
       const offset = Number.parseInt(hits[citation.index]?.offset, 16);
       selectedImage = images.findIndex(({file}) => {
@@ -987,6 +990,7 @@ function showView(view) {
   byId("filter-asset").hidden = view !== "assets";
   byId("open-asset-coverage").hidden = view !== "assets";
   byId("open-binary-citation").hidden = view !== "binaries";
+  byId("open-binary-reference-comparison").hidden = view !== "binaries";
   byId("http-filters").hidden = view !== "http";
   query.placeholder = views[view].placeholder;
   query.maxLength = view === "assets" ? 253 : 256;

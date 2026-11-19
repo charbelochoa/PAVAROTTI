@@ -14,7 +14,7 @@ function validBinaryWindowCitation(citation) {
     location(citation.address) && location(citation.offset);
 }
 
-function binaryWindowPanel(report, record, citation, restoredReport, signal, references, updateReferences) {
+function binaryWindowPanel(report, record, citation, restoredReport, signal, references, updateReferences, verifiedOrigin) {
   const details = element("details", "", "binary-window");
   details.append(element("summary", "Ventana de instrucciones"));
   const label = element("label", "Archivo binario original", "binary-image");
@@ -27,15 +27,22 @@ function binaryWindowPanel(report, record, citation, restoredReport, signal, ref
   const result = element("div");
   details.append(label, entry, status, result);
   let image;
-  let anchor = citation;
+  let anchor = verifiedOrigin?.location || citation;
   let expected = citation;
   let pending;
-  let focusOnFile;
-  let expectedOrigin;
-  let expectedHash;
+  let focusOnFile = verifiedOrigin?.location.row;
+  let expectedOrigin = verifiedOrigin?.instruction;
+  let expectedHash = verifiedOrigin?.location.window_sha256;
+  let expectedContext = verifiedOrigin && {image: verifiedOrigin.image, inspection_sha256: verifiedOrigin.inspectionHash};
   let showReferencesOnFile = false;
   let referenceAction = restoredReport ? {mode: "verificar", report: restoredReport} : undefined;
-  if (expected || referenceAction) {
+  if (verifiedOrigin) {
+    details.open = true;
+    const attached = new DataTransfer();
+    attached.items.add(verifiedOrigin.sample);
+    input.files = attached.files;
+    requestAnimationFrame(() => { if (!signal.aborted && anchor === verifiedOrigin.location) load({focus: focusOnFile}); });
+  } else if (expected || referenceAction) {
     details.open = true;
     status.textContent = expected ? `Selecciona el archivo original para verificar la cita en ${expected.offset}.` :
       "Selecciona el archivo original para verificar el informe de referencias.";
@@ -114,6 +121,9 @@ function binaryWindowPanel(report, record, citation, restoredReport, signal, ref
         throw new Error("La ventana no coincide con la cita guardada.");
       }
       if (expectedHash && expectedHash !== data.citation.window_sha256) throw new Error("La ventana no coincide con el informe guardado.");
+      if (expectedContext && Object.entries(expectedContext).some(([key, value]) => data.citation[key] !== value)) {
+        throw new Error("El análisis o la imagen no coinciden con el informe guardado.");
+      }
       if (showReferences && data.entry_ambiguous) throw new Error("El símbolo tiene más de una ubicación ejecutable para esa dirección.");
       if (showReferences && !data.window.instructions[0]?.text) throw new Error("No se pudo decodificar la instrucción de entrada del símbolo.");
       if (expectedOrigin) {
@@ -177,6 +187,7 @@ function binaryWindowPanel(report, record, citation, restoredReport, signal, ref
     focusOnFile = options?.focus;
     expectedOrigin = options?.origin;
     expectedHash = options?.windowHash;
+    expectedContext = undefined;
     showReferencesOnFile = !!options?.showReferences;
     referenceAction = undefined;
     anchor = location;
@@ -200,6 +211,7 @@ function binaryWindowPanel(report, record, citation, restoredReport, signal, ref
       focusOnFile = undefined;
       expectedOrigin = undefined;
       expectedHash = undefined;
+      expectedContext = undefined;
       showReferencesOnFile = false;
       referenceAction = undefined;
       result.replaceChildren();

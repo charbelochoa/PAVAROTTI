@@ -58,24 +58,34 @@ func ReadBinaryReferenceReport(source io.Reader) (BinaryReferenceReport, error) 
 }
 
 func ReviewBinaryReferences(ctx context.Context, store *caso.Store, report BinaryReferenceReport, source io.Reader, verify bool) (BinaryReferenceReview, error) {
-	if report.Schema != BinaryReferenceSchema || report.RecordID == "" || report.Revision < 1 || report.Image < 0 ||
-		len(report.Origins) == 0 || len(report.Origins) > maxBinaryReferenceOrigins {
-		return BinaryReferenceReview{}, ErrBinaryReferenceReport
-	}
-	seal := report.ReportSHA256
-	if verify {
-		if seal == "" || report.InspectionSHA256 == "" || report.Destination.WindowSHA256 == "" {
-			return BinaryReferenceReview{}, ErrBinaryReferenceReport
-		}
-		digest, err := binaryReferenceDigest(report)
-		if err != nil || digest != seal {
-			return BinaryReferenceReview{}, ErrBinaryReferenceReport
-		}
+	if err := validateBinaryReferenceReport(report, verify); err != nil {
+		return BinaryReferenceReview{}, err
 	}
 	evidence, err := openBinaryWindowEvidence(ctx, store, report.RecordID, report.Revision, source)
 	if err != nil {
 		return BinaryReferenceReview{}, err
 	}
+	return evidence.reviewReferences(ctx, report, verify)
+}
+
+func validateBinaryReferenceReport(report BinaryReferenceReport, verify bool) error {
+	if report.Schema != BinaryReferenceSchema || report.RecordID == "" || report.Revision < 1 || report.Image < 0 ||
+		len(report.Origins) == 0 || len(report.Origins) > maxBinaryReferenceOrigins {
+		return ErrBinaryReferenceReport
+	}
+	if verify {
+		if report.ReportSHA256 == "" || report.InspectionSHA256 == "" || report.Destination.WindowSHA256 == "" {
+			return ErrBinaryReferenceReport
+		}
+		digest, err := binaryReferenceDigest(report)
+		if err != nil || digest != report.ReportSHA256 {
+			return ErrBinaryReferenceReport
+		}
+	}
+	return nil
+}
+
+func (evidence *binaryWindowEvidence) reviewReferences(ctx context.Context, report BinaryReferenceReport, verify bool) (BinaryReferenceReview, error) {
 	if report.SHA256 != evidence.record.SHA256 || (report.InspectionSHA256 != "" && report.InspectionSHA256 != evidence.inspectionHash) {
 		return BinaryReferenceReview{}, ErrBinaryReferenceReport
 	}
@@ -136,9 +146,7 @@ func ReviewBinaryReferences(ctx context.Context, store *caso.Store, report Binar
 		seen[key] = true
 		origins = append(origins, instruction)
 	}
-	if verify {
-		report.ReportSHA256 = seal
-	} else {
+	if !verify {
 		report.ReportSHA256, err = binaryReferenceDigest(report)
 		if err != nil {
 			return BinaryReferenceReview{}, err
