@@ -27,6 +27,9 @@ La mesa de trabajo mantiene el expediente a la izquierda, los registros al centr
 - **Tráfico.** Proxy inverso HTTP(S) de un solo destino e importación de HAR. El expediente registra origen, estado HTTP, tipo MIME, latencia y señales de configuración. Las señales sirven para priorizar la revisión manual.
 - **Evidencia.** Importación de hallazgos JSON con huella SHA-256 del archivo y búsqueda por texto, origen, ID o huella. También puedes registrar notas manuales.
 - **Binarios.** Triaje estático de cabeceras y secciones PE, ELF y Mach-O con SHA-256.
+- **Indicadores.** Importa dominios, direcciones IP y huellas desde un archivo de texto, un valor por línea. El informe correlaciona dominios e IP con los activos que ya constan en el expediente y cita los registros que justifican cada coincidencia.
+- **Análisis.** Tres agentes locales de inventario, señales HTTP y cronología trabajan en paralelo sobre la evidencia del expediente. El revisor de código Go añade señales con línea y columna sin compilar ni ejecutar la fuente.
+- **Edición.** Las notas conservan su historial. Una edición requiere la revisión vigente para evitar sobrescribir cambios. Los hallazgos importados conservan su huella y procedencia.
 
 ## Uso
 
@@ -39,6 +42,36 @@ Para guardar un expediente en una ruta específica y observar un servicio que ad
 ```
 
 En la interfaz, selecciona **Abrir el destino mediante el proxy**. El proxy se activa únicamente al indicar `-destino`. Para observar un servicio HTTPS conserva la verificación TLS de la conexión saliente. Si la aplicación depende de cookies `Secure` o de su origen original, importa un HAR desde el navegador. El expediente registra metadatos de tráfico y señales. Las notas y hallazgos JSON conservan el texto que decidas incorporar.
+
+## Terminal
+
+Usa el nombre del ejecutable de tu plataforma en lugar de `pavarotti` en estos ejemplos. Coloca las opciones globales como `-datos`, `-postgres` y `-expediente` antes del comando.
+
+```sh
+pavarotti ayuda
+pavarotti -datos ./expediente importar indicadores indicadores.txt
+pavarotti -datos ./expediente importar codigo revision.go
+pavarotti -datos ./expediente nota --titulo "Turno de revisión" --texto "Validación manual pendiente"
+pavarotti -datos ./expediente listar --buscar "validación" --json
+pavarotti -datos ./expediente analizar --json
+pavarotti -datos ./expediente exportar --formato csv --salida expediente.csv
+```
+
+Usa `editar --id ID --revision N --texto "Nueva observación"` con el ID y la revisión de `listar`. Consulta versiones previas con `historial --id ID`.
+
+## PostgreSQL y Docker
+
+El ejecutable usa almacenamiento local por defecto. Para compartir un expediente entre la interfaz y el CLI, configura `PAVAROTTI_POSTGRES` con la URL de conexión o pasa `-postgres`. Ambos leen y guardan los mismos registros cuando usan la misma base de datos y el mismo nombre en `-expediente`. El usuario de PostgreSQL necesita permisos de creación de tablas para inicializar el esquema.
+
+Con Docker Compose, define `PAVAROTTI_DB_PASSWORD` con una contraseña propia en `.env` y ejecuta:
+
+```sh
+docker compose up --build --wait
+docker compose exec app pavarotti listar
+docker compose exec app pavarotti analizar --json
+```
+
+La interfaz queda en `http://127.0.0.1:8080`. Define `PAVAROTTI_WEB_PORT` si ocupas otro puerto. PostgreSQL guarda el expediente en un volumen. Puedes parar los servicios con `docker compose down` y volver a abrirlos con el mismo expediente.
 
 ## Compilar
 

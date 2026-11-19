@@ -40,7 +40,7 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 			http.ServeFileFS(w, r, resources, "ui/"+name)
 		})
 	}
-	for _, name := range []string{"Apache-2.0.txt", "NOTICE"} {
+	for _, name := range []string{"Apache-2.0.txt", "NOTICE", "DEPENDENCIAS.txt"} {
 		mux.HandleFunc("GET /licencias/"+name, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			http.ServeFileFS(w, r, resources, "licenses/"+name)

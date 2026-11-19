@@ -55,6 +55,9 @@ jobs:
       - run: curl --fail --silent http://127.0.0.1:8376/api/app
       - run: docker compose exec -T app pavarotti nota --titulo "Prueba local" --texto "Evidencia en PostgreSQL"
       - run: docker compose restart app
-      - run: docker compose exec -T app pavarotti listar --json | rg 'Evidencia en PostgreSQL'
+      - run: curl --fail --silent --retry 10 --retry-connrefused http://127.0.0.1:8376/api/app
+      - run: |
+          docker compose exec -T app pavarotti listar --json > expediente-ci.json
+          python3 -c 'import json; assert any(r["details"] == "Evidencia en PostgreSQL" for r in json.load(open("expediente-ci.json")))'
       - if: failure()
         run: docker compose logs --tail 80
