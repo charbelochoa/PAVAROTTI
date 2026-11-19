@@ -21,6 +21,15 @@ type Record struct {
 	SHA256   string   `json:"sha256,omitempty"`
 	Details  string   `json:"details,omitempty"`
 	Signals  []string `json:"signals,omitempty"`
+	Traffic  *Traffic `json:"traffic,omitempty"`
+}
+
+type Traffic struct {
+	Method string `json:"method"`
+	Status int    `json:"status"`
+	Type   string `json:"type"`
+	Millis int64  `json:"millis"`
+	Bucket int64  `json:"bucket"`
 }
 
 type Store struct {

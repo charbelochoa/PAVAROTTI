@@ -1,0 +1,6 @@
+Copyright 2016 The ZAP Development Team
+Part of internal/trafico/observe.go adapts the passive response statistics in
+StatsPassiveScanner.java under Apache License 2.0. It records a bounded latency
+bucket and drops every MIME parameter before retaining the content type.
+
+https://github.com/zaproxy/zaproxy/blob/3c8eac30cda790ba5ec6644c70c2c4225d0fb94d/zap/src/main/java/org/zaproxy/zap/extension/pscan/scanner/StatsPassiveScanner.java
