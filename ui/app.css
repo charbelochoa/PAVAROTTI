@@ -67,6 +67,12 @@ footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2re
 .tools[hidden] { display: none; }
 #report-panel { width: min(840px, calc(100vw - 2rem)); }
 #report-text { max-height: 62vh; overflow: auto; }
+#report-evidence { margin-top: .75rem; }
+#report-evidence label { margin: .65rem 0 .35rem; }
+#report-references { max-height: 31vh; overflow: auto; }
+.reference-group { display: grid; gap: .4rem; margin-top: .55rem; }
+.reference-group + .reference-group { border-top: 1px solid var(--line); padding-top: .55rem; }
+.reference-group button { text-align: left; overflow-wrap: anywhere; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: #ddd2cc; }
 #groups { display: grid; grid-template-columns: max-content 1fr; gap: .4rem .8rem; }
 #groups dd { margin: 0; color: var(--dim); }

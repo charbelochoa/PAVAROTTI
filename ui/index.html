@@ -111,7 +111,7 @@
       </section>
     </div>
     <section aria-label="Detalle de la selección" id="inspector">
-      <h2>Inspector de evidencia</h2>
+      <h2 id="inspector-heading" tabindex="-1">Inspector de evidencia</h2>
       <div class="tools" id="note-tools" hidden>
         <button id="edit-note">Editar nota</button>
         <button id="history">Historial</button>
@@ -139,6 +139,12 @@
   </dialog>
   <dialog id="report-panel">
     <h2 id="report-title">Análisis del expediente</h2>
+    <details id="report-evidence" hidden>
+      <summary>Referencias de evidencia</summary>
+      <label for="report-section">Sección del informe</label>
+      <select id="report-section"></select>
+      <div id="report-references"></div>
+    </details>
     <pre id="report-text"></pre>
     <form method="dialog"><button>Cerrar</button></form>
   </dialog>

@@ -182,12 +182,23 @@ func (h *rowHeap) Pop() any {
 }
 
 func (s *Store) Record(ctx context.Context, id string) (Record, error) {
+	return s.record(ctx, id, 0)
+}
+
+func (s *Store) RecordRevision(ctx context.Context, id string, revision int) (Record, error) {
+	if revision < 1 {
+		return Record{}, ErrNotFound
+	}
+	return s.record(ctx, id, revision)
+}
+
+func (s *Store) record(ctx context.Context, id string, revision int) (Record, error) {
 	key, ordinal, valid := recordPosition(id)
 	if !valid {
 		return Record{}, ErrNotFound
 	}
 	if s.db != nil {
-		return s.postgresRecord(ctx, key, ordinal)
+		return s.postgresRecord(ctx, key, ordinal, revision)
 	}
 	unlock, err := s.lockContext(ctx)
 	if err != nil {
@@ -195,8 +206,22 @@ func (s *Store) Record(ctx context.Context, id string) (Record, error) {
 	}
 	defer unlock()
 	record, err := s.localRecord(key, ordinal)
+	if err != nil || revision == 1 {
+		return record, err
+	}
+	if revision == 0 {
+		return s.latestLocal(record)
+	}
+	if record.Kind != "nota" {
+		return Record{}, ErrNotFound
+	}
+	edits, err := s.localEdits(id)
 	if err != nil {
 		return Record{}, err
 	}
-	return s.latestLocal(record)
+	index := revision - 2
+	if index >= len(edits) || edits[index].Revision != revision {
+		return Record{}, ErrNotFound
+	}
+	return edits[index], nil
 }
