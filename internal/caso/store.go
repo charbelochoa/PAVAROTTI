@@ -114,12 +114,10 @@ func (s *Store) Save(records []Record) error {
 }
 
 func (s *Store) Records() ([]Record, error) {
-	if s.db != nil {
-		return s.postgresRecords()
-	}
 	records := make([]Record, 0)
-	err := s.walkLocal(context.Background(), true, func(record Record) {
+	err := s.Walk(context.Background(), func(record Record) error {
 		records = append(records, record)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -135,7 +133,14 @@ func (s *Store) Records() ([]Record, error) {
 	return records, nil
 }
 
-func (s *Store) walkLocal(ctx context.Context, withEdits bool, visit func(Record)) error {
+func (s *Store) Walk(ctx context.Context, visit func(Record) error) error {
+	if s.db != nil {
+		return s.postgresWalk(ctx, visit)
+	}
+	return s.walkLocal(ctx, true, visit)
+}
+
+func (s *Store) walkLocal(ctx context.Context, withEdits bool, visit func(Record) error) error {
 	unlock, err := s.lockContext(ctx)
 	if err != nil {
 		return err
@@ -180,7 +185,9 @@ func (s *Store) walkLocal(ctx context.Context, withEdits bool, visit func(Record
 						return err
 					}
 				}
-				visit(record)
+				if err := visit(record); err != nil {
+					return err
+				}
 			}
 		}
 	}

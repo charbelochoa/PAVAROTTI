@@ -20,7 +20,7 @@ func (s *Store) Summary(ctx context.Context) (Summary, error) {
 		return s.postgresSummary(ctx)
 	}
 	value := Summary{Status: make(map[string]int), MIME: make(map[string]int), Bucket: make(map[string]int)}
-	err := s.walkLocal(ctx, false, func(record Record) {
+	err := s.walkLocal(ctx, false, func(record Record) error {
 		value.Total++
 		value.Signals += len(record.Signals)
 		if traffic := record.Traffic; traffic != nil {
@@ -29,6 +29,7 @@ func (s *Store) Summary(ctx context.Context) (Summary, error) {
 			value.MIME[traffic.Type]++
 			value.Bucket[strconv.FormatInt(traffic.Bucket, 10)]++
 		}
+		return nil
 	})
 	return value, err
 }

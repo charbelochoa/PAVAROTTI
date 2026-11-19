@@ -31,6 +31,7 @@ Usa **Anterior** y **Siguiente** para recorrer los resultados de 50 en 50. La b�
 - **Binarios.** Triaje estático de cabeceras y secciones PE, ELF y Mach-O con SHA-256.
 - **Indicadores.** Importa dominios, direcciones IP y huellas desde un archivo de texto, un valor por línea. El informe correlaciona dominios e IP con los activos que ya constan en el expediente y cita los registros que justifican cada coincidencia.
 - **Análisis.** Tres agentes locales de inventario, señales HTTP y cronología trabajan en paralelo sobre la evidencia del expediente. El revisor de código Go añade señales con línea y columna sin compilar ni ejecutar la fuente.
+- **Trazabilidad.** Cada análisis identifica la versión de sus agentes y la huella de su instantánea de entrada. Las referencias del informe incluyen el ID y la revisión de cada registro.
 - **Edición.** Las notas conservan su historial. Una edición requiere la revisión vigente para evitar sobrescribir cambios. Los hallazgos importados conservan su huella y procedencia.
 
 ## Uso

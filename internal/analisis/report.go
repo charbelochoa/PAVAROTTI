@@ -21,15 +21,17 @@ const (
 var ErrLimit = errors.New("el informe admite hasta 10000 registros por ejecución")
 
 type Report struct {
-	Records    int           `json:"records"`
-	Assets     []Group       `json:"assets"`
-	Indicators []Group       `json:"indicators"`
-	Matches    []Group       `json:"matches"`
-	Hashes     []Group       `json:"hashes"`
-	Signals    []Group       `json:"signals"`
-	Responses  []Group       `json:"responses"`
-	Timeline   []Evidence    `json:"timeline"`
-	Agents     []AgentResult `json:"agents"`
+	InputSHA256  string        `json:"input_sha256,omitempty"`
+	AgentVersion string        `json:"agent_version,omitempty"`
+	Records      int           `json:"records"`
+	Assets       []Group       `json:"assets"`
+	Indicators   []Group       `json:"indicators"`
+	Matches      []Group       `json:"matches"`
+	Hashes       []Group       `json:"hashes"`
+	Signals      []Group       `json:"signals"`
+	Responses    []Group       `json:"responses"`
+	Timeline     []Evidence    `json:"timeline"`
+	Agents       []AgentResult `json:"agents"`
 }
 
 type Group struct {
@@ -41,6 +43,7 @@ type Group struct {
 
 type Evidence struct {
 	ID       string `json:"id,omitempty"`
+	Revision int    `json:"revision,omitempty"`
 	Kind     string `json:"kind"`
 	Time     string `json:"time"`
 	Title    string `json:"title"`
@@ -80,7 +83,8 @@ func Analyze(ctx context.Context, records []caso.Record) (Report, error) {
 		}
 		date, _ := time.Parse(time.RFC3339Nano, record.Time)
 		observations = append(observations, observation{record: record, date: date, ref: Evidence{
-			ID: clip(record.ID, 160), Kind: clip(record.Kind, 64), Time: clip(record.Time, 48), Title: clip(record.Title, 160),
+			ID: clip(record.ID, 160), Revision: record.Revision,
+			Kind: clip(record.Kind, 64), Time: clip(record.Time, 48), Title: clip(record.Title, 160),
 			SourceID: clip(record.SourceID, 160), SHA256: digest(record.SHA256),
 		}})
 	}
@@ -114,6 +118,9 @@ func Analyze(ctx context.Context, records []caso.Record) (Report, error) {
 func (r Report) Text() string {
 	var out strings.Builder
 	fmt.Fprintf(&out, "Análisis del expediente\nRegistros revisados  %d\n", r.Records)
+	if r.InputSHA256 != "" {
+		fmt.Fprintf(&out, "Huella de entrada  %s\nVersión de agentes  %s\n", r.InputSHA256, r.AgentVersion)
+	}
 	for _, agent := range r.Agents {
 		fmt.Fprintf(&out, "%s  %d coincidencias, %d mostradas\n", agent.Name, agent.Matched, agent.Shown)
 	}
@@ -151,6 +158,9 @@ func (e Evidence) text() string {
 		if value != "" {
 			fields = append(fields, value)
 		}
+	}
+	if e.Revision > 0 {
+		fields = append(fields, fmt.Sprintf("rev. %d", e.Revision))
 	}
 	return strings.Join(fields, " · ")
 }

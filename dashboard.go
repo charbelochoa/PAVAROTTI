@@ -150,20 +150,21 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 		respond(w, records)
 	})
 	mux.HandleFunc("POST /api/analisis", func(w http.ResponseWriter, r *http.Request) {
-		records, err := store.Records()
-		if err == nil {
-			var report analisis.Report
-			report, err = analisis.Analyze(r.Context(), records)
-			if err == nil {
-				respond(w, map[string]any{"report": report, "text": report.Text()})
-				return
-			}
-			if errors.Is(err, analisis.ErrLimit) {
-				http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-				return
-			}
+		snapshot, err := analisis.Prepare(r.Context(), store)
+		if errors.Is(err, analisis.ErrLimit) || errors.Is(err, analisis.ErrSnapshotBytes) {
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
 		}
-		http.Error(w, "No se pudo analizar el expediente", http.StatusInternalServerError)
+		if err != nil {
+			http.Error(w, "No se pudo preparar el expediente", http.StatusInternalServerError)
+			return
+		}
+		report, err := snapshot.Analyze(r.Context())
+		if err != nil {
+			http.Error(w, "No se pudo analizar el expediente", http.StatusInternalServerError)
+			return
+		}
+		respond(w, map[string]any{"report": report, "text": report.Text()})
 	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
