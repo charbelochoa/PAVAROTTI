@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	AgentVersion      = "2"
+	AgentVersion      = "3"
 	legacyAgent       = "1"
+	networkAgent      = "2"
 	SnapshotByteLimit = 32 << 20
 )
 
@@ -107,6 +108,7 @@ func analysisRecord(base caso.Record) caso.Record {
 	for _, signal := range base.Signals[:min(len(base.Signals), 32)] {
 		record.Signals = append(record.Signals, clip(signal, 160))
 	}
+	projectAudit(&record, base)
 	return record
 }
 
@@ -114,7 +116,7 @@ func (snapshot Snapshot) Analyze(ctx context.Context) (Report, error) {
 	if !supportedAgent(snapshot.AgentVersion) {
 		return Report{}, errors.New("versión de agentes desconocida")
 	}
-	report, err := analyze(ctx, snapshot.Records, snapshot.AgentVersion == AgentVersion)
+	report, err := analyze(ctx, snapshot.Records, snapshot.AgentVersion)
 	if err != nil {
 		return Report{}, err
 	}
@@ -123,4 +125,6 @@ func (snapshot Snapshot) Analyze(ctx context.Context) (Report, error) {
 	return report, nil
 }
 
-func supportedAgent(version string) bool { return version == AgentVersion || version == legacyAgent }
+func supportedAgent(version string) bool {
+	return version == AgentVersion || version == networkAgent || version == legacyAgent
+}
