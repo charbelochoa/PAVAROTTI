@@ -10,13 +10,15 @@ import (
 )
 
 type Binary struct {
-	SHA256       string    `json:"sha256"`
-	Format       string    `json:"format"`
-	Architecture string    `json:"architecture,omitempty"`
-	Size         int       `json:"size"`
-	Sections     []Section `json:"sections"`
-	SectionCount int       `json:"section_count,omitempty"`
-	Strings      []TextHit `json:"strings,omitempty"`
+	SHA256         string    `json:"sha256"`
+	Format         string    `json:"format"`
+	Architecture   string    `json:"architecture,omitempty"`
+	Size           int       `json:"size"`
+	Sections       []Section `json:"sections"`
+	SectionCount   int       `json:"section_count,omitempty"`
+	Strings        []TextHit `json:"strings,omitempty"`
+	Symbols        []Symbol  `json:"symbols,omitempty"`
+	SymbolsLimited bool      `json:"symbols_limited,omitempty"`
 }
 
 type Section struct {
@@ -50,6 +52,7 @@ func Inspect(data []byte) Binary {
 				}
 				result.add(section.Name, section.Addr, section.Size, section.Offset, size)
 			}
+			result.elfSymbols(file, data)
 		}
 	case bytes.HasPrefix(data, []byte("MZ")):
 		if file, err := pe.NewFile(reader); err == nil {
@@ -62,24 +65,15 @@ func Inspect(data []byte) Binary {
 				}
 				result.add(section.Name, uint64(section.VirtualAddress), uint64(section.VirtualSize), uint64(section.Offset), uint64(size))
 			}
+			result.peSymbols(file)
 		}
 	default:
 		if file, err := macho.NewFile(reader); err == nil {
 			result.Format, result.Architecture = "Mach-O", file.Cpu.String()
-			const (
-				sectionTypeMask     = 0xff
-				zeroFill            = 0x1
-				gbZeroFill          = 0xc
-				threadLocalZeroFill = 0x12
-			)
 			for _, section := range file.Sections {
-				size := section.Size
-				switch section.Flags & sectionTypeMask {
-				case zeroFill, gbZeroFill, threadLocalZeroFill:
-					size = 0
-				}
-				result.add(section.Seg+"/"+section.Name, section.Addr, section.Size, uint64(section.Offset), size)
+				result.add(section.Seg+"/"+section.Name, section.Addr, section.Size, uint64(section.Offset), machOFileSize(section))
 			}
+			result.machOSymbols(file)
 		}
 	}
 	result.Strings = printableStrings(data)
@@ -119,8 +113,15 @@ func (b *Binary) add(name string, address, size, offset, fileSize uint64) {
 		return
 	}
 	section := Section{Name: name, Address: fmt.Sprintf("0x%x", address), Size: size}
-	if fileSize > 0 && offset < uint64(b.Size) && fileSize <= uint64(b.Size)-offset {
-		section.File = &FileRange{Offset: fmt.Sprintf("0x%x", offset), Size: fileSize}
+	if physical := b.fileOffset(offset, fileSize, 0); physical != "" {
+		section.File = &FileRange{Offset: physical, Size: fileSize}
 	}
 	b.Sections = append(b.Sections, section)
+}
+
+func (b *Binary) fileOffset(offset, size, delta uint64) string {
+	if offset >= uint64(b.Size) || size > uint64(b.Size)-offset || delta >= size {
+		return ""
+	}
+	return fmt.Sprintf("0x%x", offset+delta)
 }

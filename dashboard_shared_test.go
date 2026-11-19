@@ -99,6 +99,7 @@ func TestSharedDashboard(t *testing.T) {
 	call("GET", "/ingresar", "", "", nil, 200)
 	call("GET", "/api/app", "", "", nil, 401)
 	call("GET", "/api/exportar/stix", "", "", nil, 401)
+	call("GET", "/api/registro/"+strings.Repeat("a", 64)+"-1/cita-binaria?revision=1&tipo=cadena&indice=0", "", "", nil, 401)
 	call("GET", "http://"+host+"/ingresar", "", "", nil, 403)
 	call("POST", "/api/acceso/ingresar", "https://otro.invalid", "{}", nil, 403)
 	call("POST", "/api/acceso/ingresar", "", "{}", nil, 403)
