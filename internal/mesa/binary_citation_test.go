@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	"pavarotti/internal/caso"
 	"pavarotti/internal/ingesta"
 	"pavarotti/internal/terminal"
+	"pavarotti/internal/triaje"
 )
 
 func TestBinaryCitationUsesStoredRevision(t *testing.T) {
@@ -66,5 +68,60 @@ func TestBinaryCitationUsesStoredRevision(t *testing.T) {
 	}
 	if bytes.Contains(stdout.Bytes(), []byte("Observed evidence string")) {
 		t.Fatal("la cita incluye el contenido de la evidencia")
+	}
+}
+
+func TestUniversalBinaryCitationsKeepDistinctPhysicalOffsets(t *testing.T) {
+	store, err := caso.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	hash := caso.Hash([]byte("Mach-O universal de prueba"))
+	report := triaje.Binary{SHA256: hash, Format: "Mach-O universal", Size: 0x4000,
+		Images: []triaje.BinaryImage{
+			{Architecture: "CpuAmd64", Subtype: "0x3", File: triaje.FileRange{Offset: "0x1000", Size: 0x200}},
+			{Architecture: "CpuArm64", Subtype: "0x0", File: triaje.FileRange{Offset: "0x3000", Size: 0x200}},
+		},
+		Symbols: []triaje.Symbol{
+			{Name: "entry", Kind: "Externo", Address: "0x1008", Section: "__TEXT/__text", Offset: "0x1108", Image: 1},
+			{Name: "entry", Kind: "Externo", Address: "0x1008", Section: "__TEXT/__text", Offset: "0x3108", Image: 2},
+		},
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save([]caso.Record{{Kind: "binario", Title: report.Format, SHA256: hash, Time: caso.Now(), Details: string(data)}}); err != nil {
+		t.Fatal(err)
+	}
+	page, err := store.Page(t.Context(), caso.PageRequest{Kind: "binario"})
+	if err != nil || len(page.Rows) != 1 {
+		t.Fatalf("registros: %+v, %v", page, err)
+	}
+	id := page.Rows[0].ID
+	const host = "127.0.0.1:8443"
+	handler := Handler(host, Settings{}, store, testResources)
+	for index, offset := range []string{"0x1108", "0x3108"} {
+		position := strconv.Itoa(index)
+		query := "/api/registro/" + id + "/cita-binaria?revision=1&tipo=simbolo&indice=" + position
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest("GET", "http://"+host+query, nil))
+		expected := analisis.BinaryCitation{Schema: analisis.BinaryCitationSchema, RecordID: id, Revision: 1, SHA256: hash,
+			InspectionSHA256: caso.Hash(data), Kind: "simbolo", Index: index, Offset: offset}
+		var actual analisis.BinaryCitation
+		if err := json.Unmarshal(response.Body.Bytes(), &actual); response.Code != 200 || err != nil || actual != expected {
+			t.Fatalf("cita web: %+v, %v, %d", actual, err, response.Code)
+		}
+		var stdout, stderr bytes.Buffer
+		_, err := terminal.Run([]string{"citar-binario", "--id", id, "--revision", "1", "--tipo", "simbolo", "--indice", position},
+			&stdout, &stderr, func() (*caso.Store, error) { return store, nil })
+		if err != nil {
+			t.Fatalf("CLI: %v, %s", err, &stderr)
+		}
+		actual = analisis.BinaryCitation{}
+		if err := json.Unmarshal(stdout.Bytes(), &actual); err != nil || actual != expected {
+			t.Fatalf("cita CLI: %+v, %v", actual, err)
+		}
 	}
 }

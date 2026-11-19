@@ -45,7 +45,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | Flujo | Disponible | Trabajo pendiente y prueba de cierre |
 | --- | --- | --- |
 | Expedientes, terminal y agentes | Evidencia con procedencia, inventario de activos, cola persistente, revisión de código Go y exportación STIX. | Guardar un informe de cobertura por activo y periodo. Exportarlo, abrir sus citas y confirmar los cruces al restaurar el expediente. |
-| Inspección estática de binarios | PE, ELF y Mach-O con secciones, cadenas, símbolos y citas por desplazamiento. | Mostrar exportaciones PE y símbolos Mach-O universales. Navegar instrucciones y referencias en secciones de muestras locales y comprobar sus desplazamientos con archivos de referencia. |
+| Inspección estática de binarios | PE, ELF y Mach-O con secciones, cadenas, símbolos y citas por desplazamiento. PE incluye exportaciones y Mach-O universal permite seleccionar una imagen. | Navegar instrucciones y referencias en secciones de muestras locales y comprobar sus desplazamientos con archivos de referencia. |
 | Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros, reglas pasivas y comparación de dos periodos con citas a la revisión exacta. | Medir el tiempo de consulta para ventanas acotadas en expedientes con capturas voluminosas. |
 | Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, actividad por expediente, respaldo, restauración y retención verificada. | Medir el costo de respaldo, restauración y retención en expedientes grandes y verificar sus referencias después de operar. |
 
@@ -76,7 +76,8 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 14. **Retención y despliegue compartido.** La 0.4.4 permite previsualizar la retención por fecha y aplicarla cuando la copia contiene los eventos seleccionados. La prueba restaura la actividad archivada y abre las revisiones conservadas. CI prueba HTTPS con Docker Compose, roles y persistencia tras reiniciar. El archivo queda bajo custodia del operador.
 15. **Reglas pasivas HTTP.** La 0.4.5 añade reglas de cabeceras, filtros por código en la mesa y la terminal, y citas en el informe de agentes 4. Las instantáneas anteriores siguen siendo legibles por sus respectivas versiones. El criterio de cierre comprueba que la regla abre la respuesta guardada y resalta su motivo.
 16. **Comparación de capturas HTTP.** La 0.4.6 compara orígenes, tipos de captura y fechas UTC inclusivas en la mesa y la terminal. El JSON conserva la huella de entrada, los criterios y las citas aunque el expediente reciba capturas después. Las pruebas distinguen un fallo del proxy de una respuesta 502, comprueban los límites UTC y abren reglas de la revisión citada.
-17. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
+17. **Exportaciones e imágenes binarias.** La 0.4.7 añade exportaciones PE por nombre y ordinal y lee contenedores FAT y FAT64 de Mach-O universal. Verifica que una cita a una imagen abra su arquitectura y el desplazamiento absoluto guardado, incluso cuando dos imágenes tengan el mismo símbolo en la misma dirección virtual.
+18. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
 
 ## Flujo de trabajo OSINT
 
@@ -90,7 +91,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | Vista | Trabajo pendiente | Criterio de cierre |
 | --- | --- | --- |
 | Activos y fuentes | Mostrar desde una red las IP que ya tienen observaciones en el expediente | Abrir la revisión exacta de una observación de IP desde la ficha de red y comprobar su procedencia. |
-| Triaje de binarios | Incorporar exportaciones PE por nombre y símbolos de imágenes Mach-O universales | Comparar símbolos y desplazamientos con muestras de referencia, y reabrir sus citas con la misma huella y revisión. |
+| Triaje de binarios | Añadir navegación de instrucciones y referencias en secciones compatibles | Verificar dirección virtual y desplazamiento con muestras de referencia y reabrir una cita a la ubicación guardada. |
 | Historial HTTP | Medir las comparaciones con archivos HAR y tráfico de varios orígenes y tamaños | Registrar latencia de consulta, tamaño de entrada y memoria, y repetir con una ventana acotada y otra amplia. |
 
 ## Ramas y commits

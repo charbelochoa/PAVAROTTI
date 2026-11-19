@@ -207,13 +207,16 @@ function binaryPanel(record, citation) {
   panel.append(fingerprint);
 
   const sections = Array.isArray(report.sections) ? report.sections : [];
+  const images = Array.isArray(report.images) ? report.images : [];
   const count = report.section_count || sections.length;
   const names = element("details");
-  names.append(element("summary", `Secciones · ${sections.length < count ? `${sections.length} de ${count}` : count}`));
+  const sectionTitle = element("summary");
+  names.append(sectionTitle);
   names.open = citation?.kind === "seccion";
   const textHits = element("details");
   const hits = Array.isArray(report.strings) ? report.strings : [];
-  textHits.append(element("summary", `Cadenas ASCII registradas · ${hits.length}`));
+  const stringTitle = element("summary");
+  textHits.append(stringTitle);
   textHits.open = citation?.kind === "cadena";
   const search = element("input");
   search.type = "search";
@@ -221,17 +224,22 @@ function binaryPanel(record, citation) {
   search.setAttribute("aria-label", "Buscar cadenas ASCII");
   search.maxLength = 160;
   const scope = element("p");
-  const reset = element("button", "Ver todas las secciones");
+  const reset = element("button", "Quitar filtro de sección");
   const strings = element("ol", "", "binary-list");
   let selectedSection;
+  let selectedImage = 0;
+  const imageInfo = element("p", "", "muted");
   function paintStrings() {
     const term = search.value.trim().toLowerCase();
-    const start = selectedSection ? Number.parseInt(selectedSection.file.offset, 16) : 0;
-    const end = selectedSection ? start + selectedSection.file.size : report.size;
-    const matching = hits.map((hit, index) => ({hit, index})).filter(({hit}) => {
+    const range = selectedSection?.file || images[selectedImage - 1]?.file;
+    const start = range ? Number.parseInt(range.offset, 16) : 0;
+    const end = range ? start + range.size : report.size;
+    const stored = hits.map((hit, index) => ({hit, index})).filter(({hit}) => {
       const offset = Number.parseInt(hit.offset, 16);
-      return offset >= start && offset < end && (hit.offset.toLowerCase().includes(term) || hit.text.toLowerCase().includes(term));
+      return offset >= start && offset < end;
     });
+    stringTitle.textContent = `Cadenas ASCII registradas · ${stored.length}`;
+    const matching = stored.filter(({hit}) => hit.offset.toLowerCase().includes(term) || hit.text.toLowerCase().includes(term));
     scope.textContent = `${matching.length} ${matching.length === 1 ? "cadena" : "cadenas"}${selectedSection ? ` en ${selectedSection.name}` : ""}`;
     reset.hidden = !selectedSection;
     strings.replaceChildren(...matching.map(({hit, index}) => {
@@ -245,58 +253,116 @@ function binaryPanel(record, citation) {
   search.oninput = paintStrings;
   textHits.append(search, reset, scope, strings);
   const sectionsList = element("ol", "", "binary-list");
-  for (const [index, section] of sections.entries()) {
-    const row = element("li");
-    row.append(element("strong", section.name || "Sin nombre"), element("p",
-      `${report.format === "PE" ? "RVA" : "Dirección"} ${section.address} · ${section.size} bytes`));
-    if (section.file) {
-      row.append(element("p", `Archivo ${section.file.offset} · ${section.file.size} bytes`));
-      const pivot = element("button", "Cadenas de la sección");
-      pivot.onclick = () => {
-        selectedSection = section;
-        search.value = "";
-        textHits.open = true;
-        paintStrings();
-        search.focus();
-      };
-      const tools = element("div", "", "tools");
-      tools.append(pivot, binaryCitationButton(record, "seccion", index));
-      row.append(tools);
+  const noSections = element("p", "No hay secciones registradas.");
+  const symbols = binarySymbolPanel(report, record, citation, images);
+  function paintSections() {
+    const rows = [];
+    for (const [index, section] of sections.entries()) {
+      if (selectedImage && section.image !== selectedImage) continue;
+      const row = element("li");
+      row.append(element("strong", section.name || "Sin nombre"), element("p",
+        `${report.format === "PE" ? "RVA" : "Dirección"} ${section.address} · ${section.size} bytes`));
+      if (section.image && !selectedImage) row.append(element("p", binaryImageLabel(images[section.image - 1]), "type"));
+      if (section.file) {
+        row.append(element("p", `Archivo ${section.file.offset} · ${section.file.size} bytes`));
+        const pivot = element("button", "Cadenas de la sección");
+        pivot.onclick = () => {
+          selectedSection = section;
+          search.value = "";
+          textHits.open = true;
+          paintStrings();
+          search.focus();
+        };
+        const tools = element("div", "", "tools");
+        tools.append(pivot, binaryCitationButton(record, "seccion", index));
+        row.append(tools);
+      }
+      markBinaryCitation(row, citation, "seccion", index);
+      rows.push(row);
     }
-    markBinaryCitation(row, citation, "seccion", index);
-    sectionsList.append(row);
+    const total = selectedImage ? rows.length : count;
+    sectionTitle.textContent = `Secciones · ${rows.length < total ? `${rows.length} de ${total}` : total}`;
+    sectionsList.replaceChildren(...rows);
+    sectionsList.hidden = !rows.length;
+    noSections.hidden = !!rows.length;
   }
-  names.append(sections.length ? sectionsList : element("p", "No hay secciones registradas."));
-  paintStrings();
-  panel.append(names, textHits, binarySymbolPanel(report, record, citation));
+  function paintImage(index) {
+    selectedImage = index;
+    selectedSection = undefined;
+    const image = images[index - 1];
+    imageInfo.textContent = image ? `Archivo ${image.file.offset} · ${image.file.size} bytes` :
+      `${images.length} ${images.length === 1 ? "imagen registrada" : "imágenes registradas"}`;
+    paintSections();
+    paintStrings();
+    symbols.paint(index);
+  }
+  if (images.length) {
+    const label = element("label", "Imagen Mach-O", "binary-image");
+    const select = element("select");
+    const all = element("option", "Todas las imágenes");
+    all.value = "0";
+    select.append(all);
+    for (const [index, image] of images.entries()) {
+      const option = element("option", binaryImageLabel(image));
+      option.value = String(index + 1);
+      select.append(option);
+    }
+    if (citation?.kind === "seccion") selectedImage = sections[citation.index]?.image || 0;
+    if (citation?.kind === "simbolo") selectedImage = report.symbols?.[citation.index]?.image || 0;
+    if (citation?.kind === "cadena") {
+      const offset = Number.parseInt(hits[citation.index]?.offset, 16);
+      selectedImage = images.findIndex(({file}) => {
+        const start = Number.parseInt(file.offset, 16);
+        return offset >= start && offset < start + file.size;
+      }) + 1;
+    }
+    select.value = String(selectedImage);
+    select.onchange = () => paintImage(Number(select.value));
+    label.append(select);
+    panel.append(label, imageInfo);
+    if (report.unreadable_images) panel.append(element("p", `Imágenes ilegibles · ${report.unreadable_images}`));
+  }
+  names.append(sectionsList, noSections);
+  paintImage(selectedImage);
+  panel.append(names, textHits, symbols.details);
   return panel;
 }
 
-function binarySymbolPanel(report, record, citation) {
+function binaryImageLabel(image) {
+  return image ? `${image.architecture} · subtipo ${image.subtype}` : "";
+}
+
+function binarySymbolPanel(report, record, citation, images) {
   const symbols = Array.isArray(report.symbols) ? report.symbols : [];
   const details = element("details");
-  details.append(element("summary", `Símbolos · ${symbols.length}`));
+  const title = element("summary", `Símbolos · ${symbols.length}`);
+  details.append(title);
   details.open = citation?.kind === "simbolo";
   if (report.symbols_limited) details.append(element("p", "La inspección alcanzó su límite de símbolos."));
   if (!symbols.length) {
     details.append(element("p", "Este registro no contiene símbolos guardados."));
-    return details;
+    return {details, paint() {}};
   }
   const search = element("input");
   search.type = "search";
-  search.placeholder = "Buscar nombre, sección o dirección";
+  search.placeholder = "Buscar nombre, ordinal o dirección";
   search.setAttribute("aria-label", "Buscar símbolos");
   search.maxLength = 256;
   const count = element("p");
   const list = element("ol", "", "binary-list");
   const more = element("button", "Mostrar más símbolos");
+  let imageIndex = 0;
   let matching = [];
   let shown = 0;
   function appendRows() {
     const batch = matching.slice(shown, shown + 50);
     for (const {symbol, index} of batch) {
       const row = element("li");
-      row.append(element("strong", symbol.name), element("p", [symbol.kind, symbol.section, symbol.address].filter(Boolean).join(" · ")));
+      const address = report.format === "PE" ? `RVA ${symbol.address}` : symbol.address;
+      const ordinal = Number.isInteger(symbol.ordinal) && `Ordinal ${symbol.ordinal}`;
+      row.append(element("strong", symbol.name), element("p", [symbol.kind, ordinal, symbol.section, address].filter(Boolean).join(" · ")));
+      if (symbol.image && !imageIndex) row.append(element("p", binaryImageLabel(images[symbol.image - 1]), "type"));
+      if (symbol.forwarder) row.append(element("p", `Reenvío · ${symbol.forwarder}`));
       if (symbol.offset) row.append(element("p", `Archivo ${symbol.offset}`), binaryCitationButton(record, "simbolo", index));
       markBinaryCitation(row, citation, "simbolo", index);
       list.append(row);
@@ -305,10 +371,13 @@ function binarySymbolPanel(report, record, citation) {
     more.hidden = shown >= matching.length;
     count.textContent = `${shown} de ${matching.length} símbolos`;
   }
-  search.oninput = () => {
+  function paint(index) {
+    imageIndex = index;
     const term = search.value.trim().toLowerCase();
-    matching = symbols.map((symbol, index) => ({symbol, index})).filter(({symbol}) => [symbol.name, symbol.section, symbol.address, symbol.offset]
-      .some((field) => field?.toLowerCase().includes(term)));
+    const inImage = symbols.map((symbol, index) => ({symbol, index})).filter(({symbol}) => !imageIndex || symbol.image === imageIndex);
+    title.textContent = `Símbolos · ${inImage.length}`;
+    matching = inImage.filter(({symbol}) => [symbol.name, symbol.kind, symbol.section, symbol.address, symbol.offset, symbol.forwarder,
+      Number.isInteger(symbol.ordinal) ? `Ordinal ${symbol.ordinal}` : undefined].some((field) => field?.toLowerCase().includes(term)));
     if (citation?.kind === "simbolo") {
       const target = matching.findIndex(({index}) => index === citation.index);
       if (target > 0) matching.unshift(...matching.splice(target, 1));
@@ -316,11 +385,11 @@ function binarySymbolPanel(report, record, citation) {
     shown = 0;
     list.replaceChildren();
     appendRows();
-  };
+  }
+  search.oninput = () => paint(imageIndex);
   more.onclick = appendRows;
   details.append(search, count, list, more);
-  search.oninput();
-  return details;
+  return {details, paint};
 }
 
 function codeReviewPanel(id, review, citation) {
