@@ -13,12 +13,13 @@ import (
 )
 
 func terminalBinaryWindow(args []string, stdout, stderr io.Writer, open openExpediente) error {
-	flags := terminalFlags("ventana-binaria", "ventana-binaria --archivo muestra (--id ID --revision N --tipo entrada|simbolo --indice N | --cita cita.json) [--solo-cita] [--salida ventana.json]", stderr)
+	flags := terminalFlags("ventana-binaria", "ventana-binaria --archivo muestra (--id ID --revision N --tipo entrada|simbolo|instruccion --indice N [--pasos 0.2] | --cita cita.json) [--solo-cita] [--salida ventana.json]", stderr)
 	var request analisis.BinaryWindowRequest
 	flags.StringVar(&request.RecordID, "id", "", "identificador del binario")
 	flags.IntVar(&request.Revision, "revision", 0, "revisión del registro")
-	flags.StringVar(&request.Kind, "tipo", "", "entrada o simbolo")
-	flags.IntVar(&request.Index, "indice", 0, "posición del símbolo desde 0 o número de la imagen Mach-O desde 1")
+	flags.StringVar(&request.Kind, "tipo", "", "entrada, simbolo o instruccion")
+	flags.IntVar(&request.Index, "indice", 0, "posición del símbolo o instrucción desde 0, o número de la imagen Mach-O desde 1")
+	flags.StringVar(&request.Path, "pasos", "", "índices desde 0 de los saltos, separados por puntos")
 	path := flags.String("archivo", "", "archivo binario original")
 	citationPath := flags.String("cita", "", "archivo JSON de cita de ventana")
 	citationOnly := flags.Bool("solo-cita", false, "exporta solo la cita portátil")

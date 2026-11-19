@@ -96,6 +96,11 @@ func TestBinaryWindowVerifiesOriginalAndMatchesTerminal(t *testing.T) {
 func saveWindowFixture(t *testing.T, store *caso.Store) ([]byte, string) {
 	t.Helper()
 	sample := windowFixturePE(t)
+	return sample, saveWindowSample(t, store, sample)
+}
+
+func saveWindowSample(t *testing.T, store *caso.Store, sample []byte) string {
+	t.Helper()
 	records, err := ingesta.ParseNamed("binario", bytes.NewReader(sample), "muestra.exe")
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +112,56 @@ func saveWindowFixture(t *testing.T, store *caso.Store) ([]byte, string) {
 	if err != nil || len(page.Rows) != 1 {
 		t.Fatalf("muestra: %+v, %v", page, err)
 	}
-	return sample, page.Rows[0].ID
+	return page.Rows[0].ID
+}
+
+func TestWindowPathPreservesOriginsAndReopensCitations(t *testing.T) {
+	store, err := caso.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	sample := windowFixturePE(t)
+	order := binary.LittleEndian
+	order.PutUint32(sample[0x98+16:], 0x1000)
+	for _, jump := range []struct{ from, to int }{{0, 128}, {128, 300}} {
+		sample[0x200+jump.from] = 0xe9
+		order.PutUint32(sample[0x201+jump.from:], uint32(jump.to-jump.from-5))
+	}
+	id := saveWindowSample(t, store, sample)
+	const host = "127.0.0.1:8443"
+	handler := Handler(host, Settings{}, store, testResources)
+	post := func(query string) *httptest.ResponseRecorder {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodPost, "http://"+host+"/api/registro/"+id+"/ventana-binaria?revision=1&indice=0&"+query, bytes.NewReader(sample))
+		request.Header.Set("Origin", "http://"+host)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	for _, kind := range []string{"entrada", "instruccion"} {
+		response := post("tipo=" + kind + "&pasos=0.0")
+		var web analisis.BinaryWindowReport
+		if err := json.Unmarshal(response.Body.Bytes(), &web); response.Code != http.StatusOK || err != nil || web.Window.Origin == nil ||
+			web.Window.Origin.Offset != "0x280" || web.Window.Origin.Address != "0x1080" || web.Citation.Address != "0x112c" ||
+			web.Citation.Offset != "0x32c" || web.Citation.Path != "0.0" {
+			t.Fatalf("recorrido %s: %d, %+v, %v", kind, response.Code, web, err)
+		}
+		if opened, err := analisis.VerifyBinaryWindow(t.Context(), store, web.Citation, bytes.NewReader(sample)); err != nil || !reflect.DeepEqual(opened, web) {
+			t.Fatalf("cita reproducida: %+v, %v", opened, err)
+		}
+		changed := web.Citation
+		changed.Path = "0"
+		if _, err := analisis.VerifyBinaryWindow(t.Context(), store, changed, bytes.NewReader(sample)); !errors.Is(err, analisis.ErrBinaryWindowCitation) {
+			t.Fatalf("cita con un salto eliminado: %v", err)
+		}
+	}
+	if response := post("tipo=entrada&pasos=00.0"); response.Code != http.StatusBadRequest {
+		t.Fatalf("formato de ruta inválido: %d", response.Code)
+	}
+	if response := post("tipo=entrada&pasos=0.1"); response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("salto sin destino directo: %d", response.Code)
+	}
 }
 
 func windowFixturePE(t *testing.T) []byte {
