@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=PAVAROTTI
+Comment=Estación de trabajo OSINT para Blue Team
+Exec=pavarotti
+Icon=pavarotti
+Terminal=false
+Categories=Utility;Security;

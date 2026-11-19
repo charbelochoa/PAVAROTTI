@@ -3,3 +3,4 @@ dist/
 *.exe
 *.test
 .env
+__pycache__/
