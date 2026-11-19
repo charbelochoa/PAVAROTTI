@@ -16,6 +16,7 @@
   <script src="/asset-relations.js" defer></script>
   <script src="/watchlists.js" defer></script>
   <script src="/binary-reference-comparison.js" defer></script>
+  <script src="/binary-section-comparison.js" defer></script>
 </head>
 <body>
   <header>
@@ -384,6 +385,36 @@
         <output id="binary-reference-comparison-page"></output>
         <button id="binary-reference-comparison-next">Siguiente</button>
       </div>
+    </div>
+  </dialog>
+  <dialog id="binary-section-comparison" aria-labelledby="binary-section-comparison-title">
+    <div class="comparison-heading">
+      <h2 id="binary-section-comparison-title">Comparar secciones de binarios</h2>
+      <form method="dialog"><button>Cerrar</button></form>
+    </div>
+    <form id="binary-section-comparison-form">
+      <div class="binary-comparison-files">
+        <fieldset>
+          <legend>Base</legend>
+          <p id="binary-section-base"></p>
+          <label>Archivo original base<input name="archivo_base" type="file" required></label>
+        </fieldset>
+        <fieldset>
+          <legend>Actual</legend>
+          <p id="binary-section-current"></p>
+          <label>Archivo original actual<input name="archivo_actual" type="file" required></label>
+        </fieldset>
+      </div>
+      <div class="tools">
+        <button type="submit" class="primary">Comparar</button>
+        <button type="button" id="binary-section-comparison-export" hidden>Exportar JSON</button>
+      </div>
+    </form>
+    <p id="binary-section-comparison-status" role="status"></p>
+    <div id="binary-section-comparison-result" hidden>
+      <p id="binary-section-comparison-totals"></p>
+      <label class="binary-symbol-filter"><input id="binary-section-differences" type="checkbox" checked>Solo diferencias</label>
+      <ul id="binary-section-comparison-rows" class="binary-list"></ul>
     </div>
   </dialog>
   <dialog id="triage-panel" aria-labelledby="triage-title">

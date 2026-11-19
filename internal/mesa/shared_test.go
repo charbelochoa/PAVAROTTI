@@ -177,6 +177,10 @@ func TestSharedDashboard(t *testing.T) {
 	call("POST", comparison, origin, "", nil, 401)
 	call("POST", comparison, "https://otro.invalid", "", reader, 403)
 	call("POST", comparison, origin, "", reader, 400)
+	sections := "/api/secciones-binarias/comparar"
+	call("POST", sections, origin, "", nil, 401)
+	call("POST", sections, "https://otro.invalid", "", reader, 403)
+	call("POST", sections, origin, "", reader, 400)
 	watchlist := "/api/seguimiento/Guardia"
 	call("GET", "/api/seguimiento", "", "", nil, 401)
 	call("PUT", watchlist, origin, "", reader, 403)

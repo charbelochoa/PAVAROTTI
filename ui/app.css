@@ -186,6 +186,14 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: #ddd
 dialog { color: inherit; width: min(560px, calc(100vw - 2rem)); }
 dialog::backdrop { background: #09070ad9; }
 #binary-reference-comparison { width: min(800px, calc(100vw - 2rem)); }
+#binary-section-comparison { width: min(880px, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); overflow-wrap: anywhere; }
+#binary-section-comparison fieldset { min-width: 0; border: 1px solid var(--line); border-radius: 3px; }
+#binary-section-comparison fieldset p { margin: 0 0 .55rem; }
+#binary-section-comparison-status { margin: .65rem 0; }
+#binary-section-comparison-rows { max-height: 46vh; }
+.binary-section-sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: .55rem; margin-top: .55rem; }
+.binary-section-sides > div { min-width: 0; border-top: 1px solid var(--line); padding-top: .45rem; }
+.binary-section-sides article + article { margin-top: .55rem; }
 .binary-comparison-files { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(205px, 100%), 1fr)); gap: .75rem; margin: .75rem 0; }
 .binary-comparison-files label { display: grid; gap: .35rem; min-width: 0; }
 .binary-comparison-files input { width: 100%; min-width: 0; }

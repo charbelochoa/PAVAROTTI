@@ -141,25 +141,32 @@ func (evidence *binaryWindowEvidence) window(ctx context.Context, request Binary
 }
 
 func (evidence *binaryWindowEvidence) readSample(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
+	if evidence.data != nil {
+		return ctx.Err()
+	}
+	data, err := readVerifiedBinary(ctx, evidence.source, evidence.inspection.Size, evidence.record.SHA256)
+	if err != nil {
 		return err
 	}
-	if evidence.data != nil {
-		return nil
-	}
-	size := evidence.inspection.Size
-	if size <= 0 || size > triaje.MaxBinaryBytes {
-		return ErrBinaryWindowSample
-	}
-	data, err := io.ReadAll(io.LimitReader(evidence.source, int64(size)+1))
-	if err != nil {
-		return fmt.Errorf("leer el archivo original: %w", err)
-	}
-	if len(data) != size || caso.Hash(data) != evidence.record.SHA256 {
-		return ErrBinaryWindowSample
-	}
 	evidence.data = data
-	return ctx.Err()
+	return nil
+}
+
+func readVerifiedBinary(ctx context.Context, source io.Reader, size int, digest string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if size <= 0 || size > triaje.MaxBinaryBytes {
+		return nil, ErrBinaryWindowSample
+	}
+	data, err := io.ReadAll(io.LimitReader(source, int64(size)+1))
+	if err != nil {
+		return nil, fmt.Errorf("leer el archivo original: %w", err)
+	}
+	if len(data) != size || caso.Hash(data) != digest {
+		return nil, ErrBinaryWindowSample
+	}
+	return data, ctx.Err()
 }
 
 func (evidence *binaryWindowEvidence) image(index int) (*triaje.InstructionImage, error) {
