@@ -86,16 +86,7 @@ func migrateHTTPPageIndex(ctx context.Context, tx *sql.Tx) error {
 func (s *Store) prepareHTTPPageIndex(ctx context.Context) (bool, error) {
 	const pendingQuery = `SELECT EXISTS (
 		SELECT 1 FROM pavarotti_evidence_batches WHERE expediente = $1 AND NOT http_page_indexed)`
-	var pending bool
-	if err := s.db.QueryRowContext(ctx, pendingQuery, s.expediente).Scan(&pending); err != nil || !pending {
-		return !pending, err
-	}
-	tx, err := s.beginCaseWrite(ctx, true)
-	if err != nil {
-		return false, err
-	}
-	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `
+	const backfill = `
 		SELECT pavarotti_store_http_page_batch(batch.expediente, batch.batch_key, batch.payload)
 		FROM (
 			SELECT expediente, batch_key, payload
@@ -104,13 +95,8 @@ func (s *Store) prepareHTTPPageIndex(ctx context.Context) (bool, error) {
 			ORDER BY batch_key
 			LIMIT $2
 		) batch
-	`, s.expediente, maxHTTPBackfillBatches); err != nil {
-		return false, err
-	}
-	if err := tx.QueryRowContext(ctx, pendingQuery, s.expediente).Scan(&pending); err != nil {
-		return false, err
-	}
-	return !pending, tx.Commit()
+	`
+	return s.preparePageProjection(ctx, pendingQuery, backfill, maxHTTPBackfillBatches)
 }
 
 func (s *Store) postgresIndexedHTTPPage(ctx context.Context, request PageRequest, after pageCursor, limit int) ([]RecordRow, error) {

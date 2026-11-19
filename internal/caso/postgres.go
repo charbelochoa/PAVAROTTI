@@ -87,6 +87,9 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	if err := migrateHTTPPageIndex(ctx, tx); err != nil {
 		return err
 	}
+	if err := migrateSearchPage(ctx, tx); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
