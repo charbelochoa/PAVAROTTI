@@ -47,6 +47,9 @@ func testPage(t *testing.T, store *Store) {
 		entries[index] = Record{Kind: "indicador", Time: "2026-11-18T21:00:00Z",
 			Title: fmt.Sprintf("Registro %04d", index), Details: "Contenido completo fuera de la lista"}
 	}
+	entries[0] = Record{Kind: "archivo HAR", Time: "2026-11-18T21:00:00Z", Title: "GET 404",
+		Traffic: &Traffic{Method: "GET", Status: 404, Type: "text/html", Millis: 12, Bucket: 16},
+		Signals: []string{"Señal del HAR"}, Details: "Detalle que solo se obtiene desde el inspector"}
 	if err := store.Save(entries); err != nil {
 		t.Fatal(err)
 	}
@@ -74,6 +77,15 @@ func testPage(t *testing.T, store *Store) {
 	if err != nil || note.Revision != 2 || note.Title != "REVISIÓN [cita] 100%" || len(note.Details) != 1440 {
 		t.Fatalf("inspector: revisión %d, %v", note.Revision, err)
 	}
+	httpPage, err := store.Page(ctx, PageRequest{Kind: "http"})
+	if err != nil || len(httpPage.Rows) != 2 || httpPage.Rows[0].Kind != "tráfico" || httpPage.Rows[1].Kind != "archivo HAR" {
+		t.Fatalf("historial HTTP: %+v, %v", httpPage, err)
+	}
+	httpPage, err = store.Page(ctx, PageRequest{Kind: "http", HTTPClass: 4})
+	if err != nil || len(httpPage.Rows) != 1 || httpPage.Rows[0].Traffic == nil ||
+		httpPage.Rows[0].Traffic.Status != 404 || httpPage.Rows[0].Traffic.Millis != 12 || httpPage.Rows[0].SignalCount != 1 {
+		t.Fatalf("filtro por clase de estado: %+v, %v", httpPage, err)
+	}
 	if _, err := store.Record(ctx, strings.Repeat("a", 64)+"-1"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("registro inexistente: %v", err)
 	}
@@ -95,8 +107,8 @@ func testPage(t *testing.T, store *Store) {
 		cursor = page.Next
 	}
 	summary, err := store.Summary(ctx)
-	if err != nil || len(seen) != 522 || summary.Total != 522 || summary.Traffic != 1 || summary.Signals != 1 ||
-		summary.Status["200"] != 1 || summary.MIME["application/json"] != 1 || summary.Bucket["8"] != 1 {
+	if err != nil || len(seen) != 522 || summary.Total != 522 || summary.Traffic != 2 || summary.Signals != 2 ||
+		summary.Status["200"] != 1 || summary.Status["404"] != 1 || summary.MIME["application/json"] != 1 || summary.Bucket["8"] != 1 {
 		t.Fatalf("cobertura del expediente: %d, %+v, %v", len(seen), summary, err)
 	}
 }

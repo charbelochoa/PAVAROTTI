@@ -38,6 +38,9 @@ button:disabled { opacity: .6; cursor: wait; }
 .primary { background: #552e31; border-color: #a05b5d; }
 .filters { align-items: stretch; margin: .65rem 0; flex-wrap: wrap; gap: .45rem; }
 .filters input { flex: 1; }
+.views { display: flex; gap: .35rem; border-bottom: 1px solid var(--line); padding-bottom: .45rem; }
+.views button { background: transparent; }
+.views button[aria-pressed="true"] { background: #39272b; border-color: var(--accent); }
 .pager { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .45rem; border-top: 1px solid var(--line); margin-top: .65rem; padding-top: .65rem; font-size: .82rem; }
 .pager output { color: var(--dim); flex: 1; text-align: center; }
 .pager button:disabled { cursor: default; }

@@ -16,18 +16,21 @@ const DefaultPageSize = 50
 var ErrInvalidPage = errors.New("paginación inválida")
 
 type PageRequest struct {
-	Limit  int
-	Kind   string
-	Search string
-	After  string
+	Limit     int
+	Kind      string
+	Search    string
+	After     string
+	HTTPClass int
 }
 
 type RecordRow struct {
-	ID     string `json:"id"`
-	Kind   string `json:"kind"`
-	Time   string `json:"time"`
-	Title  string `json:"title"`
-	Source string `json:"source,omitempty"`
+	ID          string   `json:"id"`
+	Kind        string   `json:"kind"`
+	Time        string   `json:"time"`
+	Title       string   `json:"title"`
+	Source      string   `json:"source,omitempty"`
+	Traffic     *Traffic `json:"traffic,omitempty"`
+	SignalCount int      `json:"signal_count,omitempty"`
 }
 
 type Page struct {
@@ -46,7 +49,8 @@ func (s *Store) Page(ctx context.Context, request PageRequest) (Page, error) {
 	}
 	request.Search = strings.TrimSpace(request.Search)
 	if request.Limit < 1 || request.Limit > 100 || len(request.Search) > 1024 || len(request.Kind) > 64 ||
-		strings.ContainsRune(request.Search, 0) || strings.ContainsRune(request.Kind, 0) {
+		strings.ContainsRune(request.Search, 0) || strings.ContainsRune(request.Kind, 0) ||
+		(request.HTTPClass != 0 && (request.Kind != "http" || request.HTTPClass < 1 || request.HTTPClass > 5)) {
 		return Page{}, ErrInvalidPage
 	}
 	after, err := decodeCursor(request.After)
@@ -97,7 +101,7 @@ func (s *Store) localPage(ctx context.Context, request PageRequest, after pageCu
 	term := strings.ToLower(request.Search)
 	err := s.walkLocal(ctx, true, func(record Record) error {
 		cursor := pageCursor{Stamp: strings.TrimSuffix(record.Time, "Z"), ID: record.ID}
-		if (request.Kind != "" && record.Kind != request.Kind) ||
+		if !matchesView(record, request) ||
 			(after.ID != "" && compareCursor(cursor, after) >= 0) || !matches(record, term) {
 			return nil
 		}
@@ -106,6 +110,9 @@ func (s *Store) localPage(ctx context.Context, request PageRequest, after pageCu
 		}
 		row := RecordRow{ID: record.ID, Kind: record.Kind, Time: record.Time,
 			Title: clipRow(record.Title, 240), Source: clipRow(record.Source, 360)}
+		if request.Kind == "http" {
+			row.Traffic, row.SignalCount = record.Traffic, len(record.Signals)
+		}
 		if len(rows) < limit {
 			heap.Push(&rows, row)
 		} else {
@@ -116,6 +123,13 @@ func (s *Store) localPage(ctx context.Context, request PageRequest, after pageCu
 	})
 	slices.SortFunc(rows, func(a, b RecordRow) int { return compareCursor(rowCursor(b), rowCursor(a)) })
 	return rows, err
+}
+
+func matchesView(record Record, request PageRequest) bool {
+	if request.Kind == "http" {
+		return record.Traffic != nil && (request.HTTPClass == 0 || record.Traffic.Status/100 == request.HTTPClass)
+	}
+	return request.Kind == "" || request.Kind == record.Kind
 }
 
 func matches(record Record, term string) bool {

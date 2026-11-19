@@ -49,7 +49,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 ## Flujo de trabajo OSINT
 
 1. **Incorporar.** Un expediente reúne indicadores, capturas HTTP, binarios y respuestas DNS aportadas. Los importadores RDAP y STIX añadirán observaciones con sus referencias y fechas de origen.
-2. **Examinar.** La mesa de trabajo conserva la lista central, el inspector y las tareas. El siguiente recorrido de interfaz enlazará la cronología y las coincidencias con la evidencia concreta y añadirá una vista de historial HTTP.
+2. **Examinar.** La mesa de trabajo conserva la lista central, el inspector y las tareas. El historial HTTP reúne proxy y HAR y filtra sus respuestas por clase de estado. Queda enlazar la cronología y las coincidencias con la evidencia concreta.
 3. **Correlacionar.** Los agentes agrupan la evidencia por activo, respuesta HTTP e indicador. Los resultados quedan asociados a la versión del agente y a la huella de entrada.
 4. **Entregar.** El analista verifica coincidencias, añade notas y exporta el expediente. Los créditos del binario quedan accesibles en su panel propio.
 

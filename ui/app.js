@@ -21,6 +21,7 @@ let searchTimer;
 let analysisQueue = false;
 let checkingQueue = false;
 let queueSignature = "";
+let httpView = false;
 
 async function request(path, options) {
   const response = await fetch(path, options);
@@ -80,8 +81,17 @@ function recordNode(record) {
   row.type = "button";
   row.setAttribute("aria-controls", "record-detail");
   row.setAttribute("aria-pressed", String(record.id === selectedKey));
-  row.append(element("span", record.kind, "type"), element("strong", record.title));
-  if (record.source) row.append(element("span", record.source, "muted"));
+  const traffic = record.traffic;
+  if (traffic) {
+    row.append(element("span", `${traffic.method} ${traffic.status}`, "type"),
+      element("strong", record.source || record.title));
+    const details = [record.kind === "archivo HAR" ? "HAR" : "Proxy", traffic.type || "Sin tipo MIME", traffic.millis + " ms"];
+    if (record.signal_count) details.push(`${record.signal_count} ${record.signal_count === 1 ? "señal" : "señales"}`);
+    row.append(element("span", details.join(" · "), "muted"));
+  } else {
+    row.append(element("span", record.kind, "type"), element("strong", record.title));
+    if (record.source) row.append(element("span", record.source, "muted"));
+  }
   row.onclick = () => {
     const prior = byId("records").querySelector('[aria-pressed="true"]');
     prior?.setAttribute("aria-pressed", "false");
@@ -121,7 +131,9 @@ function pagingBusy(busy) {
 }
 
 function filters() {
-  return new URLSearchParams({tipo: byId("filter").value, buscar: byId("query").value.trim()});
+  const params = new URLSearchParams({tipo: httpView ? "http" : byId("filter").value, buscar: byId("query").value.trim()});
+  if (httpView && byId("filter-http").value) params.set("clase_http", byId("filter-http").value);
+  return params;
 }
 
 async function loadPage(index, starts = pageStarts) {
@@ -178,6 +190,22 @@ byId("filter").addEventListener("change", () => {
   clearTimeout(searchTimer);
   loadPage(0, [""]);
 });
+byId("filter-http").addEventListener("change", () => {
+  clearTimeout(searchTimer);
+  loadPage(0, [""]);
+});
+function showView(http) {
+  if (httpView === http) return;
+  httpView = http;
+  clearTimeout(searchTimer);
+  byId("view-records").setAttribute("aria-pressed", String(!http));
+  byId("view-http").setAttribute("aria-pressed", String(http));
+  byId("filter").hidden = http;
+  byId("filter-http").hidden = !http;
+  loadPage(0, [""]);
+}
+byId("view-records").onclick = () => showView(false);
+byId("view-http").onclick = () => showView(true);
 byId("refresh").addEventListener("click", () => refresh());
 
 byId("upload").addEventListener("submit", async (event) => {
