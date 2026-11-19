@@ -98,7 +98,7 @@ La actividad empieza al instalar la 0.4.2. Las operaciones del modo HTTPS se atr
 
 ### Respaldar y restaurar un expediente
 
-La terminal guarda una instantánea de PostgreSQL con los lotes de evidencia, las revisiones de notas y triaje, las tareas con sus informes y la actividad. Los comandos muestran el expediente de origen, la fecha, la huella SHA-256 y el recuento por tipo de fila. `verificar-respaldo` comprueba el formato y la huella del archivo y funciona sin conexión a PostgreSQL.
+La terminal guarda una instantánea de PostgreSQL con los lotes de evidencia, las revisiones de notas y triaje, las tareas con sus informes y la actividad. Los comandos muestran el expediente de origen, la fecha, la huella SHA-256 del contenido y el recuento por tipo de fila. `verificar-respaldo` comprueba el formato y la huella registrada al final de la copia. Funciona sin conexión a PostgreSQL.
 
 ```sh
 PAVAROTTI_POSTGRES="$PG_ORIGEN" pavarotti -expediente incidente respaldar --salida incidente.jsonl

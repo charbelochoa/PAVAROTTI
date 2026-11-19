@@ -37,9 +37,14 @@ jobs:
         with:
           go-version: '1.26.11'
           cache: false
+      - name: Preparar base de destino para restauración
+        env:
+          POSTGRES_SERVICE: ${{ job.services.postgres.id }}
+        run: docker exec -e PGPASSWORD=pavarotti-ci "$POSTGRES_SERVICE" createdb -h 127.0.0.1 -U pavarotti pavarotti_restore
       - run: go test -count=1 ./...
         env:
           PAVAROTTI_TEST_POSTGRES: postgres://pavarotti:pavarotti-ci@127.0.0.1:${{ job.services.postgres.ports[5432] }}/pavarotti_test?sslmode=disable
+          PAVAROTTI_TEST_POSTGRES_RESTORE: postgres://pavarotti:pavarotti-ci@127.0.0.1:${{ job.services.postgres.ports[5432] }}/pavarotti_restore?sslmode=disable
       - run: go vet ./...
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
       - run: CGO_ENABLED=0 go build -trimpath -o PAVAROTTI-Kali-x64 .

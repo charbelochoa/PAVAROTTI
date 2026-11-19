@@ -14,7 +14,11 @@ import (
 
 func openAuditTest(t *testing.T) *Store {
 	t.Helper()
-	dsn := os.Getenv("PAVAROTTI_TEST_POSTGRES")
+	return openAuditTestAt(t, os.Getenv("PAVAROTTI_TEST_POSTGRES"))
+}
+
+func openAuditTestAt(t *testing.T, dsn string) *Store {
+	t.Helper()
 	if dsn == "" {
 		t.Skip("PAVAROTTI_TEST_POSTGRES no configurado")
 	}

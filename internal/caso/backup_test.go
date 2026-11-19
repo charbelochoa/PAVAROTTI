@@ -6,13 +6,19 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"reflect"
 	"testing"
 	"time"
 )
 
 func TestCaseBackupRestoresHistoryAndJobs(t *testing.T) {
-	source, destination := openAuditTest(t), openAuditTest(t)
+	source := openAuditTest(t)
+	destinationDSN := os.Getenv("PAVAROTTI_TEST_POSTGRES_RESTORE")
+	if destinationDSN == "" {
+		destinationDSN = os.Getenv("PAVAROTTI_TEST_POSTGRES")
+	}
+	destination := openAuditTestAt(t, destinationDSN)
 	ctx := t.Context()
 	code := fixtureCode(t, source)
 	if _, err := source.ClassifyCode(ctx, code.ID, fixtureSignal, 0, "confirmada", "Se revisó la evidencia"); err != nil {
