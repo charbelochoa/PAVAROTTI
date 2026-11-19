@@ -20,14 +20,41 @@ jobs:
       - run: .\PAVAROTTI.exe -version
   linux:
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: pavarotti_test
+          POSTGRES_USER: pavarotti
+          POSTGRES_PASSWORD: pavarotti-ci
+        ports: ['5432/tcp']
+        options: >-
+          --health-cmd "pg_isready -U pavarotti -d pavarotti_test"
+          --health-interval 3s --health-timeout 3s --health-retries 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24.x'
           cache: false
-      - run: go test ./...
+      - run: go test -count=1 ./...
+        env:
+          PAVAROTTI_TEST_POSTGRES: postgres://pavarotti:pavarotti-ci@127.0.0.1:${{ job.services.postgres.ports[5432] }}/pavarotti_test?sslmode=disable
       - run: go vet ./...
       - run: CGO_ENABLED=0 go build -trimpath -o PAVAROTTI-Kali-x64 .
       - run: docker run --rm -v "$PWD/PAVAROTTI-Kali-x64:/opt/pavarotti:ro" kalilinux/kali-rolling /opt/pavarotti -version
       - run: docker run --rm -v "$PWD/PAVAROTTI-Kali-x64:/opt/pavarotti:ro" archlinux:base /opt/pavarotti -version
+  compose:
+    runs-on: ubuntu-24.04
+    env:
+      PAVAROTTI_DB_PASSWORD: pavarotti-compose-ci
+      PAVAROTTI_WEB_PORT: 8376
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose up --build --wait --wait-timeout 120
+      - run: curl --fail --silent http://127.0.0.1:8376/api/app
+      - run: docker compose exec -T app pavarotti nota --titulo "Prueba local" --texto "Evidencia en PostgreSQL"
+      - run: docker compose restart app
+      - run: docker compose exec -T app pavarotti listar --json | rg 'Evidencia en PostgreSQL'
+      - if: failure()
+        run: docker compose logs --tail 80
