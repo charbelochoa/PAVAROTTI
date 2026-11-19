@@ -216,6 +216,7 @@ func Handler(host string, config Settings, store *caso.Store, resources fs.FS) h
 	})
 	analysisQueueRoutes(mux, store)
 	assetRoutes(mux, store)
+	watchlistRoutes(mux, store)
 	stixRoutes(mux, store)
 	directoryRoutes(mux, store)
 	codeTriageRoutes(mux, store)

@@ -177,6 +177,20 @@ func TestSharedDashboard(t *testing.T) {
 	call("POST", comparison, origin, "", nil, 401)
 	call("POST", comparison, "https://otro.invalid", "", reader, 403)
 	call("POST", comparison, origin, "", reader, 400)
+	watchlist := "/api/seguimiento/Guardia"
+	call("GET", "/api/seguimiento", "", "", nil, 401)
+	call("PUT", watchlist, origin, "", reader, 403)
+	call("PUT", watchlist, "https://otro.invalid", "", analyst, 403)
+	call("PUT", watchlist, origin, "", analyst, 200)
+	call("PUT", watchlist+"/activo", origin, `{"type":"ipv4","value":"192.0.2.10"}`, analyst, 200)
+	call("GET", watchlist, "", "", reader, 200)
+	call("DELETE", watchlist, origin, "", reader, 403)
+	auditedList := call("GET", "/api/actividad?limite=1", "", "", reader, 200)
+	if err := json.Unmarshal(auditedList.Body.Bytes(), &history); err != nil || len(history.Events) != 1 ||
+		history.Events[0].Action != caso.AuditWatchlist || history.Events[0].Actor != caso.SharedAnalyst ||
+		history.Events[0].Details.Status != "agregar" || strings.Contains(auditedList.Body.String(), "192.0.2.10") {
+		t.Fatalf("actividad del seguimiento: %+v, %v", history, err)
+	}
 	call("POST", "/api/acceso/salir", origin, "", analyst, 204)
 	call("GET", "/api/app", "", "", analyst, 401)
 }

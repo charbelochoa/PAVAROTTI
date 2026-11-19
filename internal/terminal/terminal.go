@@ -27,6 +27,7 @@ Uso: pavarotti [opciones globales] <comando> [argumentos]
 
   listar    Consulta el expediente con filtros por tipo y texto.
   activos   Busca dominios, direcciones, redes y huellas y abre sus fichas.
+  seguimiento Organiza activos en listas y consulta sus fuentes en el expediente.
   cobertura-activo Guarda las fuentes y observaciones de un activo por periodo UTC.
   importar  Incorpora evidencia, código Go o manifiestos de dependencias.
   revisar   Revisa código Go y manifiestos de un directorio local.
@@ -76,6 +77,8 @@ func Run(args []string, stdout, stderr io.Writer, open func() (*caso.Store, erro
 		err = terminalRecords("listar", args[1:], stdout, stderr, open)
 	case "activos":
 		err = terminalAssets(args[1:], stdout, stderr, open)
+	case "seguimiento":
+		err = terminalWatchlists(args[1:], stdout, stderr, open)
 	case "cobertura-activo":
 		err = terminalAssetCoverage(args[1:], stdout, stderr, open)
 	case "importar":
