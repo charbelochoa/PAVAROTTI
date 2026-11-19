@@ -7,12 +7,18 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"pavarotti/internal/analisis"
 	"pavarotti/internal/caso"
 	"pavarotti/internal/ingesta"
+	"pavarotti/internal/terminal"
 	"pavarotti/internal/triaje"
 )
 
@@ -234,5 +240,88 @@ func TestBinarySectionComparisonMatchesReorderedUniversalImages(t *testing.T) {
 			row.Baseline[0].Image == row.Current[0].Image || row.Baseline[0].SHA256 != row.Current[0].SHA256 || row.Subtype == "" {
 			t.Fatalf("emparejamiento por arquitectura: %+v", row)
 		}
+	}
+}
+
+func TestBinarySectionComparisonAcrossInterfaces(t *testing.T) {
+	store, err := caso.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	base, current := sectionComparisonFixtures(t)
+	selection := analisis.BinarySectionSelection{
+		Baseline: saveSectionComparisonBinary(t, store, "medio-base.exe", base, nil),
+		Current:  saveSectionComparisonBinary(t, store, "medio-actual.exe", current, nil),
+	}
+	const host = "127.0.0.1:8443"
+	handler := Handler(host, Settings{}, store, testResources)
+	post := func(original, changed []byte, extra bool) *httptest.ResponseRecorder {
+		t.Helper()
+		var body bytes.Buffer
+		writer := multipart.NewWriter(&body)
+		manifest, err := writer.CreateFormField("seleccion")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.NewEncoder(manifest).Encode(selection); err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range []struct {
+			field string
+			data  []byte
+		}{{"archivo_base", original}, {"archivo_actual", changed}} {
+			part, err := writer.CreateFormFile(file.field, file.field+".exe")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := part.Write(file.data); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if extra {
+			if err := writer.WriteField("otro", "campo"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatal(err)
+		}
+		request := httptest.NewRequest(http.MethodPost, "http://"+host+"/api/secciones-binarias/comparar", &body)
+		request.Header.Set("Origin", "http://"+host)
+		request.Header.Set("Content-Type", writer.FormDataContentType())
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	response := post(base, current, false)
+	var web, fromCLI analisis.BinarySectionComparison
+	if err := json.Unmarshal(response.Body.Bytes(), &web); response.Code != http.StatusOK || err != nil ||
+		web.Baseline.RecordID != selection.Baseline.RecordID || web.Current.RecordID != selection.Current.RecordID {
+		t.Fatalf("comparación por API: %d, %s, %v", response.Code, response.Body, err)
+	}
+	if response := post(current, base, false); response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("archivos invertidos: %d, %s", response.Code, response.Body)
+	}
+	if response := post(base, current, true); response.Code != http.StatusBadRequest {
+		t.Fatalf("campo inesperado: %d, %s", response.Code, response.Body)
+	}
+	root := t.TempDir()
+	basePath, currentPath := filepath.Join(root, "base.exe"), filepath.Join(root, "actual.exe")
+	for path, data := range map[string][]byte{basePath: base, currentPath: current} {
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var stdout, stderr bytes.Buffer
+	_, err = terminal.Run([]string{"comparar-secciones", "--base-id", selection.Baseline.RecordID, "--base", basePath,
+		"--actual-id", selection.Current.RecordID, "--actual", currentPath}, &stdout, &stderr, func() (*caso.Store, error) {
+		return store, nil
+	})
+	if err != nil {
+		t.Fatalf("CLI: %v, %s", err, &stderr)
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &fromCLI); err != nil || !reflect.DeepEqual(fromCLI, web) {
+		t.Fatalf("comparación por CLI: %+v, %v", fromCLI, err)
 	}
 }

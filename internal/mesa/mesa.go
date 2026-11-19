@@ -224,6 +224,7 @@ func Handler(host string, config Settings, store *caso.Store, resources fs.FS) h
 	binaryWindowRoute(mux, store)
 	binaryReferenceRoute(mux, store)
 	binaryReferenceComparisonRoute(mux, store)
+	binarySectionComparisonRoute(mux, store)
 	activityRoute(mux, store)
 	httpComparisonRoute(mux, store)
 	var handler http.Handler = mux

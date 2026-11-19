@@ -37,6 +37,7 @@ Uso: pavarotti [opciones globales] <comando> [argumentos]
   ventana-binaria Abre instrucciones desde un símbolo o punto de entrada.
   referencias-binario Verifica un informe de referencias entrantes.
   comparar-referencias Compara dos informes de referencias del mismo binario.
+  comparar-secciones Compara secciones verificadas entre dos binarios.
   usuarios  Administra cuentas de acceso para el expediente PostgreSQL.
   actividad Consulta y exporta la actividad del expediente PostgreSQL.
   retener-actividad Previsualiza o aplica la retención de actividad respaldada.
@@ -98,6 +99,8 @@ func Run(args []string, stdout, stderr io.Writer, open func() (*caso.Store, erro
 		err = terminalBinaryReferences(args[1:], stdout, stderr, open)
 	case "comparar-referencias":
 		err = terminalCompareReferences(args[1:], stdout, stderr, open)
+	case "comparar-secciones":
+		err = terminalCompareSections(args[1:], stdout, stderr, open)
 	case "usuarios":
 		err = terminalSharedAccounts(args[1:], stdout, stderr, open)
 	case "actividad":

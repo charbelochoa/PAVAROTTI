@@ -138,7 +138,8 @@ func sharedDashboard(mux *http.ServeMux, store *caso.Store, origin string, resou
 			return
 		}
 		if dashboardMutation(r.Method) && account.Role != caso.SharedAnalyst {
-			if _, pattern := mux.Handler(r); pattern != binaryWindowPattern && pattern != binaryReferencePattern && pattern != binaryReferenceComparisonPattern {
+			if _, pattern := mux.Handler(r); pattern != binaryWindowPattern && pattern != binaryReferencePattern &&
+				pattern != binaryReferenceComparisonPattern && pattern != binarySectionComparisonPattern {
 				http.Error(w, "Este expediente requiere permisos de analista para guardar cambios", http.StatusForbidden)
 				return
 			}
