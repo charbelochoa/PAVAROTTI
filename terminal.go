@@ -30,6 +30,7 @@ Uso: pavarotti [opciones globales] <comando> [argumentos]
   historial Consulta las versiones previas de una nota.
   analizar  Correlaciona la evidencia del expediente.
   exportar  Exporta el expediente como JSON o CSV.
+  migrar-local Copia un expediente local y su historial a PostgreSQL.
   ayuda     Muestra esta ayuda.
 
 Sin comando se abre la interfaz web. Usa <comando> --help para ver sus opciones.
@@ -63,6 +64,8 @@ func terminal(args []string, stdout, stderr io.Writer, open func() (*caso.Store,
 		err = terminalAnalyze(args[1:], stdout, stderr, open)
 	case "exportar":
 		err = terminalRecords("exportar", args[1:], stdout, stderr, open)
+	case "migrar-local":
+		err = terminalMigrate(args[1:], stdout, stderr, open)
 	default:
 		err = fmt.Errorf("comando desconocido %q; usa pavarotti ayuda", args[0])
 	}
@@ -70,6 +73,27 @@ func terminal(args []string, stdout, stderr io.Writer, open func() (*caso.Store,
 		return true, nil
 	}
 	return true, err
+}
+
+func terminalMigrate(args []string, stdout, stderr io.Writer, open openExpediente) error {
+	flags := terminalFlags("migrar-local", "migrar-local <carpeta>", stderr)
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 {
+		return errors.New("uso: pavarotti -postgres <URL> migrar-local <carpeta>")
+	}
+	store, err := open()
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	count, err := store.ImportLocal(flags.Arg(0))
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(stdout, "Migración completada · %d registro(s) nuevos\n", count)
+	return err
 }
 
 func terminalFlags(name, usage string, stderr io.Writer) *flag.FlagSet {
