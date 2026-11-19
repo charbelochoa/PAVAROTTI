@@ -23,7 +23,7 @@ import (
 	"pavarotti/internal/trafico"
 )
 
-const version = "0.3.6"
+const version = "0.3.7"
 
 func main() {
 	directory := flag.String("datos", "", "carpeta del expediente local")

@@ -20,7 +20,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 
 | Configuración | Cobertura mínima |
 | --- | --- |
-| Windows x64 y Linux x86-64 con almacén local | Arranque del binario, CLI, importación, análisis, edición y persistencia después de cerrar y abrir. Ejecutar el flujo RDAP y STIX con cruces de SHA-256 y red dentro de Kali y Arch en CI. |
+| Windows x64 y Linux x86-64 con almacén local | Arranque del binario, CLI, importación, análisis, edición y persistencia después de cerrar y abrir. Ejecutar el flujo RDAP y STIX con cruces de SHA-256 y red y reimportar el paquete exportado dentro de Kali y Arch en CI. |
 | PostgreSQL | Inicio de esquema, credenciales inválidas, aislamiento por expediente, edición concurrente, migración idempotente e historial. |
 | Docker Compose | Puerto alterno en loopback, espera de salud, registro por CLI y persistencia después de reiniciar. |
 | Proxy y HAR | Destino fijo local, redirecciones, captura de metadatos, protección de datos sensibles y distinción entre fallo de conexión y señales de cabeceras. |
@@ -45,7 +45,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 4. **Ingesta y citas.** 0.3.4 importa DNS, RDAP y STIX 2.1 desde archivos, cruza indicadores STIX con dominios e IP observados y abre las revisiones citadas desde informes locales y guardados. El inspector conserva la posición y huella del archivo. La cobertura actual de STIX se limita a metadatos y comparaciones literales.
 5. **Inventario de activos.** 0.3.5 añade fichas navegables en la mesa y el comando `activos` del CLI. Las fichas de huella enlazan muestras e indicadores SHA-256. Las fichas de IP muestran cobertura por rango RDAP o prefijo STIX y conservan el recuento de observaciones directas. La consulta recorre hasta 10,000 registros y pagina resultados.
 6. **Relaciones e informes.** 0.3.6 permite navegar las referencias STIX desde el inspector, conserva sus alternativas de procedencia y muestra los objetos pendientes de importar. Los informes nuevos citan los cruces SHA-256 y la cobertura de IP observadas por DNS o HTTP. El ejecutor admite las versiones 1 y 2 del análisis y conserva la huella de entrada de cada tarea.
-7. **Exportación y resultados de ingesta.** Exportar STIX con citas reproducibles. Verificar el formato y reimportar el resultado en un expediente de prueba para recuperar observaciones, huellas y relaciones. Mostrar cuántos registros se importaron y cuántos eran duplicados.
+7. **Intercambio STIX.** 0.3.7 exporta observaciones, huellas, indicadores y relaciones compatibles con citas al ID, revisión y huella del expediente de origen. La prueba reimporta el paquete en otro expediente y vuelve a cargar el mismo archivo para comprobar la deduplicación. La exportación admite hasta 5,000 objetos y 32 MiB. La terminal puede acotar por tipo o búsqueda.
 8. **Revisión y operación compartida.** Extender las reglas estáticas. Añadir autenticación, permisos, auditoría y restauración antes de abrir el acceso a otros equipos.
 9. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
 
@@ -54,7 +54,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 1. **Incorporar.** Un expediente reúne indicadores, capturas HTTP, binarios, DNS, RDAP y paquetes STIX aportados por el analista. Las entradas conservan su huella y sus referencias de origen cuando el formato las proporciona.
 2. **Examinar.** La mesa de trabajo conserva la lista central, el inspector y las tareas. El historial HTTP reúne proxy y HAR y filtra sus respuestas por clase de estado. Las referencias de la cronología, señales y coincidencias abren la revisión citada en el inspector.
 3. **Correlacionar.** Los agentes agrupan la evidencia por activo, respuesta HTTP e indicador. Los resultados quedan asociados a la versión del agente y a la huella de entrada.
-4. **Entregar.** El analista verifica coincidencias, añade notas y exporta el expediente. Los créditos del binario quedan accesibles en su panel propio.
+4. **Entregar.** El analista verifica coincidencias, añade notas y prepara un paquete STIX 2.1 para intercambiar metadatos con referencias al expediente. Los créditos del binario quedan accesibles en su panel propio.
 
 ## Próximas vistas de la mesa
 
