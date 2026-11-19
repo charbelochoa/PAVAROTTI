@@ -76,9 +76,23 @@ func TestPostgresHTTPIndexRebuildsCaseAndRestoresCitations(t *testing.T) {
 	if _, err := other.RestoreCase(ctx, &backup); err != nil {
 		t.Fatal(err)
 	}
+	if err := other.Save([]Record{{Kind: "hallazgo", Title: "Incorporación posterior", Time: Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	var ready int
+	if err := other.db.QueryRowContext(ctx, `SELECT count(*) FILTER (WHERE http_page_indexed AND search_page_indexed),
+		count(*) FILTER (WHERE NOT http_page_indexed AND NOT search_page_indexed)
+		FROM pavarotti_evidence_batches WHERE expediente = $1`, other.expediente).Scan(&ready, &pending); err != nil ||
+		ready != 1 || pending != maxHTTPBackfillBatches+1 {
+		t.Fatalf("proyecciones diferidas y escritura posterior: %d listas, %d pendientes, %v", ready, pending, err)
+	}
 	restored, err := other.Page(ctx, query)
 	if err != nil || !reflect.DeepEqual(restored, fallback) {
 		t.Fatalf("página restaurada: %+v, %v", restored, err)
+	}
+	restored, err = other.Page(ctx, query)
+	if err != nil || !reflect.DeepEqual(restored, fallback) {
+		t.Fatalf("página reindexada: %+v, %v", restored, err)
 	}
 	if err := other.db.QueryRowContext(ctx, "SELECT count(*) FROM pavarotti_evidence_batches WHERE expediente = $1 AND NOT http_page_indexed",
 		other.expediente).Scan(&pending); err != nil || pending != 0 {

@@ -7,21 +7,22 @@ import (
 	"errors"
 	"strconv"
 	"strings"
-	"time"
 )
 
 func (s *Store) postgresPage(ctx context.Context, request PageRequest, after pageCursor, limit int) ([]RecordRow, error) {
 	var prepare func(context.Context) (bool, error)
 	var indexed func(context.Context, PageRequest, pageCursor, int) ([]RecordRow, error)
+	var worker *postgresPageWorker
+	var pendingQuery string
 	switch {
 	case request.Search != "" && !strings.ContainsRune(request.Search, 31):
-		prepare, indexed = s.searchPageForRequest, s.postgresSearchPage
+		prepare, indexed, worker, pendingQuery = s.prepareSearchPage, s.postgresSearchPage, &s.searchWork, searchPagePending
 	case request.Kind == "http" && request.Search == "":
-		prepare, indexed = s.prepareHTTPPageIndex, s.postgresIndexedHTTPPage
+		prepare, indexed, worker, pendingQuery = s.prepareHTTPPageIndex, s.postgresIndexedHTTPPage, &s.httpWork, httpPagePending
 	}
 	if prepare != nil {
-		indexContext, cancelIndex := context.WithTimeout(ctx, 8*time.Second)
-		ready, err := prepare(indexContext)
+		indexContext, cancelIndex := context.WithTimeout(ctx, pagePreparationTimeout)
+		ready, err := s.pageProjectionForRequest(indexContext, worker, pendingQuery, prepare)
 		cancelIndex()
 		if err := ctx.Err(); err != nil {
 			return nil, err

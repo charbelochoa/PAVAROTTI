@@ -55,13 +55,17 @@ func (table caseBackupTable) export(ctx context.Context, tx *sql.Tx, caseName st
 	return count, rows.Err()
 }
 
-func (table caseBackupTable) insert(ctx context.Context, tx *sql.Tx, caseName string, data json.RawMessage) error {
+func (table caseBackupTable) insert(ctx context.Context, tx *sql.Tx, caseName string, data []byte, batch bool) error {
 	projection := table.columns
 	if table.restore != "" {
 		projection = table.restore
 	}
+	populate := "jsonb_populate_record"
+	if batch {
+		populate = "jsonb_populate_recordset"
+	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO `+table.table+` (expediente, `+table.columns+
-		`) SELECT $1, `+projection+` FROM jsonb_populate_record(NULL::`+table.table+`, $2::jsonb) AS item`, caseName, []byte(data))
+		`) SELECT $1, `+projection+` FROM `+populate+`(NULL::`+table.table+`, $2::jsonb) AS item`, caseName, data)
 	if err == nil {
 		return nil
 	}
@@ -70,6 +74,54 @@ func (table caseBackupTable) insert(ctx context.Context, tx *sql.Tx, caseName st
 		return fmt.Errorf("%w: fila %s (%s)", ErrBackupIntegrity, table.kind, databaseError.Code)
 	}
 	return err
+}
+
+const (
+	maxRestoreBatchRows  = 256
+	maxRestoreBatchBytes = 2 << 20
+)
+
+type restoreBatch struct {
+	ctx      context.Context
+	tx       *sql.Tx
+	caseName string
+	table    caseBackupTable
+	data     []byte
+	count    int
+}
+
+func (batch *restoreBatch) add(table caseBackupTable, frame json.RawMessage) error {
+	if table.kind != batch.table.kind || batch.count == maxRestoreBatchRows ||
+		len(batch.data)+len(frame)+2 > maxRestoreBatchBytes {
+		if err := batch.flush(); err != nil {
+			return err
+		}
+	}
+	if len(frame)+2 > maxRestoreBatchBytes {
+		return table.insert(batch.ctx, batch.tx, batch.caseName, frame, false)
+	}
+	if batch.count == 0 {
+		batch.data = append(batch.data, '[')
+		batch.table = table
+	} else {
+		batch.data = append(batch.data, ',')
+	}
+	batch.data = append(batch.data, frame...)
+	batch.count++
+	return nil
+}
+
+func (batch *restoreBatch) flush() error {
+	if batch.count == 0 {
+		return nil
+	}
+	batch.data = append(batch.data, ']')
+	if err := batch.table.insert(batch.ctx, batch.tx, batch.caseName, batch.data, true); err != nil {
+		return err
+	}
+	batch.count = 0
+	batch.data = batch.data[:0]
+	return nil
 }
 
 func (s *Store) RestoreCase(ctx context.Context, source io.Reader) (BackupSummary, error) {
@@ -95,10 +147,15 @@ func (s *Store) RestoreCase(ctx context.Context, source io.Reader) (BackupSummar
 	if occupied {
 		return BackupSummary{}, ErrBackupDestination
 	}
-	summary, err := reader.readRows(ctx, func(table caseBackupTable, data json.RawMessage) error {
-		return table.insert(ctx, tx, s.expediente, data)
-	})
+	if _, err := tx.ExecContext(ctx, `SELECT set_config('pavarotti.restoring_case', $1, true)`, s.expediente); err != nil {
+		return BackupSummary{}, err
+	}
+	batch := restoreBatch{ctx: ctx, tx: tx, caseName: s.expediente}
+	summary, err := reader.readRows(ctx, batch.add)
 	if err != nil {
+		return BackupSummary{}, err
+	}
+	if err := batch.flush(); err != nil {
 		return BackupSummary{}, err
 	}
 	if err := s.checkRestoredReferences(ctx, tx); err != nil {

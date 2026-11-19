@@ -254,6 +254,53 @@ func TestCaseRestoreRejectsInvalidEvidenceReferences(t *testing.T) {
 	}
 }
 
+func TestCaseRestoreRollsBackMultipleBatches(t *testing.T) {
+	source, destination := openAuditTest(t), openAuditTest(t)
+	ctx := t.Context()
+	details := string(bytes.Repeat([]byte("x"), maxRestoreBatchBytes+128))
+	if err := source.Save([]Record{{Kind: "hallazgo", Time: Now(), Title: "Lote extenso", Details: details}}); err != nil {
+		t.Fatal(err)
+	}
+	eventCount := 2*maxRestoreBatchRows + 7
+	if _, err := source.db.ExecContext(ctx, `UPDATE pavarotti_audit_heads SET position = $2 WHERE expediente = $1`,
+		source.expediente, eventCount); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.db.ExecContext(ctx, `
+		INSERT INTO pavarotti_audit_events (expediente, position, actor, source, action, target, details)
+		SELECT $1, position, 'prueba', 'postgres', $3, '', '{}'::jsonb
+		FROM generate_series(2, $2::integer) AS series(position)`, source.expediente, eventCount, AuditEvidence); err != nil {
+		t.Fatal(err)
+	}
+	var archive bytes.Buffer
+	summary, err := source.BackupCase(ctx, &archive)
+	if err != nil || summary.Rows["audit_event"] != eventCount {
+		t.Fatalf("respaldo: %+v, %v", summary, err)
+	}
+	if _, err := destination.RestoreCase(ctx, bytes.NewReader(archive.Bytes()[:archive.Len()-1])); !errors.Is(err, ErrBackupIntegrity) {
+		t.Fatalf("copia interrumpida: %v", err)
+	}
+	if records, err := destination.Records(); err != nil || len(records) != 0 {
+		t.Fatalf("evidencia parcial: %d, %v", len(records), err)
+	}
+	if page, err := destination.AuditPage(ctx, 0, 50); err != nil || len(page.Events) != 0 {
+		t.Fatalf("actividad parcial: %+v, %v", page, err)
+	}
+	restored, err := destination.RestoreCase(ctx, bytes.NewReader(archive.Bytes()))
+	if err != nil || !reflect.DeepEqual(summary, restored) {
+		t.Fatalf("restauración: %+v, %v", restored, err)
+	}
+	records, err := destination.Records()
+	if err != nil || len(records) != 1 || records[0].Details != details {
+		t.Fatalf("contenido del lote extenso: %d, %v", len(records), err)
+	}
+	if page, err := destination.AuditPage(ctx, 0, 2); err != nil || len(page.Events) != 2 ||
+		page.Events[0].Position != int64(eventCount+1) || page.Events[0].Action != AuditRestore ||
+		page.Events[1].Position != int64(eventCount) {
+		t.Fatalf("secuencia restaurada: %+v, %v", page, err)
+	}
+}
+
 func backupTestNote(t *testing.T, store *Store, title string) string {
 	t.Helper()
 	if err := store.Save([]Record{{Kind: "nota", Time: Now(), Title: title, Details: "Primera revisión"}}); err != nil {
