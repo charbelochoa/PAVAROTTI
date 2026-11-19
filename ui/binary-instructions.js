@@ -1,7 +1,7 @@
 "use strict";
 
-function binaryInstructionPanel(report, record, citation, sections, images) {
-  const details = element("details", "", "binary-instructions");
+function binaryInstructionPanel(report, sections, images, citation, cite) {
+  const details = element(cite ? "details" : "div", "", "binary-instructions");
   const title = element("summary", "Instrucciones");
   const code = Array.isArray(report.instructions) ? report.instructions : [];
   const entries = [];
@@ -11,14 +11,14 @@ function binaryInstructionPanel(report, record, citation, sections, images) {
       (instruction.target !== undefined && typeof instruction.target !== "string")) continue;
     entries.push({instruction, index, section, bytes: instruction.bytes.match(/.{1,2}/g)?.join(" ")});
   }
-  details.append(title);
+  if (cite) details.append(title);
   if (!entries.length) {
     details.append(element("p", "Este análisis no contiene instrucciones guardadas."));
     return {details, paintImage() {}, hasSection() { return false; }};
   }
   const linked = citation?.kind === "instruccion" ? citation.index : -1;
   details.open = linked >= 0;
-  if (report.instructions_limited) details.append(element("p", "Listado parcial de las secciones ejecutables."));
+  if (report.instructions_limited) details.append(element("p", cite ? "Listado parcial de las secciones ejecutables." : "Ventana parcial de la sección ejecutable."));
   const byAddress = new Map();
   const withCode = new Set();
   const lookup = (section, address) => `${section.image || 0}:${address}`;
@@ -57,7 +57,8 @@ function binaryInstructionPanel(report, record, citation, sections, images) {
   const count = element("output");
   count.setAttribute("aria-live", "polite");
   pager.append(previous, count, next);
-  details.append(label, search, actions, wrapper, pager);
+  if (cite) details.append(label);
+  details.append(search, actions, wrapper, pager);
 
   const pageSize = 20;
   let image = 0;
@@ -112,7 +113,7 @@ function binaryInstructionPanel(report, record, citation, sections, images) {
       return row;
     }));
     const controls = [];
-    if (focusButton) controls.push(binaryCitationButton(record, "instruccion", selected));
+    if (focusButton && cite) controls.push(cite(selected));
     if (origin) {
       const back = element("button", "Volver al salto");
       back.onclick = () => {

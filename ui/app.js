@@ -111,7 +111,7 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
   }
   if (record.code_review) view.append(codeReviewPanel(record.id, record.code_review, citation));
   if (record.dependencies) view.append(dependencyPanel(record.dependencies, citation));
-  const binary = record.kind === "binario" && binaryPanel(record, citation?.binary);
+  const binary = record.kind === "binario" && binaryPanel(record, citation?.binary, citation?.binaryWindow);
   if (binary) view.append(binary);
   if (!record.code_review && !record.traffic && record.signals?.length) {
     const list = element("ul");
@@ -192,7 +192,7 @@ function markBinaryCitation(row, citation, kind, index) {
   }
 }
 
-function binaryPanel(record, citation) {
+function binaryPanel(record, citation, windowCitation) {
   let report;
   try {
     report = JSON.parse(record.details);
@@ -254,8 +254,11 @@ function binaryPanel(record, citation) {
   textHits.append(search, reset, scope, strings);
   const sectionsList = element("ol", "", "binary-list");
   const noSections = element("p", "No hay secciones registradas.");
-  const instructions = binaryInstructionPanel(report, record, citation, sections, images);
-  const symbols = binarySymbolPanel(report, record, citation, images);
+  const instructions = binaryInstructionPanel(report, sections, images, citation,
+    (index) => binaryCitationButton(record, "instruccion", index));
+  const binaryWindow = ["ELF", "PE", "Mach-O", "Mach-O universal"].includes(report.format) ?
+    binaryWindowPanel(report, record, windowCitation?.sha256 === record.sha256 ? windowCitation : undefined, inspectorRequest.signal) : undefined;
+  const symbols = binarySymbolPanel(report, record, citation, images, binaryWindow?.openSymbol);
   function paintSections() {
     const rows = [];
     for (const [index, section] of sections.entries()) {
@@ -301,6 +304,7 @@ function binaryPanel(record, citation) {
     paintSections();
     paintStrings();
     instructions.paintImage(index);
+    binaryWindow?.paintImage(index);
     symbols.paint(index);
   }
   if (images.length) {
@@ -317,6 +321,7 @@ function binaryPanel(record, citation) {
     if (citation?.kind === "seccion") selectedImage = sections[citation.index]?.image || 0;
     if (citation?.kind === "simbolo") selectedImage = report.symbols?.[citation.index]?.image || 0;
     if (citation?.kind === "instruccion") selectedImage = sections[report.instructions?.[citation.index]?.section]?.image || 0;
+    if (windowCitation?.image > 0 && windowCitation.image <= images.length) selectedImage = windowCitation.image;
     if (citation?.kind === "cadena") {
       const offset = Number.parseInt(hits[citation.index]?.offset, 16);
       selectedImage = images.findIndex(({file}) => {
@@ -332,6 +337,7 @@ function binaryPanel(record, citation) {
   }
   names.append(sectionsList, noSections);
   paintImage(selectedImage);
+  if (binaryWindow) panel.append(binaryWindow.details);
   panel.append(instructions.details, names, textHits, symbols.details);
   return panel;
 }
@@ -340,7 +346,7 @@ function binaryImageLabel(image) {
   return image ? `${image.architecture} · subtipo ${image.subtype}` : "";
 }
 
-function binarySymbolPanel(report, record, citation, images) {
+function binarySymbolPanel(report, record, citation, images, openWindow) {
   const symbols = Array.isArray(report.symbols) ? report.symbols : [];
   const details = element("details");
   const title = element("summary", `Símbolos · ${symbols.length}`);
@@ -372,6 +378,11 @@ function binarySymbolPanel(report, record, citation, images) {
       if (symbol.image && !imageIndex) row.append(element("p", binaryImageLabel(images[symbol.image - 1]), "type"));
       if (symbol.forwarder) row.append(element("p", `Reenvío · ${symbol.forwarder}`));
       if (symbol.offset) row.append(element("p", `Archivo ${symbol.offset}`), binaryCitationButton(record, "simbolo", index));
+      if (symbol.offset && !symbol.forwarder && openWindow) {
+        const window = element("button", "Abrir ventana");
+        window.onclick = () => openWindow(index);
+        row.append(window);
+      }
       markBinaryCitation(row, citation, "simbolo", index);
       list.append(row);
     }
@@ -953,10 +964,21 @@ byId("binary-citation-file").onchange = async (event) => {
   try {
     if (file.size > 4096) throw new Error("El archivo de cita supera los 4 KiB");
     const citation = JSON.parse(await file.text());
-    if (citation?.schema !== "pavarotti.binary-citation.v1" || typeof citation.record_id !== "string" ||
+    if (typeof citation?.record_id !== "string" ||
       !/^[a-f0-9]{64}-[1-9][0-9]*$/.test(citation.record_id) || !Number.isSafeInteger(citation.revision) ||
-      citation.revision < 1 || !Number.isSafeInteger(citation.index) || citation.index < 0 ||
-      !["seccion", "cadena", "simbolo", "instruccion"].includes(citation.kind)) {
+      citation.revision < 1 || !Number.isSafeInteger(citation.index) || citation.index < 0) {
+      throw new Error("El archivo no contiene una cita de binario válida");
+    }
+    if (citation.schema === binaryWindowSchema && validBinaryWindowCitation(citation)) {
+      await selectRecord(citation.record_id, citation.revision, undefined, undefined, {binaryWindow: citation});
+      if (selectedRecord?.id !== citation.record_id || selectedRecord.revision !== citation.revision ||
+        selectedRecord.kind !== "binario" || selectedRecord.sha256 !== citation.sha256) {
+        throw new Error("La cita no coincide con una revisión de binario en este expediente.");
+      }
+      status.textContent = "";
+      return;
+    }
+    if (citation.schema !== "pavarotti.binary-citation.v1" || !["seccion", "cadena", "simbolo", "instruccion"].includes(citation.kind)) {
       throw new Error("El archivo no contiene una cita de binario válida");
     }
     const verified = await request(binaryCitationURL(citation));
