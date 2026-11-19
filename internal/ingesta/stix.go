@@ -22,19 +22,21 @@ type stixHeader struct {
 
 type stixObject struct {
 	stixHeader
-	Value          string   `json:"value"`
-	Pattern        string   `json:"pattern"`
-	PatternType    string   `json:"pattern_type"`
-	PatternVersion string   `json:"pattern_version"`
-	FirstObserved  string   `json:"first_observed"`
-	LastObserved   string   `json:"last_observed"`
-	NumberObserved int      `json:"number_observed"`
-	ObjectRefs     []string `json:"object_refs"`
-	Relationship   string   `json:"relationship_type"`
-	SourceRef      string   `json:"source_ref"`
-	TargetRef      string   `json:"target_ref"`
-	ResolvesToRefs []string `json:"resolves_to_refs"`
-	BelongsToRefs  []string `json:"belongs_to_refs"`
+	Value          string            `json:"value"`
+	Pattern        string            `json:"pattern"`
+	PatternType    string            `json:"pattern_type"`
+	PatternVersion string            `json:"pattern_version"`
+	FirstObserved  string            `json:"first_observed"`
+	LastObserved   string            `json:"last_observed"`
+	NumberObserved int               `json:"number_observed"`
+	ObjectRefs     []string          `json:"object_refs"`
+	Relationship   string            `json:"relationship_type"`
+	SourceRef      string            `json:"source_ref"`
+	TargetRef      string            `json:"target_ref"`
+	ResolvesToRefs []string          `json:"resolves_to_refs"`
+	BelongsToRefs  []string          `json:"belongs_to_refs"`
+	Hashes         map[string]string `json:"hashes"`
+	ExternalRefs   []caso.STIXOrigin `json:"external_references"`
 }
 
 var stixEquality = regexp.MustCompile(`^\[\s*(domain-name:value|ipv4-addr:value|ipv6-addr:value|file:hashes\.'(?:MD5|SHA-1|SHA-256)')\s*=\s*'([^'\\\r\n]{1,253})'\s*\]$`)
@@ -57,7 +59,7 @@ func parseSTIX(data []byte) ([]caso.Record, error) {
 	if err := json.Unmarshal(input, &bundle); err != nil {
 		return nil, fmt.Errorf("paquete STIX inválido: %w", err)
 	}
-	if bundle.Type != "bundle" || !bundle.valid() || len(bundle.Objects) == 0 || len(bundle.Objects) > 5000 {
+	if bundle.Type != "bundle" || !bundle.valid() || len(bundle.Objects) == 0 || len(bundle.Objects) > caso.MaxSTIXObjects {
 		return nil, errors.New("se esperaba un paquete STIX 2.1 con un ID y de 1 a 5000 objetos")
 	}
 	hash, stamp := caso.Hash(data), caso.Now()
@@ -85,6 +87,14 @@ func (object stixObject) record(path, hash, stamp string) (caso.Record, error) {
 	}
 	record := caso.Record{Kind: "stix", Title: "STIX · " + object.Type, SourceID: path,
 		Time: stamp, SHA256: hash, Details: "Objeto STIX · " + object.ID, STIX: &caso.STIXObject{ID: object.ID}}
+	for _, origin := range object.ExternalRefs {
+		if !origin.Valid() ||
+			!boundedText(origin.ExternalID, 128) || !boundedText(origin.Description, 512) || len(record.STIX.Origins) == 8 {
+			continue
+		}
+		record.STIX.Origins = append(record.STIX.Origins, origin)
+		record.Details += "\nProcedencia declarada · " + origin.ExternalID + " · " + origin.Description
+	}
 	switch object.Type {
 	case "domain-name", "ipv4-addr", "ipv6-addr":
 		if len(object.ResolvesToRefs)+len(object.BelongsToRefs) > 256 ||
@@ -106,6 +116,18 @@ func (object stixObject) record(path, hash, stamp string) (caso.Record, error) {
 		}
 		record.Title = "Observable · " + value.Value
 		record.Source = value.Value
+	case "file":
+		for _, algorithm := range []struct{ name, kind string }{{"SHA-256", "sha256"}, {"SHA-1", "sha1"}, {"MD5", "md5"}} {
+			if raw, present := object.Hashes[algorithm.name]; present {
+				value, valid := stixValue(raw, algorithm.kind)
+				if !valid {
+					return caso.Record{}, errors.New("huella de archivo STIX inválida")
+				}
+				record.FileHashes = append(record.FileHashes, value)
+				record.Details += "\n" + algorithm.name + " · " + value.Value
+			}
+		}
+		record.Title = "Archivo STIX"
 	case "indicator":
 		if object.Pattern == "" || object.PatternType == "" {
 			return caso.Record{}, errors.New("faltan el patrón y su tipo en el indicador STIX")
@@ -129,8 +151,14 @@ func (object stixObject) record(path, hash, stamp string) (caso.Record, error) {
 		}
 		record.Title = "Observaciones STIX"
 		record.Time = last.UTC().Format(time.RFC3339Nano)
+		record.STIX.Observation = &caso.STIXObservation{First: first.UTC().Format(time.RFC3339Nano), Last: record.Time, Count: object.NumberObserved}
 		record.Details += fmt.Sprintf("\nPrimera observación · %s\nÚltima observación · %s\nObservaciones · %d\nReferencias\n%s",
 			first.UTC().Format(time.RFC3339Nano), record.Time, object.NumberObserved, strings.Join(object.ObjectRefs, "\n"))
+	case "note":
+		if len(object.ObjectRefs) < 1 || len(object.ObjectRefs) > 256 || !addSTIXRefs(record.STIX, "anotado", object.ObjectRefs) {
+			return caso.Record{}, errors.New("referencias de nota STIX inválidas")
+		}
+		record.Title = "Nota STIX"
 	case "relationship":
 		if !caso.ValidSTIXID(object.SourceRef) || !caso.ValidSTIXID(object.TargetRef) ||
 			strings.TrimSpace(object.Relationship) == "" || !boundedText(object.Relationship, 80) {
@@ -168,6 +196,14 @@ func (object stixObject) indicator() (caso.Indicator, bool) {
 
 func stixValue(value, kind string) (caso.Indicator, bool) {
 	if len(value) > 254 || strings.Contains(value, "[.]") {
+		return caso.Indicator{}, false
+	}
+	if kind == "dominio" {
+		if name, ok := normalizedDNSName(value); ok && name != "." && !strings.Contains(name, "_") {
+			if _, err := netip.ParseAddr(name); err != nil {
+				return caso.Indicator{Type: kind, Value: name}, true
+			}
+		}
 		return caso.Indicator{}, false
 	}
 	item, ok := indicator(value)

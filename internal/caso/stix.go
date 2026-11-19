@@ -2,12 +2,36 @@ package caso
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 )
 
+const MaxSTIXObjects = 5000
+
 type STIXObject struct {
-	ID   string    `json:"id"`
-	Refs []STIXRef `json:"refs,omitempty"`
+	ID          string           `json:"id"`
+	Refs        []STIXRef        `json:"refs,omitempty"`
+	Observation *STIXObservation `json:"observation,omitempty"`
+	Origins     []STIXOrigin     `json:"origins,omitempty"`
+}
+
+type STIXObservation struct {
+	First string `json:"first"`
+	Last  string `json:"last"`
+	Count int    `json:"count"`
+}
+
+type STIXOrigin struct {
+	SourceName  string `json:"source_name"`
+	ExternalID  string `json:"external_id"`
+	Description string `json:"description,omitempty"`
+}
+
+func (origin STIXOrigin) Valid() bool {
+	id, revision, found := strings.Cut(origin.ExternalID, "@")
+	_, _, valid := recordPosition(id)
+	value, err := strconv.Atoi(revision)
+	return origin.SourceName == "PAVAROTTI" && found && valid && err == nil && value > 0 && strconv.Itoa(value) == revision
 }
 
 type STIXRef struct {
@@ -33,7 +57,16 @@ func (record Record) STIXObject() STIXObject {
 	}
 	object := STIXObject{ID: id}
 	if strings.HasPrefix(id, "observed-data--") {
-		if _, refs, found := strings.Cut(details, "\nReferencias\n"); found {
+		if values, refs, found := strings.Cut(details, "\nReferencias\n"); found {
+			lines := strings.SplitN(values, "\n", 4)
+			if len(lines) == 3 {
+				first, firstOK := strings.CutPrefix(lines[0], "Primera observación · ")
+				last, lastOK := strings.CutPrefix(lines[1], "Última observación · ")
+				number, _ := strings.CutPrefix(lines[2], "Observaciones · ")
+				if count, err := strconv.Atoi(number); firstOK && lastOK && err == nil && count > 0 {
+					object.Observation = &STIXObservation{First: first, Last: last, Count: count}
+				}
+			}
 			for ref := range strings.SplitSeq(refs, "\n") {
 				if ValidSTIXID(ref) && len(object.Refs) < 256 {
 					object.Refs = append(object.Refs, STIXRef{Role: "observado", ID: ref})

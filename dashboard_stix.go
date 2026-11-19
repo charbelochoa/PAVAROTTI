@@ -10,6 +10,22 @@ import (
 )
 
 func stixRoutes(mux *http.ServeMux, store *caso.Store) {
+	mux.HandleFunc("GET /api/exportar/stix", func(w http.ResponseWriter, r *http.Request) {
+		data, stats, err := analisis.ExportSTIX(r.Context(), store, nil)
+		switch {
+		case errors.Is(err, analisis.ErrSTIXEmpty), errors.Is(err, analisis.ErrSTIXLimit):
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		case err != nil:
+			http.Error(w, "No se pudo exportar el expediente", http.StatusInternalServerError)
+		default:
+			w.Header().Set("Content-Type", "application/stix+json")
+			w.Header().Set("Content-Disposition", `attachment; filename="PAVAROTTI-STIX.json"`)
+			w.Header().Set("X-Pavarotti-Objects", strconv.Itoa(stats.Objects))
+			w.Header().Set("X-Pavarotti-Exported", strconv.Itoa(stats.Exported))
+			w.Header().Set("X-Pavarotti-Excluded", strconv.Itoa(stats.Excluded))
+			_, _ = w.Write(data)
+		}
+	})
 	mux.HandleFunc("GET /api/registro/{id}/stix", func(w http.ResponseWriter, r *http.Request) {
 		offset := 0
 		if after := r.URL.Query().Get("despues"); after != "" {
