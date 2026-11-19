@@ -39,7 +39,7 @@ jobs:
           bundle="$PWD/dist/bundle"
           version=$(python3 -c 'import json; print(json.load(open("dist/bundle/build-info.json"))["version"])')
           digest=$(python3 -c 'import json; print(json.load(open("dist/bundle/build-info.json"))["targets"]["linux-amd64"]["sha256"])')
-          docker run --rm --network none -v "$bundle:/packages:ro" -e VERSION="$version" -e DIGEST="$digest" +            kalilinux/kali-rolling /bin/sh -ec '
+          docker run --rm --network none -v "$bundle:/packages:ro" -e VERSION="$version" -e DIGEST="$digest" kalilinux/kali-rolling /bin/sh -ec '
               dpkg -i /packages/*.deb
               test -z "$(dpkg -V pavarotti)"
               test "$(pavarotti -version)" = "PAVAROTTI $VERSION"
@@ -50,7 +50,7 @@ jobs:
               dpkg -r pavarotti
               test -d /tmp/expediente
             '
-          docker run --rm --network none -v "$bundle:/packages:ro" -e VERSION="$version" -e DIGEST="$digest" +            archlinux:base /bin/sh -ec '
+          docker run --rm --network none -v "$bundle:/packages:ro" -e VERSION="$version" -e DIGEST="$digest" archlinux:base /bin/sh -ec '
               pacman -U --noconfirm /packages/*.pkg.tar.xz
               pacman -Qk pavarotti
               test "$(pavarotti -version)" = "PAVAROTTI $VERSION"
