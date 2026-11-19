@@ -65,6 +65,7 @@ func Inspect(data []byte) Binary {
 				}
 				result.add(section.Name, uint64(section.VirtualAddress), uint64(section.VirtualSize), uint64(section.Offset), uint64(size))
 			}
+			result.peExports(file, data)
 			result.peSymbols(file)
 		}
 	default:

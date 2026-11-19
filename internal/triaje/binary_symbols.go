@@ -17,25 +17,28 @@ const (
 )
 
 type Symbol struct {
-	Name    string `json:"name"`
-	Kind    string `json:"kind"`
-	Address string `json:"address"`
-	Section string `json:"section,omitempty"`
-	Offset  string `json:"offset,omitempty"`
+	Name      string  `json:"name"`
+	Kind      string  `json:"kind"`
+	Address   string  `json:"address"`
+	Section   string  `json:"section,omitempty"`
+	Offset    string  `json:"offset,omitempty"`
+	Ordinal   *uint32 `json:"ordinal,omitempty"`
+	Forwarder string  `json:"forwarder,omitempty"`
 }
 
-func (b *Binary) addSymbol(name, kind string, address uint64, section, offset string) bool {
-	if name == "" || !symbolLabel(name) {
+func (b *Binary) addSymbol(symbol Symbol, address uint64) bool {
+	if symbol.Name == "" || !symbolLabel(symbol.Name) {
 		return true
 	}
 	if len(b.Symbols) == maxBinarySymbols {
 		b.SymbolsLimited = true
 		return false
 	}
-	if !symbolLabel(section) {
-		section = ""
+	if !symbolLabel(symbol.Section) {
+		symbol.Section = ""
 	}
-	b.Symbols = append(b.Symbols, Symbol{Name: name, Kind: kind, Address: fmt.Sprintf("0x%x", address), Section: section, Offset: offset})
+	symbol.Address = fmt.Sprintf("0x%x", address)
+	b.Symbols = append(b.Symbols, symbol)
 	return true
 }
 
@@ -115,7 +118,7 @@ func (b *Binary) elfSymbol(file *elf.File, entry, names []byte) bool {
 		section.Flags&elf.SHF_COMPRESSED == 0 && kind != elf.STT_TLS {
 		offset = b.fileOffset(section.Offset, section.FileSize, position-base)
 	}
-	return b.addSymbol(string(text[:end]), kind.String(), address, section.Name, offset)
+	return b.addSymbol(Symbol{Name: string(text[:end]), Kind: kind.String(), Section: section.Name, Offset: offset}, address)
 }
 
 func elfFileBytes(section *elf.Section, data []byte) []byte {
@@ -140,7 +143,7 @@ func (b *Binary) peSymbols(file *pe.File) {
 		if symbol.Type&0x30 == 0x20 {
 			kind = "Función COFF"
 		}
-		if !b.addSymbol(symbol.Name, kind, uint64(section.VirtualAddress)+delta, section.Name, offset) {
+		if !b.addSymbol(Symbol{Name: symbol.Name, Kind: kind, Section: section.Name, Offset: offset}, uint64(section.VirtualAddress)+delta) {
 			return
 		}
 	}
@@ -169,7 +172,7 @@ func (b *Binary) machOSymbols(file *macho.File) {
 		if symbol.Type&external != 0 {
 			kind = "Externo"
 		}
-		if !b.addSymbol(symbol.Name, kind, symbol.Value, section.Seg+"/"+section.Name, offset) {
+		if !b.addSymbol(Symbol{Name: symbol.Name, Kind: kind, Section: section.Seg + "/" + section.Name, Offset: offset}, symbol.Value) {
 			return
 		}
 	}
