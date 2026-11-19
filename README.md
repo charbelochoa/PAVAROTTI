@@ -65,6 +65,7 @@ En **Binarios → Comparar informes**, adjunta el JSON base, el actual y el arch
 - **RDAP.** Importa archivos JSON de dominio, resultados de búsqueda de dominios y rangos IP. El inspector conserva la posición en el archivo, su huella, servidores de nombre, estados y fechas del registro. La importación omite las fichas de contacto y los enlaces del archivo.
 - **STIX 2.1.** Importa paquetes JSON con dominios, direcciones, prefijos IP, relaciones y periodos de observación. Reconoce indicadores por igualdad simple de dominio, IP o huella. El informe cruza dominios y direcciones exactas con el expediente. Los patrones complejos se conservan por ID para revisión en el archivo de origen.
 - **Activos.** Busca dominios, direcciones, redes y huellas. Cada ficha muestra las fechas y distingue observaciones de tráfico o DNS, registros RDAP, declaraciones STIX, indicadores y referencias manuales. Las fichas de IP muestran los rangos RDAP y prefijos STIX que las cubren. El inventario y las fichas calculan los recuentos en todo el expediente y muestran los resultados por página. Abre desde la ficha la revisión de evidencia que sustenta cada fuente.
+- **Relaciones del activo.** Abre las relaciones desde la ficha de un dominio, IP, red o huella. Las filas distinguen respuestas DNS, servidores de nombre RDAP, cobertura declarada por RDAP o STIX, IP observadas dentro de una red y huellas registradas en el mismo objeto de archivo STIX. Cada fila muestra la dirección del vínculo, el recuento, las fechas de evidencia y hasta cinco citas. Puedes acotar por fechas UTC inclusivas, abrir el otro activo y exportar el resultado JSON. Se muestran las 100 relaciones con más registros y el total de las restantes.
 - **Seguimiento.** En **Activos → Seguimiento**, crea una lista y agrega dominios, IP, redes o huellas. También puedes añadir un activo desde su ficha. Al actualizar la lista, la mesa cruza sus activos con la evidencia guardada, muestra los recuentos y abre la última revisión citada. Los activos pendientes de observar se pueden agregar de antemano. Cada expediente admite 24 listas y 200 activos por lista. En el modo compartido, los lectores pueden consultarlas y los analistas administrarlas.
 - **Cobertura por periodo.** Desde una ficha de red, abre **IP observadas** para navegar las direcciones registradas en respuestas DNS o HTTP, en orden numérico y con sus citas. **Cobertura por periodo** usa las fechas guardadas en el expediente y guarda las fuentes, las coincidencias y la huella de entrada en un informe JSON. Las fechas UTC son inclusivas. Puedes reabrir el informe en el expediente original o en su restauración. El informe muestra hasta 100 fuentes, 100 direcciones y cinco citas por dirección e indica cuántas filas adicionales existen.
 - **Relaciones STIX.** El inspector recorre enlaces entrantes y salientes de relaciones, observaciones y observables importados. La referencia indica si procede del mismo paquete, de otro paquete del expediente o si falta importar el objeto.
@@ -89,6 +90,14 @@ pavarotti seguimiento crear --lista "Guardia"
 pavarotti seguimiento agregar --lista "Guardia" --tipo ipv4 --valor 192.0.2.42
 pavarotti seguimiento listar --lista "Guardia" --json
 ```
+
+Consulta las relaciones del mismo expediente con la terminal.
+
+```bash
+pavarotti relaciones-activo --tipo dominio --valor portal.invalid --salida relaciones.json
+```
+
+Introduce `--desde` y `--hasta` para consultar un periodo UTC.
 
 En Windows abre `PAVAROTTI.exe`. En Kali o Arch, copia el ejecutable a un volumen con permisos de ejecución y ábrelo con `./PAVAROTTI-Kali-x64`. Si la copia perdió el permiso, usa `chmod +x PAVAROTTI-Kali-x64`. El programa abre el navegador en una dirección de tu equipo y muestra esa misma URL en la terminal. Elige **Créditos** para consultar la atribución.
 
