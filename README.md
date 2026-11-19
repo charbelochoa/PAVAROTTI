@@ -66,6 +66,8 @@ pavarotti -datos ./expediente importar stix indicadores-stix.json
 pavarotti -datos ./expediente importar codigo revision.go
 pavarotti -datos ./expediente nota --titulo "Turno de revisión" --texto "Validación manual pendiente"
 pavarotti -datos ./expediente listar --buscar "validación" --json
+pavarotti -datos ./expediente activos --tipo dominio --buscar example.invalid
+pavarotti -datos ./expediente activos --tipo ipv4 --valor 192.0.2.17 --json
 pavarotti -datos ./expediente analizar --json
 pavarotti -datos ./expediente exportar --formato csv --salida expediente.csv
 ```
