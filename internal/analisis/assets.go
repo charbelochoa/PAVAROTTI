@@ -106,19 +106,16 @@ func DescribeAsset(ctx context.Context, store *caso.Store, query AssetQuery) (As
 	rows := make([]AssetReference, 0)
 	address, _ := netip.ParseAddr(key.Value)
 	err := walkEvidence(ctx, store, func(record caso.Record) {
-		network := recordNetwork(record)
-		direct := false
-		recordAssets(record, network, func(candidate AssetKey, role string) {
-			if candidate == key {
-				direct = true
-				detail.add(role)
-				rows = append(rows, AssetReference{Evidence: reference(record), Role: role})
-			}
-		})
-		if !direct && address.IsValid() && network.contains(address) {
+		role, network := assetSource(record, key, address)
+		switch role {
+		case "":
+			return
+		case "cobertura":
 			detail.Coverage++
-			rows = append(rows, AssetReference{Evidence: reference(record), Role: "cobertura", Network: network.value})
+		default:
+			detail.add(role)
 		}
+		rows = append(rows, AssetReference{Evidence: reference(record), Role: role, Network: network})
 	})
 	if err != nil {
 		return AssetDetail{}, err
@@ -148,6 +145,20 @@ func DescribeAsset(ctx context.Context, store *caso.Store, query AssetQuery) (As
 		detail.Next = detail.Rows[limit-1].ID
 	}
 	return detail, nil
+}
+
+func assetSource(record caso.Record, key AssetKey, address netip.Addr) (string, string) {
+	network := recordNetwork(record)
+	var role string
+	recordAssets(record, network, func(candidate AssetKey, current string) {
+		if candidate == key && role == "" {
+			role = current
+		}
+	})
+	if role == "" && address.IsValid() && network.contains(address) {
+		return "cobertura", network.value
+	}
+	return role, ""
 }
 
 func walkEvidence(ctx context.Context, store *caso.Store, visit func(caso.Record)) error {

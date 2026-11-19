@@ -11,7 +11,7 @@ import (
 )
 
 func terminalAssets(args []string, stdout, stderr io.Writer, open openExpediente) error {
-	flags := terminalFlags("activos", "activos [--tipo <tipo>] [--valor <activo> | --buscar <texto>] [--json]", stderr)
+	flags := terminalFlags("activos", "activos [--tipo <tipo>] [--valor <activo> | --buscar <texto>] [--observadas] [--json]", stderr)
 	var query analisis.AssetQuery
 	flags.StringVar(&query.Type, "tipo", "", "dominio, ipv4, ipv6, red, sha256, sha1 o md5")
 	flags.StringVar(&query.Value, "valor", "", "valor exacto del activo para abrir su ficha")
@@ -19,10 +19,12 @@ func terminalAssets(args []string, stdout, stderr io.Writer, open openExpediente
 	flags.StringVar(&query.After, "despues", "", "cursor devuelto por la página anterior")
 	flags.IntVar(&query.Limit, "limite", 50, "resultados por página, de 1 a 100")
 	asJSON := flags.Bool("json", false, "emite resultados estructurados")
+	observations := flags.Bool("observadas", false, "lista IP observadas para --tipo red --valor <red>")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if flags.NArg() != 0 || query.Limit < 1 || query.Limit > 100 {
+	if flags.NArg() != 0 || query.Limit < 1 || query.Limit > 100 ||
+		(*observations && (query.Type != "red" || query.Value == "" || query.Search != "")) {
 		return errors.New("usa pavarotti activos --help")
 	}
 	store, err := open()
@@ -33,6 +35,29 @@ func terminalAssets(args []string, stdout, stderr io.Writer, open openExpediente
 	ctx := context.Background()
 	encoder := json.NewEncoder(stdout)
 	encoder.SetIndent("", "  ")
+	if *observations {
+		page, err := analisis.ListNetworkObservations(ctx, store, query.Value, query.After, query.Limit)
+		if err != nil {
+			return err
+		}
+		if *asJSON {
+			return encoder.Encode(page)
+		}
+		if _, err := fmt.Fprintf(stdout, "%s · %d direcciones observadas · %d registros\n", page.Network, page.Addresses, page.Records); err != nil {
+			return err
+		}
+		for _, row := range page.Rows {
+			if _, err := fmt.Fprintf(stdout, "%s · %s · %d observaciones\n", row.Type, row.Value, row.Count); err != nil {
+				return err
+			}
+			for _, ref := range row.Evidence {
+				if _, err := fmt.Fprintf(stdout, "  %s · %s · %s · rev. %d\n", ref.Time, ref.Kind, ref.ID, ref.Revision); err != nil {
+					return err
+				}
+			}
+		}
+		return nextAssetPage(stdout, page.Next)
+	}
 	if query.Value != "" {
 		detail, err := analisis.DescribeAsset(ctx, store, query)
 		if err != nil {

@@ -71,7 +71,7 @@ type HTTPComparisonEvidence struct {
 
 type httpWindowFilter struct {
 	HTTPWindow
-	start, end time.Time
+	utcPeriod
 }
 
 type httpRowKey struct {
@@ -161,16 +161,15 @@ func normalizeHTTPWindow(window HTTPWindow) (httpWindowFilter, error) {
 	default:
 		return httpWindowFilter{}, errors.New("elige HAR, proxy o todas las capturas")
 	}
-	from, startErr := time.Parse(time.DateOnly, window.From)
-	to, endErr := time.Parse(time.DateOnly, window.To)
-	if startErr != nil || endErr != nil || from.Year() < 1 || to.Year() < 1 || to.Before(from) {
-		return httpWindowFilter{}, errors.New("indica fechas UTC en orden, con formato AAAA-MM-DD")
+	period, err := parseUTCPeriod(window.From, window.To)
+	if err != nil {
+		return httpWindowFilter{}, err
 	}
-	return httpWindowFilter{HTTPWindow: window, start: from, end: to.AddDate(0, 0, 1)}, nil
+	return httpWindowFilter{HTTPWindow: window, utcPeriod: period}, nil
 }
 
 func (w httpWindowFilter) matches(stamp time.Time, origin, kind string) bool {
-	return !stamp.Before(w.start) && stamp.Before(w.end) &&
+	return w.includes(stamp) &&
 		(w.Origin == "" || w.Origin == origin) && (w.Capture == "" || w.Capture == kind)
 }
 
@@ -218,7 +217,7 @@ func compareHTTPInput(record caso.Record, origin string, stamp time.Time, inA, i
 		timestamp: stamp, Baseline: inA, Current: inB}
 	status := record.Traffic.Status
 	switch {
-	case record.Kind == "tráfico" && status == 502 && record.HTTPRuleSet == 0 && slices.Contains(record.Signals, caso.ProxyNoResponseSignal):
+	case record.HTTPTransportFailure():
 		input.Category = httpMetric{httpRowKey{"transport", "sin-respuesta"}, "El proxy no recibió respuesta"}
 	case status >= 100 && status <= 599:
 		code := strconv.Itoa(status/100) + "xx"

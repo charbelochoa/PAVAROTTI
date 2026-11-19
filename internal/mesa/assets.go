@@ -50,6 +50,22 @@ func assetRoutes(mux *http.ServeMux, store *caso.Store) {
 		}
 		respond(w, detail)
 	})
+	mux.HandleFunc("GET /api/activos/red", func(w http.ResponseWriter, r *http.Request) {
+		query, ok := parseQuery(w, r)
+		if !ok {
+			return
+		}
+		if query.Search != "" || query.Type != "" {
+			assetError(w, analisis.ErrAssetQuery)
+			return
+		}
+		page, err := analisis.ListNetworkObservations(r.Context(), store, query.Value, query.After, query.Limit)
+		if err != nil {
+			assetError(w, err)
+			return
+		}
+		respond(w, page)
+	})
 }
 
 func assetError(w http.ResponseWriter, err error) {
@@ -60,6 +76,8 @@ func assetError(w http.ResponseWriter, err error) {
 		http.Error(w, "Activo inexistente en el expediente", http.StatusNotFound)
 	case errors.Is(err, analisis.ErrLimit):
 		http.Error(w, "El inventario admite hasta 10000 registros por expediente", http.StatusUnprocessableEntity)
+	case errors.Is(err, analisis.ErrSnapshotBytes):
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 	default:
 		http.Error(w, "No se pudo consultar el inventario", http.StatusInternalServerError)
 	}
