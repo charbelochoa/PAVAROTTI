@@ -1226,8 +1226,8 @@ byId("logout").onclick = async (event) => {
 Promise.all([request("/api/app"), request("/credits.json")]).then(([app, credits]) => {
   canWrite = !app.shared || app.account?.role === "analista";
   for (const id of ["evidence-tools", "analyze", "add-note", "edit-note", "analysis-priority-label"]) byId(id).hidden = !canWrite;
+  if (app.case) byId("case-heading").textContent = app.case;
   if (app.shared) {
-    byId("case-heading").textContent = app.case;
     byId("account").textContent = `${app.account.name} · ${app.account.role}`;
     byId("account").hidden = false;
     byId("logout").hidden = false;

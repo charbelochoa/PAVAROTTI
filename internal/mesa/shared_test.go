@@ -75,7 +75,7 @@ func TestSharedDashboard(t *testing.T) {
 	}
 	const host = "127.0.0.1:8443"
 	const origin = "https://" + host
-	handler := Handler(host, Settings{Version: "version-de-prueba", Shared: true, Case: name}, store, testResources)
+	handler := Handler(host, Settings{Version: "version-de-prueba", Shared: true}, store, testResources)
 	call := func(method, target, requestOrigin, body string, cookie *http.Cookie, status int) *httptest.ResponseRecorder {
 		t.Helper()
 		if strings.HasPrefix(target, "/") {
