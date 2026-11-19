@@ -33,6 +33,7 @@ Uso: pavarotti [opciones globales] <comando> [argumentos]
   triaje    Consulta o clasifica señales de código con su justificación.
   citar-binario Exporta la ubicación verificada de un binario como JSON.
   ventana-binaria Abre instrucciones desde un símbolo o punto de entrada.
+  referencias-binario Verifica un informe de referencias entrantes.
   usuarios  Administra cuentas de acceso para el expediente PostgreSQL.
   actividad Consulta y exporta la actividad del expediente PostgreSQL.
   retener-actividad Previsualiza o aplica la retención de actividad respaldada.
@@ -86,6 +87,8 @@ func Run(args []string, stdout, stderr io.Writer, open func() (*caso.Store, erro
 		err = terminalBinaryCitation(args[1:], stdout, stderr, open)
 	case "ventana-binaria":
 		err = terminalBinaryWindow(args[1:], stdout, stderr, open)
+	case "referencias-binario":
+		err = terminalBinaryReferences(args[1:], stdout, stderr, open)
 	case "usuarios":
 		err = terminalSharedAccounts(args[1:], stdout, stderr, open)
 	case "actividad":
