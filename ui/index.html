@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>PAVAROTTI</title>
+  <link rel="icon" href="/icono.png">
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="brand"><img src="/icono.png" alt="" width="40" height="40"><h1>PAVAROTTI</h1></div>
+    <button id="credits">Créditos</button>
+  </header>
+  <main>
+    <aside>
+      <div class="intro">
+        <img class="portrait" src="/mascara.svg" alt="Máscara porcina en arte ASCII">
+        <h2>Expediente local</h2>
+        <p>Reúne evidencia y revisa señales para investigaciones de Blue Team.</p>
+      </div>
+      <section>
+        <h2>Proxy inverso</h2>
+        <p id="proxy-status">Consultando…</p>
+        <a id="proxy-link" target="_blank" rel="noopener" hidden>Abrir el destino mediante el proxy</a>
+      </section>
+      <section>
+        <h2>Incorporar evidencia</h2>
+        <form id="upload">
+          <label for="file-kind">Tipo de archivo</label>
+          <select id="file-kind" name="kind">
+            <option value="har">Captura de tráfico HAR</option>
+            <option value="hallazgos">Hallazgos JSON</option>
+            <option value="binario">Binario PE, ELF o Mach-O</option>
+          </select>
+          <label for="evidence">Archivo</label>
+          <input id="evidence" type="file" name="evidence" required>
+          <button class="primary">Analizar y guardar</button>
+        </form>
+        <button id="add-note" class="wide">Registrar nota</button>
+      </section>
+    </aside>
+    <div class="workspace">
+      <section aria-label="Resumen del expediente" class="totals">
+        <div><strong id="total">0</strong><span>Registros</span></div>
+        <div><strong id="traffic">0</strong><span>Respuestas HTTP</span></div>
+        <div><strong id="signals">0</strong><span>Señales</span></div>
+      </section>
+      <details id="distribution">
+        <summary>Distribución del tráfico observado</summary>
+        <dl id="groups"></dl>
+      </details>
+      <section class="record-list">
+        <div class="list-head">
+          <h2>Registros</h2>
+          <button id="refresh">Actualizar</button>
+        </div>
+        <div class="filters">
+          <input type="search" id="query" aria-label="Buscar en el expediente" placeholder="Buscar texto, origen, ID o SHA-256">
+          <select id="filter" aria-label="Filtrar por tipo">
+            <option value="">Todos los tipos</option>
+            <option value="tráfico">Proxy</option>
+            <option value="archivo HAR">HAR</option>
+            <option value="hallazgo">Hallazgos</option>
+            <option value="binario">Binarios</option>
+            <option value="nota">Notas</option>
+          </select>
+        </div>
+        <p role="status" id="status"></p>
+        <div id="records"></div>
+      </section>
+    </div>
+  </main>
+  <dialog id="credit-panel">
+    <h2>Créditos</h2>
+    <p id="version"></p>
+    <ul id="references"></ul>
+    <p><a href="/licencias/NOTICE" target="_blank" rel="noopener">Aviso de atribución</a> · <a href="/licencias/Apache-2.0.txt" target="_blank" rel="noopener">Licencia del código adaptado</a></p>
+    <form method="dialog"><button>Cerrar</button></form>
+  </dialog>
+  <dialog id="note-panel">
+    <h2>Registrar nota</h2>
+    <form id="note-form">
+      <label for="title">Título</label><input id="title" name="title" maxlength="160" required>
+      <label for="source">Origen o referencia</label><input id="source" name="source" maxlength="512">
+      <label for="details">Observación</label><textarea id="details" name="details" rows="5" maxlength="8000" required></textarea>
+      <p id="note-error" role="alert"></p>
+      <div class="actions"><button id="note-cancel" type="button">Cancelar</button><button class="primary">Guardar nota</button></div>
+    </form>
+  </dialog>
+</body>
+</html>

@@ -1,0 +1,17 @@
+[
+  {
+    "name": "Ghidra",
+    "url": "https://github.com/NationalSecurityAgency/ghidra",
+    "detail": "Referencia de triaje de binarios. Proyecto de la National Security Agency."
+  },
+  {
+    "name": "ARTEX",
+    "url": "https://github.com/BaaRai/ARTEX",
+    "detail": "Referencia del formato de intercambio de hallazgos. Autumn-27 y BaaRai."
+  },
+  {
+    "name": "ZAP",
+    "url": "https://github.com/zaproxy/zaproxy",
+    "detail": "Estadísticas HTTP pasivas adaptadas de StatsPassiveScanner.java. Copyright 2016 The ZAP Development Team, Apache-2.0."
+  }
+]
