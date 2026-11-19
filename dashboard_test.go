@@ -110,6 +110,45 @@ func TestProxyObservaDestinoConfigurado(t *testing.T) {
 	}
 }
 
+func TestEdicionAnalisisYRevision(t *testing.T) {
+	const host = "127.0.0.1:7000"
+	store, err := caso.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := dashboard(host, settings{}, store)
+	call := func(method, path, body string, expected int) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(method, "http://"+host+path, strings.NewReader(body))
+		req.Header.Set("Origin", "http://"+host)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		if rec.Code != expected {
+			t.Fatalf("%s %s: %d, esperado %d · %s", method, path, rec.Code, expected, rec.Body)
+		}
+		return rec
+	}
+	call("POST", "/api/nota", `{"title":"Inspección","details":"Una revisión","source":"https://example.invalid"}`, 200)
+	var records []caso.Record
+	if err := json.Unmarshal(call("GET", "/api/registro", "", 200).Body.Bytes(), &records); err != nil || len(records) != 1 {
+		t.Fatalf("registro: %v, %v", records, err)
+	}
+	path := "/api/nota/" + records[0].ID
+	body := `{"title":"Inspección manual","details":"La segunda revisión","source":"https://example.invalid","revision":1}`
+	call("PATCH", path, body, 200)
+	call("PATCH", path, body, 409)
+	history := call("GET", path+"/historial", "", 200).Body.String()
+	if !strings.Contains(history, "Una revisión") || strings.Contains(history, "segunda revisión") {
+		t.Fatal(history)
+	}
+	code := "package demo\nimport \"net/http\"\nfunc check() { http.Get(\"https://example.invalid\") }"
+	call("POST", "/api/archivo/codigo", code, 200)
+	data := call("POST", "/api/analisis", "", 200).Body.String()
+	if !strings.Contains(data, "example.invalid") || !strings.Contains(data, records[0].ID) {
+		t.Fatal(data)
+	}
+}
+
 func TestInspeccionBinario(t *testing.T) {
 	file, err := os.Executable()
 	if err != nil {

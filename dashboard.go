@@ -3,26 +3,31 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"slices"
 	"strings"
 
+	"pavarotti/internal/analisis"
 	"pavarotti/internal/caso"
-	"pavarotti/internal/trafico"
-	"pavarotti/internal/triaje"
+	"pavarotti/internal/ingesta"
 )
 
 //go:embed ui/* licenses/*
 var resources embed.FS
 
-const uploadLimit = 32 << 20
-
 type settings struct {
 	Version string `json:"version"`
 	Proxy   string `json:"proxy,omitempty"`
 	Target  string `json:"target,omitempty"`
+}
+
+type noteInput struct {
+	Title    string `json:"title"`
+	Source   string `json:"source"`
+	Details  string `json:"details"`
+	Revision int    `json:"revision"`
 }
 
 func dashboard(host string, config settings, store *caso.Store) http.Handler {
@@ -54,63 +59,96 @@ func dashboard(host string, config settings, store *caso.Store) http.Handler {
 		respond(w, records)
 	})
 	mux.HandleFunc("POST /api/archivo/{tipo}", func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, uploadLimit)
-		data, err := io.ReadAll(r.Body)
+		records, err := ingesta.Parse(r.PathValue("tipo"), r.Body)
 		if err != nil {
-			http.Error(w, "No se pudo leer el archivo. Límite: 32 MiB.", http.StatusBadRequest)
-			return
-		}
-		var records []caso.Record
-		switch r.PathValue("tipo") {
-		case "har":
-			records, err = trafico.ImportHAR(data)
-		case "hallazgos":
-			records, err = caso.Findings(data)
-		case "binario":
-			if len(data) == 0 {
-				http.Error(w, "El archivo está vacío", http.StatusBadRequest)
+			if errors.Is(err, ingesta.ErrSize) {
+				http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
 				return
 			}
-			result := triaje.Inspect(data)
-			details, _ := json.MarshalIndent(result, "", "  ")
-			records = []caso.Record{{Kind: "binario", Time: caso.Now(), Title: result.Format,
-				SHA256: result.SHA256, Details: string(details)}}
-		default:
-			http.NotFound(w, r)
-			return
-		}
-		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		save(w, store, records)
 	})
 	mux.HandleFunc("POST /api/nota", func(w http.ResponseWriter, r *http.Request) {
-		var note struct {
-			Title   string `json:"title"`
-			Source  string `json:"source"`
-			Details string `json:"details"`
-		}
+		var note noteInput
 		r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
-		if err := json.NewDecoder(r.Body).Decode(&note); err != nil || strings.TrimSpace(note.Title) == "" ||
-			len(note.Title) > 160 || strings.TrimSpace(note.Details) == "" {
+		if err := json.NewDecoder(r.Body).Decode(&note); err != nil {
 			http.Error(w, "Introduce un título y una nota", http.StatusBadRequest)
 			return
 		}
-		save(w, store, []caso.Record{{Kind: "nota", Time: caso.Now(), Title: strings.TrimSpace(note.Title),
-			Source: strings.TrimSpace(note.Source), Details: strings.TrimSpace(note.Details)}})
+		record, err := ingesta.Nota(note.Title, note.Source, note.Details)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		save(w, store, []caso.Record{record})
+	})
+	mux.HandleFunc("PATCH /api/nota/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var note noteInput
+		r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+		if err := json.NewDecoder(r.Body).Decode(&note); err != nil {
+			http.Error(w, "Nota inválida", http.StatusBadRequest)
+			return
+		}
+		record, err := store.Edit(r.PathValue("id"), note.Revision, note.Title, note.Source, note.Details)
+		if err != nil {
+			editError(w, err)
+			return
+		}
+		respond(w, record)
+	})
+	mux.HandleFunc("GET /api/nota/{id}/historial", func(w http.ResponseWriter, r *http.Request) {
+		records, err := store.History(r.PathValue("id"))
+		if err != nil {
+			editError(w, err)
+			return
+		}
+		respond(w, records)
+	})
+	mux.HandleFunc("POST /api/analisis", func(w http.ResponseWriter, r *http.Request) {
+		records, err := store.Records()
+		if err == nil {
+			var report analisis.Report
+			report, err = analisis.Analyze(r.Context(), records)
+			if err == nil {
+				respond(w, map[string]any{"report": report, "text": report.Text()})
+				return
+			}
+			if errors.Is(err, analisis.ErrLimit) {
+				http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+				return
+			}
+		}
+		http.Error(w, "No se pudo analizar el expediente", http.StatusInternalServerError)
 	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Cache-Control", "no-store")
-		if r.Host != host || (r.Method == http.MethodPost && r.Header.Get("Origin") != "http://"+host) {
+		mutating := r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions
+		if r.Host != host || (mutating && r.Header.Get("Origin") != "http://"+host) {
 			http.Error(w, "Origen incorrecto", http.StatusForbidden)
 			return
 		}
 		mux.ServeHTTP(w, r)
 	})
+}
+
+func editError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, caso.ErrNotFound):
+		http.Error(w, "Registro inexistente", http.StatusNotFound)
+	case errors.Is(err, caso.ErrRevisionConflict):
+		http.Error(w, "La nota cambió. Actualiza el expediente antes de editar de nuevo.", http.StatusConflict)
+	case errors.Is(err, caso.ErrReadOnly):
+		http.Error(w, "La evidencia importada está protegida", http.StatusForbidden)
+	case errors.Is(err, caso.ErrInvalidEdit):
+		http.Error(w, "Introduce una nota válida y su número de revisión", http.StatusBadRequest)
+	default:
+		http.Error(w, "No se pudo guardar o leer la nota", http.StatusInternalServerError)
+	}
 }
 
 func respond(w http.ResponseWriter, data any) {

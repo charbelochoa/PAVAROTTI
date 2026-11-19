@@ -49,6 +49,10 @@ footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2re
 #record-detail { max-height: 75vh; overflow: auto; margin-top: .6rem; overflow-wrap: anywhere; }
 #record-detail h3 { margin: .4rem 0; }
 #record-detail p { margin-top: .4rem; }
+.tools { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .6rem; }
+.tools[hidden] { display: none; }
+#report-panel { width: min(840px, calc(100vw - 2rem)); }
+#report-text { max-height: 62vh; overflow: auto; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: #ddd2cc; }
 #groups { display: grid; grid-template-columns: max-content 1fr; gap: .4rem .8rem; }
 #groups dd { margin: 0; color: var(--dim); }

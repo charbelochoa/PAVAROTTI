@@ -22,33 +22,84 @@ import (
 	"pavarotti/internal/trafico"
 )
 
-const version = "0.2.0"
+const version = "0.3.0"
 
 func main() {
 	directory := flag.String("datos", "", "carpeta del expediente local")
+	postgres := flag.String("postgres", os.Getenv("PAVAROTTI_POSTGRES"), "DSN PostgreSQL")
+	caseName := flag.String("expediente", "principal", "nombre del expediente en PostgreSQL")
+	publishPort := flag.Int("publicar-local", 0, "puerto del host para la interfaz en Docker")
 	upstream := flag.String("destino", "", "origen HTTP(S) del proxy inverso")
 	proxyPort := flag.Int("puerto-proxy", 0, "puerto local del proxy")
 	uiPort := flag.Int("puerto-app", 0, "puerto local de la interfaz")
 	noBrowser := flag.Bool("sin-navegador", false, "muestra la URL local en la terminal")
 	showVersion := flag.Bool("version", false, "muestra la versión")
-	flag.Parse()
+	args := os.Args[1:]
+	if len(args) > 0 && args[0] == "servir" {
+		args = args[1:]
+	}
+	if err := flag.CommandLine.Parse(args); err != nil {
+		log.Fatal(err)
+	}
 	if *showVersion {
 		fmt.Println("PAVAROTTI " + version)
 		return
 	}
-	if *directory == "" {
+	openStore := func() (*caso.Store, error) {
+		if *postgres != "" {
+			dsn, err := databaseURL(*postgres, os.Getenv("PAVAROTTI_DB_PASSWORD"))
+			if err != nil {
+				return nil, err
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+			defer cancel()
+			return caso.OpenPostgres(ctx, dsn, *caseName)
+		}
+		if *directory != "" {
+			return caso.Open(*directory)
+		}
 		config, err := os.UserConfigDir()
+		if err != nil {
+			return nil, err
+		}
+		return caso.Open(filepath.Join(config, "PAVAROTTI", "expediente"))
+	}
+	if args := flag.Args(); len(args) > 0 && args[0] != "servir" {
+		handled, err := terminal(args, os.Stdout, os.Stderr, openStore)
 		if err != nil {
 			log.Fatal(err)
 		}
-		*directory = filepath.Join(config, "PAVAROTTI", "expediente")
+		if !handled {
+			log.Fatal("comando desconocido. Consulta pavarotti ayuda")
+		}
+		return
+	} else if len(args) > 1 {
+		log.Fatal("coloca las opciones de servir antes del comando")
 	}
-	if err := run(*directory, *upstream, *uiPort, *proxyPort, !*noBrowser); err != nil {
+	store, err := openStore()
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = run(store, *upstream, *uiPort, *proxyPort, *publishPort, !*noBrowser)
+	if err := errors.Join(err, store.Close()); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(directory, upstream string, uiPort, proxyPort int, browser bool) error {
+func databaseURL(dsn, password string) (string, error) {
+	if password == "" {
+		return dsn, nil
+	}
+	parsed, err := url.Parse(dsn)
+	if err != nil || parsed.User == nil || parsed.User.Username() == "" ||
+		(parsed.Scheme != "postgresql" && parsed.Scheme != "postgres") {
+		return "", errors.New("la conexión con contraseña de entorno requiere una URL PostgreSQL con usuario")
+	}
+	parsed.User = url.UserPassword(parsed.User.Username(), password)
+	return parsed.String(), nil
+}
+
+func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int, browser bool) error {
 	var target *url.URL
 	if upstream != "" {
 		var err error
@@ -57,20 +108,26 @@ func run(directory, upstream string, uiPort, proxyPort int, browser bool) error 
 			return err
 		}
 	}
-	store, err := caso.Open(directory)
-	if err != nil {
-		return err
+	bind := "127.0.0.1"
+	if publishPort != 0 {
+		if publishPort < 1 || publishPort > 65535 || uiPort == 0 {
+			return errors.New("la publicación local requiere puertos válidos y un puerto de aplicación fijo")
+		}
+		bind = "0.0.0.0"
 	}
-	app, err := listen(uiPort)
+	app, err := listen(bind, uiPort)
 	if err != nil {
 		return err
 	}
 	defer app.Close()
 	appAddress := app.Addr().String()
+	if publishPort != 0 {
+		appAddress = net.JoinHostPort("127.0.0.1", strconv.Itoa(publishPort))
+	}
 	config := settings{Version: version}
 	servers := make(map[net.Listener]*http.Server)
 	if target != nil {
-		proxy, err := listen(proxyPort)
+		proxy, err := listen("127.0.0.1", proxyPort)
 		if err != nil {
 			return err
 		}
@@ -110,8 +167,8 @@ func run(directory, upstream string, uiPort, proxyPort int, browser bool) error 
 	}
 }
 
-func listen(port int) (net.Listener, error) {
-	return net.Listen("tcp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+func listen(bind string, port int) (net.Listener, error) {
+	return net.Listen("tcp4", net.JoinHostPort(bind, strconv.Itoa(port)))
 }
 
 func newServer(handler http.Handler) *http.Server {

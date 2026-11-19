@@ -14,6 +14,7 @@
     <div class="brand"><img src="/icono.png" alt="" width="40" height="40"><h1>PAVAROTTI</h1></div>
     <nav aria-label="Herramientas del expediente">
       <button id="refresh">Actualizar</button>
+      <button id="analyze">Analizar expediente</button>
       <button id="add-note">Registrar nota</button>
       <button id="credits">Créditos</button>
     </nav>
@@ -38,6 +39,7 @@
             <option value="har">Captura de tráfico HAR</option>
             <option value="hallazgos">Hallazgos JSON</option>
             <option value="binario">Binario PE, ELF o Mach-O</option>
+            <option value="codigo">Revisión de archivo Go</option>
           </select>
           <label for="evidence">Archivo</label>
           <input id="evidence" type="file" name="evidence" required>
@@ -65,6 +67,7 @@
             <option value="archivo HAR">HAR</option>
             <option value="hallazgo">Hallazgos</option>
             <option value="binario">Binarios</option>
+            <option value="código">Código</option>
             <option value="nota">Notas</option>
           </select>
         </div>
@@ -73,6 +76,10 @@
     </div>
     <section aria-label="Detalle de la selección" id="inspector">
       <h2>Inspector de evidencia</h2>
+      <div class="tools" id="note-tools" hidden>
+        <button id="edit-note">Editar nota</button>
+        <button id="history">Historial</button>
+      </div>
       <div id="record-detail"><p>Selecciona un registro para examinarlo.</p></div>
     </section>
   </main>
@@ -85,7 +92,7 @@
     <form method="dialog"><button>Cerrar</button></form>
   </dialog>
   <dialog id="note-panel">
-    <h2>Registrar nota</h2>
+    <h2 id="note-title">Registrar nota</h2>
     <form id="note-form">
       <label for="title">Título</label><input id="title" name="title" maxlength="160" required>
       <label for="source">Origen o referencia</label><input id="source" name="source" maxlength="512">
@@ -93,6 +100,11 @@
       <p id="note-error" role="alert"></p>
       <div class="actions"><button id="note-cancel" type="button">Cancelar</button><button class="primary">Guardar nota</button></div>
     </form>
+  </dialog>
+  <dialog id="report-panel">
+    <h2 id="report-title">Análisis del expediente</h2>
+    <pre id="report-text"></pre>
+    <form method="dialog"><button>Cerrar</button></form>
   </dialog>
 </body>
 </html>

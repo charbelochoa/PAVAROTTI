@@ -38,6 +38,7 @@ type Group struct {
 }
 
 type Evidence struct {
+	ID       string `json:"id,omitempty"`
 	Kind     string `json:"kind"`
 	Time     string `json:"time"`
 	Title    string `json:"title"`
@@ -77,7 +78,7 @@ func Analyze(ctx context.Context, records []caso.Record) (Report, error) {
 		}
 		date, _ := time.Parse(time.RFC3339Nano, record.Time)
 		observations = append(observations, observation{record: record, date: date, ref: Evidence{
-			Kind: clip(record.Kind, 64), Time: clip(record.Time, 48), Title: clip(record.Title, 160),
+			ID: clip(record.ID, 160), Kind: clip(record.Kind, 64), Time: clip(record.Time, 48), Title: clip(record.Title, 160),
 			SourceID: clip(record.SourceID, 160), SHA256: digest(record.SHA256),
 		}})
 	}
@@ -144,7 +145,7 @@ func (r Report) Text() string {
 
 func (e Evidence) text() string {
 	fields := []string{e.Time, e.Kind, e.Title}
-	for _, value := range []string{e.SourceID, e.SHA256} {
+	for _, value := range []string{e.ID, e.SourceID, e.SHA256} {
 		if value != "" {
 			fields = append(fields, value)
 		}
