@@ -69,20 +69,16 @@ func ListNetworkObservations(ctx context.Context, store *caso.Store, value, afte
 	return page, nil
 }
 
-func collectAssetInput(ctx context.Context, store *caso.Store, key AssetKey, period *utcPeriod, sources bool) ([]assetInput, error) {
+func collectAssetInput(ctx context.Context, store *caso.Store, key AssetKey, period *caso.EvidencePeriod, sources bool) ([]assetInput, error) {
 	network := parseAssetNetwork(key.Value)
 	address, _ := netip.ParseAddr(key.Value)
 	var inputs []assetInput
-	scanned, size := 0, 0
-	err := store.Walk(ctx, func(record caso.Record) error {
-		if scanned == RecordLimit {
-			return ErrLimit
-		}
-		scanned++
-		stamp, err := time.Parse(time.RFC3339Nano, record.Time)
-		if period != nil && (err != nil || !period.includes(stamp)) {
-			return nil
-		}
+	filter := caso.EvidenceFilter{}
+	if period != nil {
+		filter.Periods = []caso.EvidencePeriod{*period}
+	}
+	size := 0
+	err := store.WalkFiltered(ctx, filter, func(record caso.Record) error {
 		var in assetInput
 		if sources {
 			in.Reference.Role, in.Reference.Network = assetSource(record, key, address)
@@ -93,6 +89,10 @@ func collectAssetInput(ctx context.Context, store *caso.Store, key AssetKey, per
 		if in.Reference.Role == "" && len(in.Addresses) == 0 {
 			return nil
 		}
+		if len(inputs) == RecordLimit {
+			return ErrLimit
+		}
+		stamp, _ := time.Parse(time.RFC3339Nano, record.Time)
 		in.Reference.Evidence, in.stamp = reference(record), stamp
 		data, err := json.Marshal(in)
 		if err != nil {

@@ -93,7 +93,7 @@ func assetError(w http.ResponseWriter, err error) {
 	case errors.Is(err, caso.ErrNotFound):
 		http.Error(w, "Activo inexistente en el expediente", http.StatusNotFound)
 	case errors.Is(err, analisis.ErrLimit):
-		http.Error(w, "El inventario admite hasta 10000 registros por expediente", http.StatusUnprocessableEntity)
+		http.Error(w, "La consulta de activos supera el límite de 10000 registros", http.StatusUnprocessableEntity)
 	case errors.Is(err, analisis.ErrSnapshotBytes):
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 	default:
