@@ -13,6 +13,7 @@
   <script src="/app.js" defer></script>
   <script src="/http-comparison.js" defer></script>
   <script src="/asset-coverage.js" defer></script>
+  <script src="/binary-reference-comparison.js" defer></script>
 </head>
 <body>
   <header>
@@ -119,6 +120,7 @@
           </select>
           <button id="open-asset-coverage" hidden>Cobertura por periodo</button>
           <button id="open-binary-citation" title="Abrir cita o informe de referencias" hidden>Abrir cita JSON</button>
+          <button id="open-binary-reference-comparison" hidden>Comparar informes</button>
           <input id="binary-citation-file" type="file" accept=".json,application/json" aria-label="Cita de binario" hidden>
         </div>
         <div class="filters http-filters" id="http-filters" role="group" aria-label="Filtros del historial HTTP" hidden>
@@ -293,6 +295,42 @@
     <input type="file" id="asset-coverage-file" accept=".json,application/json" aria-label="Informe de cobertura de activos" hidden>
     <p id="asset-coverage-status" role="status"></p>
     <div id="asset-coverage-result" hidden></div>
+  </dialog>
+  <dialog id="binary-reference-comparison" aria-labelledby="binary-reference-comparison-title">
+    <div class="comparison-heading">
+      <h2 id="binary-reference-comparison-title">Comparar informes de referencias</h2>
+      <form method="dialog"><button>Cerrar</button></form>
+    </div>
+    <form id="binary-reference-comparison-form">
+      <div class="binary-comparison-files">
+        <label>Informe base<input name="base" type="file" accept=".json,application/json" required></label>
+        <label>Informe actual<input name="actual" type="file" accept=".json,application/json" required></label>
+        <label>Archivo binario original<input name="archivo" type="file" required></label>
+      </div>
+      <div class="tools">
+        <button class="primary">Comparar</button>
+        <button type="button" id="binary-reference-comparison-export" hidden>Exportar JSON</button>
+      </div>
+    </form>
+    <p id="binary-reference-comparison-status" role="status"></p>
+    <div id="binary-reference-comparison-result" hidden>
+      <p id="binary-reference-comparison-destination"></p>
+      <p id="binary-reference-comparison-totals"></p>
+      <label class="binary-image">Orígenes por estado
+        <select id="binary-reference-comparison-filter">
+          <option value="">Todos</option>
+          <option value="agregado">Agregados</option>
+          <option value="ausente">Ausentes del informe actual</option>
+          <option value="comun">Comunes</option>
+        </select>
+      </label>
+      <ul id="binary-reference-comparison-rows" class="binary-list"></ul>
+      <div class="pager" id="binary-reference-comparison-pager">
+        <button id="binary-reference-comparison-previous">Anterior</button>
+        <output id="binary-reference-comparison-page"></output>
+        <button id="binary-reference-comparison-next">Siguiente</button>
+      </div>
+    </div>
   </dialog>
   <dialog id="triage-panel" aria-labelledby="triage-title">
     <h2 id="triage-title">Clasificar señal</h2>
