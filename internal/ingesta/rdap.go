@@ -77,7 +77,7 @@ func parseRDAP(data []byte) ([]caso.Record, error) {
 }
 
 func (object rdapObject) record(path, hash, stamp string) (caso.Record, error) {
-	var title string
+	var title, network string
 	var sources, details []string
 	if len(object.Nameservers) > 31 || len(object.Status) > 32 || len(object.Events) > 64 ||
 		!boundedText(object.Handle, 253) {
@@ -107,7 +107,8 @@ func (object rdapObject) record(path, hash, stamp string) (caso.Record, error) {
 			!(object.IPVersion == "v4" && start.Is4() || object.IPVersion == "v6" && start.Is6()) {
 			return caso.Record{}, errors.New("rango o versión IP RDAP inválidos")
 		}
-		title = "Red · " + start.String() + " – " + end.String()
+		network = start.String() + " – " + end.String()
+		title = "Red · " + network
 		if !boundedText(object.Name, 253) || !boundedText(object.Country, 2) {
 			return caso.Record{}, errors.New("nombre o país de red RDAP inválido")
 		}
@@ -140,7 +141,7 @@ func (object rdapObject) record(path, hash, stamp string) (caso.Record, error) {
 		details = append(details, event.Action+" · "+date.UTC().Format(time.RFC3339Nano))
 	}
 	return caso.Record{Kind: "rdap", Time: stamp, Title: title, Source: strings.Join(sources, ", "),
-		SourceID: path, SHA256: hash, Details: strings.Join(details, "\n")}, nil
+		SourceID: path, SHA256: hash, Details: strings.Join(details, "\n"), Network: network}, nil
 }
 
 func boundedText(value string, maximum int) bool {
