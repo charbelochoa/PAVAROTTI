@@ -143,3 +143,67 @@ func TestAuditFailureRollsBackMutation(t *testing.T) {
 		t.Fatalf("actividad tras el fallo: %+v, %v", page, err)
 	}
 }
+
+func TestAuditTracksActualQueueTransitions(t *testing.T) {
+	store := openAuditTest(t)
+	ctx := t.Context()
+	actor := store.AuditContext(ctx, SharedAccount{Name: "analista", Role: SharedAnalyst})
+	fingerprint := Hash([]byte("carga de prueba"))
+	enqueue := func(priority int) AnalysisJob {
+		t.Helper()
+		job, err := store.EnqueueAnalysis(actor, fingerprint, "audit-test", priority, json.RawMessage(`{"data":"temporal"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return job
+	}
+	job := enqueue(0)
+	if again := enqueue(0); again.ID != job.ID {
+		t.Fatalf("tarea repetida: %+v", again)
+	}
+	if higher := enqueue(2); higher.ID != job.ID || higher.Priority != 2 {
+		t.Fatalf("prioridad: %+v", higher)
+	}
+	claimed, found, err := store.ClaimAnalysis(ctx, "audit-test")
+	if err != nil || !found || claimed.Job.ID != job.ID {
+		t.Fatalf("asignación: %+v, %v, %v", claimed, found, err)
+	}
+	if err := store.RenewAnalysis(ctx, claimed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CancelAnalysis(actor, job.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CancelAnalysis(actor, job.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.FinishAnalysis(ctx, claimed, json.RawMessage(`{"finished":true}`), ""); !errors.Is(err, ErrJobState) {
+		t.Fatalf("ejecutor cancelado: %v", err)
+	}
+	next := enqueue(1)
+	claimed, found, err = store.ClaimAnalysis(ctx, "audit-test")
+	if err != nil || !found || claimed.Job.ID != next.ID || next.ID == job.ID {
+		t.Fatalf("asignación posterior: %+v, %v, %v", claimed, found, err)
+	}
+	if err := store.FinishAnalysis(ctx, claimed, json.RawMessage(`{"finished":true}`), ""); err != nil {
+		t.Fatal(err)
+	}
+	if again := enqueue(2); again.ID != next.ID || again.State != "succeeded" {
+		t.Fatalf("reutilización del informe: %+v", again)
+	}
+	page, err := store.AuditPage(ctx, 0, 50)
+	expected := []string{AuditFinish, AuditStart, AuditQueue, AuditCancel, AuditStart, AuditPriority, AuditQueue}
+	if err != nil || len(page.Events) != len(expected) {
+		t.Fatalf("actividad de cola: %+v, %v", page, err)
+	}
+	for index, action := range expected {
+		if event := page.Events[index]; event.Action != action || event.Position != int64(len(expected)-index) {
+			t.Fatalf("evento %d: %+v", index, event)
+		}
+	}
+	if page.Events[0].Actor == "analista" || page.Events[0].Source != "postgres" || page.Events[0].Details.Status != "succeeded" ||
+		page.Events[3].Actor != "analista" || page.Events[3].Source != "sesion" || page.Events[3].Target != job.ID ||
+		page.Events[5].Details.Priority == nil || *page.Events[5].Details.Priority != 2 {
+		t.Fatalf("metadatos de cola: %+v", page.Events)
+	}
+}

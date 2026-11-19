@@ -18,6 +18,11 @@ const (
 	AuditNote     = "nota.creada"
 	AuditEdit     = "nota.editada"
 	AuditTriage   = "senal.clasificada"
+	AuditQueue    = "tarea.encolada"
+	AuditPriority = "tarea.priorizada"
+	AuditStart    = "tarea.iniciada"
+	AuditFinish   = "tarea.finalizada"
+	AuditCancel   = "tarea.cancelada"
 )
 
 type AuditDetails struct {
@@ -25,6 +30,8 @@ type AuditDetails struct {
 	Revision int         `json:"revision,omitempty"`
 	Finding  *FindingKey `json:"finding,omitempty"`
 	Status   string      `json:"status,omitempty"`
+	Priority *int        `json:"priority,omitempty"`
+	Attempt  int         `json:"attempt,omitempty"`
 }
 
 type AuditEvent struct {
