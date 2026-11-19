@@ -162,7 +162,7 @@ func (build *stixBuilder) add(record caso.Record) {
 	default:
 		if record.Indicator != nil {
 			key, valid := normalizeAsset(AssetKey(*record.Indicator))
-			if !valid {
+			if !valid || (key.Type == "dominio" && strings.Contains(key.Value, "_")) {
 				return
 			}
 			field := stixSCOType(key.Type) + ":value"
@@ -213,6 +213,9 @@ func (build *stixBuilder) observables(record caso.Record) []string {
 	hashes := make(map[string]string)
 	network := recordNetwork(record)
 	recordAssets(record, network, "", func(key AssetKey, _ string) {
+		if key.Type == "dominio" && strings.Contains(key.Value, "_") {
+			return
+		}
 		if kind := stixSCOType(key.Type); kind != "" {
 			ids = appendDistinct(ids, build.sco(&exchangeEntry{Type: kind, Value: key.Value}))
 		} else if algorithm := stixHashName(key.Type); algorithm != "" {
