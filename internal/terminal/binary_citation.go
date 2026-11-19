@@ -12,7 +12,7 @@ func terminalBinaryCitation(args []string, stdout, stderr io.Writer, open openEx
 	flags := terminalFlags("citar-binario", "citar-binario --id ID --revision N --tipo seccion|cadena|simbolo|instruccion --indice N [--salida archivo.json]", stderr)
 	id := flags.String("id", "", "identificador del registro")
 	revision := flags.Int("revision", 0, "revisión del registro")
-	kind := flags.String("tipo", "", "seccion, cadena o simbolo")
+	kind := flags.String("tipo", "", "seccion, cadena, simbolo o instruccion")
 	index := flags.Int("indice", -1, "posición en la lista a partir de 0")
 	output := flags.String("salida", "", "archivo JSON de salida")
 	if err := flags.Parse(args); err != nil {

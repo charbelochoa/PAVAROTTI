@@ -74,16 +74,15 @@ func Inspect(data []byte) Binary {
 					size = 0
 				}
 				index := result.add(image, section.Name, section.Addr, section.Size, section.Offset, size)
-				if decode != nil && section.Flags&elf.SHF_EXECINSTR != 0 && section.Flags&elf.SHF_COMPRESSED == 0 && size > 0 {
-					result.addInstructions(data, image, index, section.Addr, section.Offset, size, decode, file.Type != elf.ET_REL, maxBinaryInstructions)
+				if codeSize := elfCodeSize(section); decode != nil && codeSize != 0 {
+					result.addInstructions(data, image, index, section.Addr, section.Offset, codeSize, decode, file.Type != elf.ET_REL, maxBinaryInstructions)
 				}
 			}
 			result.elfSymbols(file, data)
 		}
 	case bytes.HasPrefix(data, []byte("MZ")):
 		if file, err := pe.NewFile(reader); err == nil {
-			bits := map[uint16]string{pe.IMAGE_FILE_MACHINE_AMD64: "x86-64", pe.IMAGE_FILE_MACHINE_I386: "x86", pe.IMAGE_FILE_MACHINE_ARM64: "ARM64"}
-			result.Format, result.Architecture = "PE", bits[file.Machine]
+			result.Format, result.Architecture = "PE", peArchitecture(file.Machine)
 			decode := peInstructionDecoder(file.Machine)
 			for _, section := range file.Sections {
 				size := section.Size
@@ -91,11 +90,8 @@ func Inspect(data []byte) Binary {
 					size = 0
 				}
 				index := result.add(image, section.Name, uint64(section.VirtualAddress), uint64(section.VirtualSize), uint64(section.Offset), uint64(size))
-				if decode != nil && section.Characteristics&pe.IMAGE_SCN_MEM_EXECUTE != 0 && size > 0 {
-					if section.VirtualSize != 0 {
-						size = min(size, section.VirtualSize)
-					}
-					result.addInstructions(data, image, index, uint64(section.VirtualAddress), uint64(section.Offset), uint64(size), decode, true, maxBinaryInstructions)
+				if codeSize := peCodeSize(section); decode != nil && codeSize != 0 {
+					result.addInstructions(data, image, index, uint64(section.VirtualAddress), uint64(section.Offset), codeSize, decode, true, maxBinaryInstructions)
 				}
 			}
 			result.peExports(file, data)
@@ -113,6 +109,19 @@ func Inspect(data []byte) Binary {
 		result.Strings = printableStrings(data, 0, maxBinaryStrings)
 	}
 	return result
+}
+
+func peArchitecture(machine uint16) string {
+	switch machine {
+	case pe.IMAGE_FILE_MACHINE_AMD64:
+		return "x86-64"
+	case pe.IMAGE_FILE_MACHINE_I386:
+		return "x86"
+	case pe.IMAGE_FILE_MACHINE_ARM64:
+		return "ARM64"
+	default:
+		return ""
+	}
 }
 
 func printableStrings(data []byte, base uint64, limit int) []TextHit {

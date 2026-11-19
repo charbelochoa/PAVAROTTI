@@ -146,14 +146,22 @@ jobs:
           for image in kalilinux/kali-rolling archlinux:base; do
             docker run --rm --network none -v "$PWD/PAVAROTTI-Kali-x64:/opt/pavarotti:ro" -v "$samples:/samples:ro" "$image" /bin/sh -ec '
               /opt/pavarotti -datos /tmp/expediente importar binario /samples/muestra >&2
-              /opt/pavarotti -datos /tmp/expediente listar --tipo binario --json
+              /opt/pavarotti -datos /tmp/expediente listar --tipo binario --json >/tmp/binarios.json
+              id=$(sed -n "s/.*\"id\": \"\([0-9a-f-]*\)\".*/\1/p" /tmp/binarios.json)
+              /opt/pavarotti -datos /tmp/expediente ventana-binaria --archivo /samples/muestra \
+                --id "$id" --revision 1 --tipo entrada --indice 0 --solo-cita --salida /tmp/cita.json >&2
+              cat /tmp/binarios.json
+              /opt/pavarotti -datos /tmp/expediente ventana-binaria --archivo /samples/muestra --cita /tmp/cita.json
             ' > "$samples/instrucciones.json"
             python3 - "$samples/instrucciones.json" "$samples/muestra" <<'PY'
           import hashlib
           import json
           import sys
           from pathlib import Path
-          record, = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          payload = Path(sys.argv[1]).read_text(encoding="utf-8")
+          records, cursor = json.JSONDecoder().raw_decode(payload)
+          record, = records
+          window = json.loads(payload[cursor:])
           sample = Path(sys.argv[2]).read_bytes()
           assert record["sha256"] == hashlib.sha256(sample).hexdigest()
           first, middle, last = json.loads(record["details"])["instructions"]
@@ -161,6 +169,8 @@ jobs:
           assert middle["text"] == "nop" and last["text"] == "ret"
           offset = int(first["offset"], 16)
           assert first["bytes"] == sample[offset:offset+2].hex() == "eb01"
+          assert window["window"]["instructions"][0]["address"] == first["address"]
+          assert window["citation"]["offset"] == first["offset"] and window["citation"]["sha256"] == record["sha256"]
           PY
           done
       - name: Comparación de capturas en Kali y Arch
