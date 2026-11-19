@@ -10,13 +10,36 @@ import (
 const maxLocalSearchText = 16 << 10
 
 func (record Record) searchFields(yield func(string) bool) {
+	if !yield(record.ID) {
+		return
+	}
+	for field := range record.evidenceSearchFields {
+		if !yield(field) {
+			return
+		}
+	}
+	for field := range record.metadataSearchFields {
+		if !yield(field) {
+			return
+		}
+	}
+}
+
+func (record Record) evidenceSearchFields(yield func(string) bool) {
 	for field := range record.dependencySearchFields {
 		if !yield(field) {
 			return
 		}
 	}
-	for _, field := range [...]string{record.ID, record.Kind, record.Time, record.Title, record.Source,
-		record.SourceID, record.SHA256, record.Details} {
+	for _, field := range [...]string{record.Source, record.SourceID, record.Details} {
+		if !yield(field) {
+			return
+		}
+	}
+}
+
+func (record Record) metadataSearchFields(yield func(string) bool) {
+	for _, field := range [...]string{record.Kind, record.Time, record.Title, record.SHA256} {
 		if !yield(field) {
 			return
 		}
@@ -36,9 +59,9 @@ func (record Record) searchFields(yield func(string) bool) {
 	}
 }
 
-func localSearchText(record Record) (string, bool) {
+func localSearchText(fields func(func(string) bool)) (string, bool) {
 	var document strings.Builder
-	for field := range record.searchFields {
+	for field := range fields {
 		if field == "" {
 			continue
 		}
@@ -52,12 +75,14 @@ func localSearchText(record Record) (string, bool) {
 	return document.String(), false
 }
 
-func decodeSearchRows(key string, data []byte) ([]localPageEntry, error) {
+func decodeSearchRows(key string, data []byte) ([]localPageEntry, int, error) {
 	records, err := decodeBatch(key, data)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	rows := make([]localPageEntry, 0, len(records))
+	metadata := make(map[string]string)
+	weight := 0
 	for _, record := range records {
 		entry := localPageEntry{RecordRow: RecordRow{Kind: record.Kind, Time: record.Time, Title: record.Title,
 			Source: record.Source, SourceID: record.SourceID, Traffic: record.Traffic, SignalCount: len(record.Signals)}}
@@ -66,10 +91,19 @@ func decodeSearchRows(key string, data []byte) ([]localPageEntry, error) {
 				entry.rules = append(entry.rules, finding.Rule)
 			}
 		}
-		entry.document, entry.partial = localSearchText(record)
+		entry.document, entry.partial = localSearchText(record.evidenceSearchFields)
+		meta, partial := localSearchText(record.metadataSearchFields)
+		entry.partial = entry.partial || partial
+		shared, exists := metadata[meta]
+		if !exists {
+			shared = strings.Clone(meta)
+			metadata[shared] = shared
+			weight += len(shared)
+		}
+		entry.searchMetadata = shared
 		rows = append(rows, entry)
 	}
-	return rows, nil
+	return rows, weight, nil
 }
 
 func (s *Store) localSearchMatch(item localPageEntry, key, filename, term string, full *[]Record) (bool, error) {
@@ -82,7 +116,7 @@ func (s *Store) localSearchMatch(item localPageEntry, key, filename, term string
 			return matches(edits[len(edits)-1], term), nil
 		}
 	}
-	if strings.Contains(item.document, term) {
+	if strings.Contains(item.document, term) || strings.Contains(item.searchMetadata, term) || matchesPageID(key, item.ID, term) {
 		return true, nil
 	}
 	if !item.partial {
@@ -100,4 +134,12 @@ func (s *Store) localSearchMatch(item localPageEntry, key, filename, term string
 	}
 	ordinal, _ := strconv.Atoi(item.ID)
 	return matches((*full)[ordinal-1], term), nil
+}
+
+func matchesPageID(key, ordinal, term string) bool {
+	if strings.Contains(key, term) || strings.Contains(ordinal, term) {
+		return true
+	}
+	prefix, suffix, crosses := strings.Cut(term, "-")
+	return crosses && strings.HasSuffix(key, prefix) && strings.HasPrefix(ordinal, suffix)
 }

@@ -38,6 +38,8 @@ func TestLocalTextIndexKeepsLiteralSearchAndCurrentNotes(t *testing.T) {
 		return page
 	}
 	note := check(PageRequest{Search: "Título anterior"}, 1).Rows[0].ID
+	check(PageRequest{Search: note}, 1)
+	check(PageRequest{Search: note[61:]}, 1)
 	for _, item := range []struct {
 		query string
 		count int

@@ -32,9 +32,10 @@ type localPageBatch struct {
 
 type localPageEntry struct {
 	RecordRow
-	rules    []string
-	document string
-	partial  bool
+	rules          []string
+	document       string
+	searchMetadata string
+	partial        bool
 }
 
 func (cache *localPageCache) lookup(key string, info os.FileInfo, text bool) ([]localPageEntry, bool) {
@@ -71,15 +72,16 @@ func (s *Store) localPageBatch(key string, file os.DirEntry, text bool) ([]local
 		return nil, err
 	}
 	var rows []localPageEntry
+	var metadataWeight int
 	if text {
-		rows, err = decodeSearchRows(key, data)
+		rows, metadataWeight, err = decodeSearchRows(key, data)
 	} else {
 		rows, err = decodePageRows(data)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", file.Name(), err)
 	}
-	weight := 256
+	weight := 256 + metadataWeight
 	for index := range rows {
 		row := &rows[index]
 		row.ID = strconv.Itoa(index + 1)
@@ -90,7 +92,7 @@ func (s *Store) localPageBatch(key string, file os.DirEntry, text bool) ([]local
 		} else {
 			row.SourceID = ""
 		}
-		weight += 184 + len(row.ID) + len(row.Kind) + len(row.Time) + len(row.Title) + len(row.Source) + len(row.SourceID) + len(row.document)
+		weight += 200 + len(row.ID) + len(row.Kind) + len(row.Time) + len(row.Title) + len(row.Source) + len(row.SourceID) + len(row.document)
 		if row.Traffic != nil {
 			weight += 64 + len(row.Traffic.Method) + len(row.Traffic.Type)
 		}
