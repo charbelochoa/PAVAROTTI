@@ -37,7 +37,10 @@ func observeAt(origin, method string, status int, elapsed time.Duration, headers
 	if !observed.IsZero() {
 		entry.Time = observed.UTC().Format(time.RFC3339Nano)
 	}
-	entry.HTTPFindings = passiveFindings(origin, method, media, status, headers, observed)
+	if headers != nil && status >= 200 && status <= 599 {
+		entry.HTTPRuleSet = 1
+		entry.HTTPFindings = passiveFindings(origin, method, media, status, headers, observed)
+	}
 	for _, finding := range entry.HTTPFindings {
 		entry.Signals = append(entry.Signals, finding.Label)
 	}
@@ -56,7 +59,10 @@ func ImportHAR(input []byte) ([]caso.Record, error) {
 		if origin == "" || item.Resp.Status < 100 || item.Resp.Status > 599 {
 			continue
 		}
-		headers := make(http.Header)
+		var headers http.Header
+		if item.Resp.Headers != nil {
+			headers = make(http.Header)
+		}
 		for _, field := range item.Resp.Headers {
 			switch strings.ToLower(field.Name) {
 			case "content-type", "x-content-type-options", "strict-transport-security", "x-frame-options",
