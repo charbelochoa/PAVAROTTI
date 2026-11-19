@@ -25,7 +25,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | Docker Compose | Puerto alterno en loopback, espera de salud, registro por CLI y persistencia después de reiniciar. |
 | Proxy y HAR | Destino fijo local, redirecciones, captura de metadatos, protección de datos sensibles y distinción entre fallo de conexión y señales de cabeceras. |
 | Navegador | Selección e inspector, búsqueda, historial, carga de informes y uso con ancho móvil. Abrir una cita de un informe guardado tras editar la evidencia y comprobar su revisión. Desde una ficha de activo, abrir fuentes DNS, HTTP, RDAP y STIX. |
-| Revisión estática y dependencias | Localizar Go por línea y columna físicas. Consultar dependencias Go y npm por versión y posición. Comprobar las entradas límites y abrir sus citas desde un informe guardado. |
+| Revisión estática y dependencias | Localizar Go por línea y columna físicas. Consultar dependencias por versión y posición. Revisar un directorio, abrir la cita y conservar dos decisiones de triaje tras reiniciar y migrar a PostgreSQL. |
 
 `go test -count=1 ./...` ejecuta la suite local. Para incluir PostgreSQL, configura `PAVAROTTI_TEST_POSTGRES` con un servidor de pruebas separado. `go vet ./...` completa la revisión estática. CI construye y prueba las configuraciones de la matriz y comprueba avisos de dependencias con `govulncheck`.
 
@@ -48,7 +48,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 6. **Relaciones e informes.** 0.3.6 permite navegar las referencias STIX desde el inspector, conserva sus alternativas de procedencia y muestra los objetos pendientes de importar. Los informes nuevos citan los cruces SHA-256 y la cobertura de IP observadas por DNS o HTTP. El ejecutor admite las versiones 1 y 2 del análisis y conserva la huella de entrada de cada tarea.
 7. **Intercambio STIX.** 0.3.7 exporta observaciones, huellas, indicadores y relaciones compatibles con citas al ID, revisión y huella del expediente de origen. La prueba reimporta el paquete en otro expediente y vuelve a cargar el mismo archivo para comprobar la deduplicación. La exportación admite hasta 5,000 objetos y 32 MiB. La terminal puede acotar por tipo o búsqueda.
 8. **Revisión estática e inventario.** 0.3.8 amplía la revisión Go y lee `go.mod` y `package-lock.json` v2 y v3. Guarda reglas, líneas, columnas, versiones declaradas, reemplazos y huellas. Los informes del agente 3 abren la señal o dependencia citada. La prueba comprueba la recuperación de tareas pendientes del agente 2 y los límites de 250 señales guardadas y 5,000 entradas de manifiesto.
-9. **Flujo de revisión humana.** Admitir directorios seleccionados y registrar el estado y la justificación de cada señal. Probar que una clasificación se puede recuperar desde la evidencia y auditar después de una revisión.
+9. **Flujo de revisión humana.** 0.3.9 revisa directorios desde la mesa y el CLI, conserva las rutas relativas y presenta el resultado de cada archivo. Guarda el estado, fecha y justificación de cada señal con revisiones de triaje. Las pruebas verifican la recuperación tras reiniciar, la migración a PostgreSQL y el rechazo de escrituras con una revisión obsoleta.
 10. **Operación compartida.** Añadir autenticación, permisos, auditoría y restauración antes de abrir el acceso a otros equipos.
 11. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
 
