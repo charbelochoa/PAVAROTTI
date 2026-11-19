@@ -38,10 +38,16 @@ func (b *Binary) addInstructions(data []byte, image binaryImageRange, section in
 		return
 	}
 	start := image.offset + offset
-	code := data[start : start+size]
-	limit := min(budget, len(b.Instructions)+maxSectionInstructions)
+	limit := min(budget-len(b.Instructions), maxSectionInstructions)
+	var limited bool
+	b.Instructions, limited = appendInstructions(b.Instructions, data[start:start+size], section, address, start, decode, linked, limit)
+	b.InstructionsLimited = b.InstructionsLimited || limited
+}
+
+func appendInstructions(rows []Instruction, code []byte, section int, address, start uint64, decode instructionDecoder, linked bool, count int) ([]Instruction, bool) {
+	limit := len(rows) + count
 	position := 0
-	for position < len(code) && len(b.Instructions) < limit {
+	for position < len(code) && len(rows) < limit {
 		at := address + uint64(position)
 		length, text, target := decode(code[position:], at)
 		if length <= 0 || length > len(code)-position {
@@ -51,11 +57,38 @@ func (b *Binary) addInstructions(data []byte, image binaryImageRange, section in
 			target = ""
 		}
 		end := position + length
-		b.Instructions = append(b.Instructions, Instruction{Section: section, Address: hexAddress(at),
+		rows = append(rows, Instruction{Section: section, Address: hexAddress(at),
 			Offset: hexAddress(start + uint64(position)), Bytes: hex.EncodeToString(code[position:end]), Text: text, Target: target})
 		position = end
 	}
-	b.InstructionsLimited = b.InstructionsLimited || position < len(code)
+	return rows, position < len(code)
+}
+
+func elfCodeSize(section *elf.Section) uint64 {
+	if section.Type == elf.SHT_NOBITS || section.Type == elf.SHT_NULL ||
+		section.Flags&elf.SHF_EXECINSTR == 0 || section.Flags&elf.SHF_COMPRESSED != 0 {
+		return 0
+	}
+	return section.FileSize
+}
+
+func peCodeSize(section *pe.Section) uint64 {
+	if section.Offset == 0 || section.Characteristics&pe.IMAGE_SCN_MEM_EXECUTE == 0 {
+		return 0
+	}
+	size := section.Size
+	if section.VirtualSize != 0 {
+		size = min(size, section.VirtualSize)
+	}
+	return uint64(size)
+}
+
+func machOCodeSize(section *macho.Section) uint64 {
+	const hasInstructions = 0x80000400
+	if section.Flags&hasInstructions == 0 {
+		return 0
+	}
+	return machOFileSize(section)
 }
 
 func elfInstructionDecoder(file *elf.File) instructionDecoder {

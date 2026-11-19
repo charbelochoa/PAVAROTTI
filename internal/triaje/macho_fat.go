@@ -35,38 +35,44 @@ func (b *Binary) inspectMachO(data []byte, file *macho.File, image binaryImageRa
 	for _, section := range file.Sections[:sectionBudget] {
 		size := machOFileSize(section)
 		index := b.add(image, section.Seg+"/"+section.Name, section.Addr, section.Size, uint64(section.Offset), size)
-		const hasInstructions = 0x80000400
-		if decode != nil && section.Flags&hasInstructions != 0 && size > 0 {
-			b.addInstructions(data, image, index, section.Addr, uint64(section.Offset), size, decode, file.Type != macho.TypeObj, instructionBudget)
+		if codeSize := machOCodeSize(section); decode != nil && codeSize != 0 {
+			b.addInstructions(data, image, index, section.Addr, uint64(section.Offset), codeSize, decode, file.Type != macho.TypeObj, instructionBudget)
 		}
 	}
 	b.machOSymbols(file, image, len(b.Symbols)+(maxBinarySymbols-len(b.Symbols))/remaining)
 }
 
-func (b *Binary) inspectMachOFat(data []byte) {
-	headers := machOFatSlices(data)
-	var usable []struct {
-		header machOSlice
-		file   *macho.File
-	}
-	var architectures []string
+type parsedMachOSlice struct {
+	header machOSlice
+	file   *macho.File
+}
+
+func usableMachOSlices(data []byte, headers []machOSlice) []parsedMachOSlice {
+	var usable []parsedMachOSlice
 	for _, member := range headers {
 		reader := bytes.NewReader(data[member.offset : member.offset+member.size])
 		file, err := macho.NewFile(reader)
 		if err != nil || file.Cpu != member.cpu || file.SubCpu != member.subtype {
 			continue
 		}
-		usable = append(usable, struct {
-			header machOSlice
-			file   *macho.File
-		}{member, file})
-		label := file.Cpu.String()
+		member.index = len(usable) + 1
+		usable = append(usable, parsedMachOSlice{member, file})
+	}
+	return usable
+}
+
+func (b *Binary) inspectMachOFat(data []byte) {
+	headers := machOFatSlices(data)
+	usable := usableMachOSlices(data, headers)
+	if len(usable) == 0 {
+		return
+	}
+	var architectures []string
+	for _, member := range usable {
+		label := member.file.Cpu.String()
 		if !slices.Contains(architectures, label) {
 			architectures = append(architectures, label)
 		}
-	}
-	if len(usable) == 0 {
-		return
 	}
 	b.Format, b.Architecture = "Mach-O universal", strings.Join(architectures, " / ")
 	b.UnreadableImages = len(headers) - len(usable)
@@ -75,7 +81,6 @@ func (b *Binary) inspectMachOFat(data []byte) {
 		remaining := len(usable) - index
 		b.Images = append(b.Images, BinaryImage{Architecture: header.cpu.String(), Subtype: fmt.Sprintf("0x%x", header.subtype),
 			File: FileRange{Offset: fmt.Sprintf("0x%x", header.offset), Size: header.size}})
-		header.index = len(b.Images)
 		b.inspectMachO(data, member.file, header.binaryImageRange, remaining)
 		hits := printableStrings(data[header.offset:header.offset+header.size], header.offset, (maxBinaryStrings-len(b.Strings))/remaining)
 		b.Strings = append(b.Strings, hits...)
