@@ -42,9 +42,10 @@ type BinaryWindowCitation struct {
 }
 
 type BinaryWindowReport struct {
-	Citation BinaryWindowCitation     `json:"citation"`
-	Window   triaje.InstructionWindow `json:"window"`
-	Name     string                   `json:"name"`
+	Citation       BinaryWindowCitation     `json:"citation"`
+	Window         triaje.InstructionWindow `json:"window"`
+	Name           string                   `json:"name"`
+	EntryAmbiguous bool                     `json:"entry_ambiguous,omitempty"`
 }
 
 type binaryWindowEvidence struct {
@@ -135,7 +136,8 @@ func (evidence *binaryWindowEvidence) window(ctx context.Context, request Binary
 	}
 	citation := BinaryWindowCitation{Schema: BinaryWindowSchema, BinaryWindowRequest: request, SHA256: evidence.record.SHA256,
 		InspectionSHA256: evidence.inspectionHash, WindowSHA256: caso.Hash(encoded), Image: image, Address: first.Address, Offset: first.Offset}
-	return BinaryWindowReport{Citation: citation, Window: window, Name: name}, nil
+	return BinaryWindowReport{Citation: citation, Window: window, Name: name,
+		EntryAmbiguous: request.Kind == "simbolo" && window.Origin == nil && !decoded.MatchesLocation(first.Address, first.Offset)}, nil
 }
 
 func (evidence *binaryWindowEvidence) readSample(ctx context.Context) error {

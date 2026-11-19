@@ -90,3 +90,26 @@ test("preserves window hashes and selected rows when restored references are exp
   const location = locationFor(result[0]);
   for (const [field, value] of Object.entries(origin)) assert.equal(location[field], value);
 });
+
+test("matches symbol aliases by address and physical offset within their own image", () => {
+  const sections = [{image: 1}, {image: 2}];
+  const index = indexReferences(entries([
+    jump("0x1000", "0x100", "0x1040"), target("0x1040", "0x140"),
+    jump("0x1000", "0x300", "0x1040", 1), target("0x1040", "0x340", 1)
+  ], sections));
+  const symbol = {name: "entry", address: "0x1040", offset: "0x140", image: 1};
+  for (const name of [symbol.name, "alias"]) {
+    const result = index.forSymbol({...symbol, name});
+    assert.equal(result.rows.length, 1);
+    assert.equal(result.rows[0].instruction.offset, "0x100");
+  }
+  const second = index.forSymbol({...symbol, image: 2, offset: "0x340"});
+  assert.equal(second.rows.length, 1);
+  assert.equal(second.rows[0].instruction.offset, "0x300");
+  const ambiguous = index.forSymbol({...symbol, offset: "0x340"});
+  assert.equal(ambiguous.ambiguous, true);
+  assert.equal(ambiguous.rows.length, 0);
+  for (const attributes of [{forwarder: "DLL.Entry"}, {offset: ""}, {image: "1"}]) {
+    assert.equal(index.forSymbol({...symbol, ...attributes}).rows.length, 0);
+  }
+});

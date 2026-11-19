@@ -99,6 +99,31 @@ func saveWindowFixture(t *testing.T, store *caso.Store) ([]byte, string) {
 	return sample, saveWindowSample(t, store, sample)
 }
 
+func TestSymbolWindowIdentifiesAmbiguousExecutableAddress(t *testing.T) {
+	store, err := caso.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	sample := append(windowFixturePE(t), make([]byte, 0x200)...)
+	order := binary.LittleEndian
+	order.PutUint16(sample[0x86:], 2)
+	section := sample[0x98+binary.Size(pe.OptionalHeader64{})+40:]
+	copy(section, ".mirror")
+	order.PutUint32(section[8:], 0x10)
+	order.PutUint32(section[12:], 0x112c)
+	order.PutUint32(section[16:], 0x10)
+	order.PutUint32(section[20:], 0x500)
+	order.PutUint32(section[36:], pe.IMAGE_SCN_MEM_EXECUTE)
+	sample[0x500] = 0xc3
+	id := saveWindowSample(t, store, sample)
+	request := analisis.BinaryWindowRequest{RecordID: id, Revision: 1, Kind: "simbolo"}
+	window, err := analisis.OpenBinaryWindow(t.Context(), store, request, bytes.NewReader(sample))
+	if err != nil || !window.EntryAmbiguous || window.Citation.Address != "0x112c" || window.Citation.Offset != "0x32c" {
+		t.Fatalf("símbolo con dirección compartida: %+v, %v", window, err)
+	}
+}
+
 func saveWindowSample(t *testing.T, store *caso.Store, sample []byte) string {
 	t.Helper()
 	records, err := ingesta.ParseNamed("binario", bytes.NewReader(sample), "muestra.exe")

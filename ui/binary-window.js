@@ -33,6 +33,7 @@ function binaryWindowPanel(report, record, citation, restoredReport, signal, ref
   let focusOnFile;
   let expectedOrigin;
   let expectedHash;
+  let showReferencesOnFile = false;
   let referenceAction = restoredReport ? {mode: "verificar", report: restoredReport} : undefined;
   if (expected || referenceAction) {
     details.open = true;
@@ -82,7 +83,7 @@ function binaryWindowPanel(report, record, citation, restoredReport, signal, ref
     renderWindow(review.destination, review.report.destination.row);
   }
 
-  async function load({preserve = false, focus} = {}) {
+  async function load({preserve = false, focus, showReferences = false} = {}) {
     pending?.abort();
     if (!preserve) result.replaceChildren();
     const file = input.files[0];
@@ -113,6 +114,8 @@ function binaryWindowPanel(report, record, citation, restoredReport, signal, ref
         throw new Error("La ventana no coincide con la cita guardada.");
       }
       if (expectedHash && expectedHash !== data.citation.window_sha256) throw new Error("La ventana no coincide con el informe guardado.");
+      if (showReferences && data.entry_ambiguous) throw new Error("El símbolo tiene más de una ubicación ejecutable para esa dirección.");
+      if (showReferences && !data.window.instructions[0]?.text) throw new Error("No se pudo decodificar la instrucción de entrada del símbolo.");
       if (expectedOrigin) {
         const actual = data.window.instructions[focus];
         const fields = ["address", "offset", "bytes", "target"];
@@ -122,13 +125,13 @@ function binaryWindowPanel(report, record, citation, restoredReport, signal, ref
       }
       status.textContent = expectedOrigin ? `Origen verificado · ${expectedOrigin.offset}` :
         expected ? `Cita de ventana verificada · ${data.citation.offset}` : `Archivo verificado · ${data.citation.offset}`;
-      renderWindow(data, focus);
+      renderWindow(data, focus, showReferences);
     } catch (error) {
       if (!current.aborted) status.textContent = error.message;
     }
   }
 
-  function renderWindow(data, focus) {
+  function renderWindow(data, focus, showReferences = false) {
     const location = report.format === "PE" ? "RVA" : "Dirección";
     const {window} = data;
     const steps = data.citation.path?.split(".") || [];
@@ -166,7 +169,7 @@ function binaryWindowPanel(report, record, citation, restoredReport, signal, ref
     if (origin) result.append(origin);
     if (steps.length === binaryWindowPathLimit) result.append(element("p", "Se alcanzó el límite de 32 saltos en el recorrido."));
     result.append(tools, listing.details);
-    if (focus !== undefined) listing.focusIndex(focus);
+    if (focus !== undefined) listing.focusIndex(focus, showReferences);
   }
 
   function open(location, options) {
@@ -174,6 +177,7 @@ function binaryWindowPanel(report, record, citation, restoredReport, signal, ref
     focusOnFile = options?.focus;
     expectedOrigin = options?.origin;
     expectedHash = options?.windowHash;
+    showReferencesOnFile = !!options?.showReferences;
     referenceAction = undefined;
     anchor = location;
     details.open = true;
@@ -181,11 +185,13 @@ function binaryWindowPanel(report, record, citation, restoredReport, signal, ref
     load(options);
   }
   input.onchange = () => {
-    if (anchor || referenceAction) load({focus: focusOnFile, preserve: referenceAction?.mode === "exportar"});
+    if (anchor || referenceAction) load({focus: focusOnFile, showReferences: showReferencesOnFile, preserve: referenceAction?.mode === "exportar"});
     else status.textContent = "Elige un símbolo o abre el punto de entrada.";
   };
   entry.onclick = () => open({kind: "entrada", index: image});
-  return {details, incoming, openReference, exportReferences, openSymbol(index) { open({kind: "simbolo", index}); },
+  return {details, incoming, openReference, exportReferences, symbolReferences: references.forSymbol,
+    openSymbol(index) { open({kind: "simbolo", index}); },
+    openSymbolReferences(index) { open({kind: "simbolo", index}, {focus: 0, showReferences: true}); },
     followInstruction(index) { open({kind: "instruccion", index, path: "0"}, {focus: 0}); }, paintImage(index) {
     if (image !== undefined && image !== index) {
       pending?.abort();
@@ -194,6 +200,7 @@ function binaryWindowPanel(report, record, citation, restoredReport, signal, ref
       focusOnFile = undefined;
       expectedOrigin = undefined;
       expectedHash = undefined;
+      showReferencesOnFile = false;
       referenceAction = undefined;
       result.replaceChildren();
       status.textContent = "";

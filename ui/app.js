@@ -258,11 +258,14 @@ function binaryPanel(record, citation, windowCitation, referenceReport) {
   const binaryWindow = ["ELF", "PE", "Mach-O", "Mach-O universal"].includes(report.format) ?
     binaryWindowPanel(report, record, windowCitation?.sha256 === record.sha256 ? windowCitation : undefined,
       referenceReport?.sha256 === record.sha256 ? referenceReport : undefined, inspectorRequest.signal, binaryReferenceIndex(entries),
-      () => instructions.refreshIncoming?.()) : undefined;
+      () => {
+        instructions.refreshIncoming?.();
+        symbols.refreshReferences?.();
+      }) : undefined;
   const instructions = binaryInstructionPanel(report, sections, images, {entries, citation,
     cite: (index) => binaryCitationButton(record, "instruccion", index), follow: binaryWindow?.followInstruction,
     incoming: binaryWindow?.incoming, openReference: binaryWindow?.openReference, exportReferences: binaryWindow?.exportReferences});
-  const symbols = binarySymbolPanel(report, record, citation, images, binaryWindow?.openSymbol);
+  const symbols = binarySymbolPanel(report, record, citation, images, binaryWindow);
   function paintSections() {
     const rows = [];
     for (const [index, section] of sections.entries()) {
@@ -351,7 +354,7 @@ function binaryImageLabel(image) {
   return image ? `${image.architecture} · subtipo ${image.subtype}` : "";
 }
 
-function binarySymbolPanel(report, record, citation, images, openWindow) {
+function binarySymbolPanel(report, record, citation, images, binaryWindow) {
   const symbols = Array.isArray(report.symbols) ? report.symbols : [];
   const details = element("details");
   const title = element("summary", `Símbolos · ${symbols.length}`);
@@ -367,12 +370,32 @@ function binarySymbolPanel(report, record, citation, images, openWindow) {
   search.placeholder = "Buscar nombre, ordinal o dirección";
   search.setAttribute("aria-label", "Buscar símbolos");
   search.maxLength = 256;
+  const filter = element("label", "", "binary-symbol-filter");
+  const onlyReferenced = element("input");
+  onlyReferenced.type = "checkbox";
+  filter.append(onlyReferenced, document.createTextNode("Solo símbolos con referencias"));
   const count = element("p");
   const list = element("ol", "", "binary-list");
   const more = element("button", "Mostrar más símbolos");
   let imageIndex = 0;
   let matching = [];
   let shown = 0;
+  const visibleReferenceButtons = new Map();
+  const referenceCounts = new Map();
+  function referenceCount(symbol) {
+    if (!referenceCounts.has(symbol)) referenceCounts.set(symbol, binaryWindow.symbolReferences(symbol).rows.length);
+    return referenceCounts.get(symbol);
+  }
+  function paintReference(button, symbol) {
+    const references = referenceCount(symbol);
+    button.textContent = `Referencias · ${references}`;
+    button.hidden = !references;
+  }
+  function refreshReferences() {
+    referenceCounts.clear();
+    if (onlyReferenced.checked) paint(imageIndex);
+    else for (const [button, symbol] of visibleReferenceButtons) paintReference(button, symbol);
+  }
   function appendRows() {
     const batch = matching.slice(shown, shown + 50);
     for (const {symbol, index} of batch) {
@@ -382,12 +405,22 @@ function binarySymbolPanel(report, record, citation, images, openWindow) {
       row.append(element("strong", symbol.name), element("p", [symbol.kind, ordinal, symbol.section, address].filter(Boolean).join(" · ")));
       if (symbol.image && !imageIndex) row.append(element("p", binaryImageLabel(images[symbol.image - 1]), "type"));
       if (symbol.forwarder) row.append(element("p", `Reenvío · ${symbol.forwarder}`));
-      if (symbol.offset) row.append(element("p", `Archivo ${symbol.offset}`), binaryCitationButton(record, "simbolo", index));
-      if (symbol.offset && !symbol.forwarder && openWindow) {
-        const window = element("button", "Abrir ventana");
-        window.onclick = () => openWindow(index);
-        row.append(window);
+      const tools = element("div", "", "tools");
+      if (symbol.offset) {
+        row.append(element("p", `Archivo ${symbol.offset}`));
+        tools.append(binaryCitationButton(record, "simbolo", index));
       }
+      if (symbol.offset && !symbol.forwarder && binaryWindow) {
+        const window = element("button", "Abrir ventana");
+        window.onclick = () => binaryWindow.openSymbol(index);
+        const references = element("button");
+        references.setAttribute("aria-label", `Referencias de ${symbol.name}, ${symbol.address}`);
+        references.onclick = () => binaryWindow.openSymbolReferences(index);
+        visibleReferenceButtons.set(references, symbol);
+        paintReference(references, symbol);
+        tools.append(window, references);
+      }
+      if (tools.childElementCount) row.append(tools);
       markBinaryCitation(row, citation, "simbolo", index);
       list.append(row);
     }
@@ -400,20 +433,26 @@ function binarySymbolPanel(report, record, citation, images, openWindow) {
     const term = search.value.trim().toLowerCase();
     const inImage = symbols.map((symbol, index) => ({symbol, index})).filter(({symbol}) => !imageIndex || symbol.image === imageIndex);
     title.textContent = `Símbolos · ${inImage.length}`;
-    matching = inImage.filter(({symbol}) => [symbol.name, symbol.kind, symbol.section, symbol.address, symbol.offset, symbol.forwarder,
-      Number.isInteger(symbol.ordinal) ? `Ordinal ${symbol.ordinal}` : undefined].some((field) => field?.toLowerCase().includes(term)));
+    matching = inImage.filter(({symbol}) =>
+      [symbol.name, symbol.kind, symbol.section, symbol.address, symbol.offset, symbol.forwarder,
+        Number.isInteger(symbol.ordinal) ? `Ordinal ${symbol.ordinal}` : undefined].some((field) => field?.toLowerCase().includes(term)) &&
+      (!onlyReferenced.checked || referenceCount(symbol) > 0));
     if (citation?.kind === "simbolo") {
       const target = matching.findIndex(({index}) => index === citation.index);
       if (target > 0) matching.unshift(...matching.splice(target, 1));
     }
     shown = 0;
+    visibleReferenceButtons.clear();
     list.replaceChildren();
     appendRows();
   }
   search.oninput = () => paint(imageIndex);
+  onlyReferenced.onchange = () => paint(imageIndex);
   more.onclick = appendRows;
-  details.append(search, count, list, more);
-  return {details, paint};
+  details.append(search);
+  if (binaryWindow) details.append(filter);
+  details.append(count, list, more);
+  return {details, paint, refreshReferences};
 }
 
 function codeReviewPanel(id, review, citation) {
