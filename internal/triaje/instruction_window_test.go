@@ -86,3 +86,39 @@ func TestInstructionWindowMachOResolvesEntryInsideSelectedImage(t *testing.T) {
 		}
 	}
 }
+
+func TestMachOThreadEntryUsesArchitectureProgramCounter(t *testing.T) {
+	for _, fixture := range []struct {
+		cpu           macho.Cpu
+		flavor, words uint32
+		at, width     int
+		pc            uint64
+	}{
+		{macho.Cpu386, 1, 16, 56, 4, 0x1000},
+		{macho.CpuAmd64, 4, 42, 144, 8, 0x100000020},
+		{macho.CpuArm64, 6, 68, 272, 8, 0x100000040},
+	} {
+		t.Run(fixture.cpu.String(), func(t *testing.T) {
+			order := binary.LittleEndian
+			command := make([]byte, 16+4*fixture.words)
+			order.PutUint32(command, 0x5)
+			order.PutUint32(command[4:], uint32(len(command)))
+			order.PutUint32(command[8:], fixture.flavor)
+			order.PutUint32(command[12:], fixture.words)
+			if fixture.width == 4 {
+				order.PutUint32(command[fixture.at:], uint32(fixture.pc))
+			} else {
+				order.PutUint64(command[fixture.at:], fixture.pc)
+			}
+			file := &macho.File{FileHeader: macho.FileHeader{Cpu: fixture.cpu, Type: macho.TypeExec}, ByteOrder: order,
+				Loads: []macho.Load{macho.LoadBytes(command)}}
+			if entry := machOCodeEntry(file); entry == nil || entry.physical || entry.position != fixture.pc {
+				t.Fatalf("contador de programa: %+v", entry)
+			}
+			file.Loads[0] = macho.LoadBytes(command[:len(command)-4])
+			if entry := machOCodeEntry(file); entry != nil {
+				t.Fatalf("registro truncado aceptado: %+v", entry)
+			}
+		})
+	}
+}

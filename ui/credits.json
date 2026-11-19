@@ -2,7 +2,7 @@
   {
     "name": "Ghidra",
     "url": "https://github.com/NationalSecurityAgency/ghidra",
-    "detail": "Mesa de trabajo e inspector de binarios. La detección de caracteres ASCII adapta AsciiCharSetRecognizer.java de la National Security Agency, Apache-2.0.",
+    "detail": "Mesa de trabajo e inspector de binarios. Los registros de hilo de Mach-O sirvieron de referencia para localizar su punto de entrada. La detección de caracteres ASCII adapta AsciiCharSetRecognizer.java de la National Security Agency, Apache-2.0.",
     "reference": "https://github.com/NationalSecurityAgency/ghidra/blob/8ca9077040cc43cd790babcfccf19475622a3e9a/Ghidra/Features/Base/src/main/java/ghidra/util/ascii/AsciiCharSetRecognizer.java"
   },
   {

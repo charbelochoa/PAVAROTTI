@@ -182,27 +182,64 @@ func machOCodeEntry(file *macho.File) *codeEntry {
 	if file.Type != macho.TypeExec {
 		return nil
 	}
-	const entryPointCommand = 0x80000028
-	text := file.Segment("__TEXT")
-	if text == nil {
-		return nil
-	}
-	var found *codeEntry
+	const (
+		entryPointCommand = 0x80000028
+		unixThreadCommand = 0x5
+	)
+	var main, thread []byte
+	var repeatedThread bool
 	for _, load := range file.Loads {
 		raw := load.Raw()
-		if len(raw) < 8 || file.ByteOrder.Uint32(raw) != entryPointCommand {
+		if len(raw) < 8 {
 			continue
 		}
-		if len(raw) != 24 || found != nil {
-			return nil
+		switch file.ByteOrder.Uint32(raw) {
+		case entryPointCommand:
+			if main != nil || len(raw) != 24 {
+				return nil
+			}
+			main = raw
+		case unixThreadCommand:
+			repeatedThread = repeatedThread || thread != nil
+			thread = raw
 		}
-		offset := file.ByteOrder.Uint64(raw[8:])
-		if offset >= text.Filesz || offset > math.MaxUint64-text.Offset {
-			return nil
-		}
-		found = &codeEntry{position: text.Offset + offset, physical: true}
 	}
-	return found
+	if main == nil {
+		if repeatedThread {
+			return nil
+		}
+		return machOThreadEntry(file, thread)
+	}
+	text := file.Segment("__TEXT")
+	offset := file.ByteOrder.Uint64(main[8:])
+	if text == nil || offset >= text.Filesz || offset > math.MaxUint64-text.Offset {
+		return nil
+	}
+	return &codeEntry{position: text.Offset + offset, physical: true}
+}
+
+func machOThreadEntry(file *macho.File, command []byte) *codeEntry {
+	var flavor, words uint32
+	var position, width int
+	switch file.Cpu {
+	case macho.Cpu386:
+		flavor, words, position, width = 1, 16, 10, 4
+	case macho.CpuAmd64:
+		flavor, words, position, width = 4, 42, 16, 8
+	case macho.CpuArm64:
+		flavor, words, position, width = 6, 68, 32, 8
+	default:
+		return nil
+	}
+	const headerSize = 16
+	if len(command) < headerSize+int(words)*4 || file.ByteOrder.Uint32(command[8:]) != flavor || file.ByteOrder.Uint32(command[12:]) != words {
+		return nil
+	}
+	pc := command[headerSize+position*width:]
+	if width == 4 {
+		return &codeEntry{position: uint64(file.ByteOrder.Uint32(pc))}
+	}
+	return &codeEntry{position: file.ByteOrder.Uint64(pc)}
 }
 
 func ParseBinaryHex(value string) (uint64, bool) {
