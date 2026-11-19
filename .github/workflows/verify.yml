@@ -143,7 +143,8 @@ jobs:
           for image in kalilinux/kali-rolling archlinux:base; do
             docker run --rm --network none -v "$PWD/PAVAROTTI-Kali-x64:/opt/pavarotti:ro" -v "$samples:/samples:ro" "$image" /bin/sh -ec '
               /opt/pavarotti -datos /tmp/expediente importar har /samples/captura.har >&2
-              /opt/pavarotti -datos /tmp/expediente comparar-http --origen-a https://example.invalid +                --desde-a 2026-11-01 --hasta-a 2026-11-01 --captura-b har --desde-b 2026-11-02 --hasta-b 2026-11-02
+              /opt/pavarotti -datos /tmp/expediente comparar-http --origen-a https://example.invalid \
+                --desde-a 2026-11-01 --hasta-a 2026-11-01 --captura-b har --desde-b 2026-11-02 --hasta-b 2026-11-02
             ' > "$samples/comparacion.json"
             python3 - "$samples/comparacion.json" <<'PY'
           import json
