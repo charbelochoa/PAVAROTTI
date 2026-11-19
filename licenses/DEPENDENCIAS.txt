@@ -2,7 +2,7 @@ Licencias de las dependencias distribuidas con PAVAROTTI
 
 --------------------------------------------------------------------------
 
-Biblioteca estándar de Go
+Biblioteca estándar de Go y golang.org/x/mod@v0.40.0
 
 Copyright 2009 The Go Authors.
 

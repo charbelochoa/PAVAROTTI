@@ -70,6 +70,8 @@ footer { border-top: 1px solid var(--line); padding: .55rem clamp(1rem, 3vw, 2re
 .audit-items { display: grid; gap: .45rem; margin-top: .55rem; }
 .audit-item { display: grid; gap: .2rem; padding: .55rem; border: 1px solid var(--line); border-radius: 4px; }
 .audit-item p { margin: 0; }
+.audit-panel input, .audit-panel > button { margin-top: .6rem; }
+.audit-panel input { width: 100%; }
 .tools { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .6rem; }
 .tools[hidden] { display: none; }
 #report-panel { width: min(840px, calc(100vw - 2rem)); }

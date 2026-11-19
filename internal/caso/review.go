@@ -1,6 +1,9 @@
 package caso
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+)
 
 type CodeReview struct {
 	Package string    `json:"package"`
@@ -15,6 +18,49 @@ type Finding struct {
 	Column int    `json:"column"`
 	Rule   string `json:"rule"`
 	Review string `json:"review"`
+}
+
+type DependencyInventory struct {
+	Ecosystem string       `json:"ecosystem"`
+	Manifest  string       `json:"manifest"`
+	Project   string       `json:"project,omitempty"`
+	Entries   []Dependency `json:"entries"`
+	Skipped   int          `json:"skipped,omitempty"`
+}
+
+type Dependency struct {
+	Name        string       `json:"name"`
+	Version     string       `json:"version,omitempty"`
+	Scope       string       `json:"scope"`
+	Line        int          `json:"line,omitempty"`
+	Location    string       `json:"location,omitempty"`
+	InstalledAs string       `json:"installed_as,omitempty"`
+	Integrity   string       `json:"integrity,omitempty"`
+	Replacement *Replacement `json:"replacement,omitempty"`
+}
+
+type Replacement struct {
+	Name    string `json:"name,omitempty"`
+	Version string `json:"version,omitempty"`
+	Local   bool   `json:"local,omitempty"`
+	Line    int    `json:"line"`
+}
+
+func (record Record) MatchesDependency(term string) bool {
+	if record.Dependencies == nil {
+		return false
+	}
+	for _, entry := range record.Dependencies.Entries {
+		if strings.Contains(strings.ToLower(entry.Name), term) || strings.Contains(strings.ToLower(entry.Version), term) ||
+			strings.Contains(strings.ToLower(entry.InstalledAs), term) {
+			return true
+		}
+		if entry.Replacement != nil && (strings.Contains(strings.ToLower(entry.Replacement.Name), term) ||
+			strings.Contains(strings.ToLower(entry.Replacement.Version), term)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (record Record) StaticReview() *CodeReview {

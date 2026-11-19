@@ -56,7 +56,7 @@ function inspect(record, message = "Selecciona un registro para examinarlo.") {
   }
   view.append(element("span", record.kind, "type"), element("h3", record.title), element("p", formatTime(record.time)));
   if (record.source) view.append(element("p", record.source));
-  if (record.source_id) view.append(element("p", (record.code_review ? "Archivo · " : "ID · ") + record.source_id));
+  if (record.source_id) view.append(element("p", (record.code_review || record.dependencies ? "Archivo · " : "ID · ") + record.source_id));
   if (selectedRevision) {
     view.append(element("p", "Revisión citada " + record.revision));
   } else if (record.id && record.kind === "nota") {
@@ -83,6 +83,7 @@ function inspect(record, message = "Selecciona un registro para examinarlo.") {
     view.append(element("p", `${item.type || "Tipo desconocido"} · ${item.millis} ms`));
   }
   if (record.code_review) view.append(codeReviewPanel(record.code_review));
+  if (record.dependencies) view.append(dependencyPanel(record.dependencies));
   if (!record.code_review && record.signals?.length) {
     const list = element("ul");
     for (const signal of record.signals) list.append(element("li", signal));
@@ -125,6 +126,57 @@ function codeReviewPanel(review) {
     imports.ontoggle = () => { if (imports.open && !offset) more.onclick(); };
     view.append(imports);
   }
+  return view;
+}
+
+function dependencyPanel(inventory) {
+  const view = element("div", "", "audit-panel");
+  const entries = inventory.entries || [];
+  view.append(element("h4", "Inventario de dependencias"), element("p", `${entries.length} ${entries.length === 1 ? "entrada" : "entradas"}`));
+  if (inventory.skipped) view.append(element("p", `Entradas fuera del esquema admitido · ${inventory.skipped}`));
+  if (!entries.length) return view;
+  const search = element("input");
+  search.type = "search";
+  search.placeholder = "Buscar dependencia";
+  search.setAttribute("aria-label", "Buscar dependencia en el manifiesto");
+  const list = element("div", "", "audit-items");
+  const more = element("button", "Mostrar más dependencias");
+  let results = entries;
+  let offset = 0;
+  const next = () => {
+    for (const entry of results.slice(offset, offset + 50)) {
+      const row = element("div", "", "audit-item");
+      row.tabIndex = -1;
+      row.dataset.name = entry.name;
+      row.dataset.line = entry.line || "";
+      row.dataset.location = entry.location || "";
+      row.append(element("strong", entry.version ? `${entry.name} · ${entry.version}` : entry.name), element("span", entry.scope, "type"));
+      if (entry.line) row.append(element("p", "Línea " + entry.line));
+      if (entry.location) row.append(element("p", entry.location));
+      if (entry.installed_as) row.append(element("p", "Instalado como · " + entry.installed_as));
+      if (entry.integrity) row.append(element("p", "Integridad declarada · " + entry.integrity));
+      if (entry.replacement) {
+        const r = entry.replacement;
+        const label = r.local ? "Ruta local" : `${r.name} · ${r.version}`;
+        row.append(element("p", `Reemplazo · ${label}${r.line ? ` · línea ${r.line}` : ""}`));
+      }
+      list.append(row);
+    }
+    offset += 50;
+    more.hidden = offset >= results.length;
+  };
+  more.onclick = next;
+  search.oninput = () => {
+    const query = search.value.trim().toLowerCase();
+    results = entries.filter((entry) => [entry.name, entry.version, entry.installed_as, entry.replacement?.name,
+      entry.replacement?.version].some((value) => value?.toLowerCase().includes(query)));
+    offset = 0;
+    list.replaceChildren();
+    if (!results.length) list.append(element("p", "Sin dependencias para mostrar."));
+    next();
+  };
+  next();
+  view.append(search, list, more);
   return view;
 }
 
