@@ -38,6 +38,7 @@ Uso: pavarotti [opciones globales] <comando> [argumentos]
   editar    Actualiza una nota con su revisión actual.
   historial Consulta las versiones previas de una nota.
   analizar  Correlaciona la evidencia del expediente.
+  comparar-http Compara dos periodos UTC del historial HTTP y exporta el informe.
   encolar   Programa un análisis persistente en PostgreSQL.
   tareas    Lista las tareas de análisis en JSON.
   informe   Abre el informe de una tarea terminada.
@@ -93,6 +94,8 @@ func Run(args []string, stdout, stderr io.Writer, open func() (*caso.Store, erro
 		err = terminalHistory(args[1:], stdout, stderr, open)
 	case "analizar":
 		err = terminalAnalyze(args[1:], stdout, stderr, open)
+	case "comparar-http":
+		err = terminalHTTPComparison(args[1:], stdout, stderr, open)
 	case "encolar", "tareas", "informe", "cancelar", "ejecutor":
 		err = terminalQueue(args[0], args[1:], stdout, stderr, open)
 	case "exportar":

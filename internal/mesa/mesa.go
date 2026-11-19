@@ -220,6 +220,7 @@ func Handler(host string, config Settings, store *caso.Store, resources fs.FS) h
 	codeTriageRoutes(mux, store)
 	binaryCitationRoute(mux, store)
 	activityRoute(mux, store)
+	httpComparisonRoute(mux, store)
 	var handler http.Handler = mux
 	origin := "http://" + host
 	if config.Shared {
