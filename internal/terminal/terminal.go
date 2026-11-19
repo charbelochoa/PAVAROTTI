@@ -43,6 +43,9 @@ Uso: pavarotti [opciones globales] <comando> [argumentos]
   cancelar  Cancela una tarea de análisis pendiente o activa.
   ejecutor  Ejecuta la cola de análisis para este expediente.
   exportar  Exporta el expediente como STIX 2.1, JSON o CSV.
+  respaldar Guarda una copia consistente del expediente PostgreSQL.
+  verificar-respaldo Comprueba el formato y la huella de una copia.
+  restaurar Carga una copia en un expediente PostgreSQL vacío.
   migrar-local Copia un expediente local y su historial a PostgreSQL.
   ayuda     Muestra esta ayuda.
 
@@ -91,6 +94,8 @@ func Run(args []string, stdout, stderr io.Writer, open func() (*caso.Store, erro
 		err = terminalQueue(args[0], args[1:], stdout, stderr, open)
 	case "exportar":
 		err = terminalRecords("exportar", args[1:], stdout, stderr, open)
+	case "respaldar", "verificar-respaldo", "restaurar":
+		err = terminalBackup(args[0], args[1:], stdout, stderr, open)
 	case "migrar-local":
 		err = terminalMigrate(args[1:], stdout, stderr, open)
 	default:

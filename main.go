@@ -27,7 +27,7 @@ import (
 	"pavarotti/internal/trafico"
 )
 
-const version = "0.4.2"
+const version = "0.4.3"
 
 //go:embed ui/* licenses/*
 var resources embed.FS
@@ -153,7 +153,7 @@ func run(store *caso.Store, upstream string, uiPort, proxyPort, publishPort int,
 	scheme := "http://"
 	if shared != nil {
 		appAddress, scheme = shared.Host, "https://"
-		settings.Shared, settings.Case = true, store.SharedCase()
+		settings.Shared = true
 	}
 	servers := make(map[net.Listener]*http.Server)
 	if target != nil {

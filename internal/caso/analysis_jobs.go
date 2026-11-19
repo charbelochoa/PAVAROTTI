@@ -99,7 +99,7 @@ func (s *Store) EnqueueAnalysis(ctx context.Context, fingerprint, version string
 	}
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginCaseWrite(ctx, false)
 	if err != nil {
 		return AnalysisJob{}, err
 	}
@@ -141,7 +141,7 @@ func (s *Store) ClaimAnalysis(ctx context.Context, versions ...string) (Analysis
 	}
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginCaseWrite(ctx, false)
 	if err != nil {
 		return AnalysisClaim{}, false, err
 	}
@@ -233,7 +233,7 @@ func (s *Store) FinishAnalysis(ctx context.Context, claim AnalysisClaim, payload
 	}
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginCaseWrite(ctx, false)
 	if err != nil {
 		return err
 	}
@@ -325,7 +325,7 @@ func (s *Store) CancelAnalysis(ctx context.Context, id string) (AnalysisJob, err
 	if !validJobID(id) {
 		return job, ErrNotFound
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginCaseWrite(ctx, false)
 	if err != nil {
 		return AnalysisJob{}, err
 	}

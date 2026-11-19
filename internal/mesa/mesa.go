@@ -53,6 +53,7 @@ func Handler(host string, config Settings, store *caso.Store, resources fs.FS) h
 	mux.HandleFunc("GET /api/app", func(w http.ResponseWriter, r *http.Request) {
 		state := config
 		state.Activity = store.HasAuditLog()
+		state.Case = store.SharedCase()
 		if account, ok := r.Context().Value(sharedAccountKey{}).(caso.SharedAccount); ok {
 			state.Account = &account
 		}

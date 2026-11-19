@@ -122,7 +122,7 @@ func (s *Store) SaveEvidence(ctx context.Context, records []Record) (SaveResult,
 	if s.db != nil {
 		ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 		defer cancel()
-		tx, err := s.db.BeginTx(ctx, nil)
+		tx, err := s.beginCaseWrite(ctx, false)
 		if err != nil {
 			return SaveResult{}, err
 		}

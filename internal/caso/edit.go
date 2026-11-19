@@ -159,7 +159,7 @@ func batchRecord(key string, ordinal int, data []byte) (Record, error) {
 func (s *Store) postgresEdit(ctx context.Context, key string, ordinal int, rewrite func(Record, []Record) (Record, error)) (Record, error) {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginCaseWrite(ctx, false)
 	if err != nil {
 		return Record{}, err
 	}

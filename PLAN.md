@@ -47,7 +47,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | Expedientes, terminal y agentes | Evidencia con procedencia, inventario de activos, cola persistente, revisión de código Go y exportación STIX. | Guardar un informe de cobertura por activo y periodo. Exportarlo, abrir sus citas y confirmar los cruces al restaurar el expediente. |
 | Inspección estática de binarios | PE, ELF y Mach-O con secciones, cadenas, símbolos y citas por desplazamiento. | Mostrar exportaciones PE y símbolos Mach-O universales. Navegar instrucciones y referencias en secciones de muestras locales y comprobar sus desplazamientos con archivos de referencia. |
 | Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros y señales de cabeceras. | Ampliar las reglas pasivas y comparar capturas por origen y periodo. Verificar cada señal con respuestas de prueba y citas reproducibles. |
-| Operación compartida | Instalación nativa, Docker Compose local, HTTPS con roles, PostgreSQL y actividad por expediente. | Probar el respaldo y la restauración, la retención y el arranque HTTPS con Compose. |
+| Operación compartida | Instalación nativa, Docker Compose local, HTTPS con roles, actividad por expediente y respaldo y restauración de PostgreSQL. | Probar la retención y el arranque HTTPS con Compose. |
 
 ## Hallazgos de la revisión de 0.3
 
@@ -56,7 +56,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 - El primer chequeo de persistencia de Compose falló en CI después del reinicio. La verificación ahora espera a la aplicación y compara JSON estructurado.
 - La revisión de dependencias encontró avisos para el controlador de PostgreSQL y dos módulos de Go. Se actualizó a versiones con las correcciones y se fijó Go 1.26.11 en la compilación de CI y Docker.
 - El análisis admite hasta 10,000 registros por ejecución. Desde 0.3.1, el panel consulta 50 registros por página y carga la evidencia completa al seleccionarla. PostgreSQL filtra antes de entregar resultados. El almacén local recorre los lotes y mantiene en memoria la página candidata. Ambos almacenes aún recorren los datos para responder búsquedas amplias.
-- La configuración compartida usa PostgreSQL y HTTPS con cuentas de lectura y análisis por expediente. Desde la 0.4.2, las operaciones nuevas generan eventos de auditoría. Quedan pendientes el respaldo, la restauración y la retención del hito 6.
+- La configuración compartida usa PostgreSQL y HTTPS con cuentas de lectura y análisis por expediente. Desde la 0.4.2, las operaciones nuevas generan eventos de auditoría. La 0.4.3 añade respaldos verificables y restauración en un expediente vacío. La retención sigue pendiente en el hito 6.
 
 ## Orden de implementación
 
@@ -72,8 +72,9 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 10. **Mesa de investigación compartida.** 0.4.0 añade acceso HTTPS con roles por expediente, filtros combinados sobre el historial HTTP y un inspector de binarios que abre cadenas desde una sección y conecta la huella con los activos. La prueba comprueba cada flujo desde el navegador con un lector y un analista.
 11. **Símbolos y citas de binarios.** 0.4.1 guarda símbolos definidos de tablas ELF, COFF y Mach-O. La mesa exporta una cita JSON con la huella del archivo, la huella del análisis, el ID, la revisión y el desplazamiento. Al reabrirla, verifica esos datos y señala la fila citada. Las revisiones previas siguen mostrando los metadatos que guardaron.
 12. **Auditoría de operaciones.** La 0.4.2 registra incorporaciones, ediciones, triaje, migraciones y cambios de la cola en la misma transacción. La mesa abre la revisión de evidencia o tarea del evento. Las pruebas cubren conflictos concurrentes, retroceso cuando falla la auditoría y separación de expedientes.
-13. **Respaldo y restauración.** Generar una copia consistente con evidencia, revisiones, triaje, tareas y actividad. Restaurarla en una base nueva, comprobar sus referencias y definir cómo aplicar retención.
-14. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
+13. **Respaldo y restauración.** La 0.4.3 guarda evidencia, revisiones, triaje, tareas y actividad en una copia verificable por SHA-256. Restaura en un expediente vacío con sus referencias. Las pruebas cubren la edición concurrente al respaldar, la exclusión de otras escrituras al restaurar, las copias truncadas y las referencias inválidas.
+14. **Retención y despliegue compartido.** Definir la retención de actividad y respaldos, verificar qué referencias conserva cada política y probar el inicio de la configuración HTTPS con Docker Compose.
+15. **Paquetes y capacidad.** Medir latencia y memoria con expedientes de distintos tamaños, añadir índices donde las mediciones lo justifiquen y verificar los binarios y sus huellas en cada etiqueta.
 
 ## Flujo de trabajo OSINT
 

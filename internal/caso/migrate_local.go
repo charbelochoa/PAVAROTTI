@@ -37,7 +37,7 @@ func (s *Store) ImportLocal(path string) (int, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginCaseWrite(ctx, false)
 	if err != nil {
 		return 0, err
 	}
