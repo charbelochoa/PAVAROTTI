@@ -71,7 +71,7 @@ type HTTPComparisonEvidence struct {
 
 type httpWindowFilter struct {
 	HTTPWindow
-	utcPeriod
+	caso.EvidencePeriod
 }
 
 type httpRowKey struct {
@@ -106,7 +106,8 @@ func CompareHTTP(ctx context.Context, store *caso.Store, criteria HTTPCompareCri
 	criteria = HTTPCompareCriteria{Baseline: a.HTTPWindow, Current: b.HTTPWindow}
 	var inputs []httpComparisonInput
 	bytes := 0
-	err = store.WalkHTTP(ctx, func(record caso.Record) error {
+	filter := caso.EvidenceFilter{HTTP: true, Periods: []caso.EvidencePeriod{a.EvidencePeriod, b.EvidencePeriod}}
+	err = store.WalkFiltered(ctx, filter, func(record caso.Record) error {
 		stamp, err := time.Parse(time.RFC3339Nano, record.Time)
 		if err != nil {
 			return nil
@@ -165,11 +166,11 @@ func normalizeHTTPWindow(window HTTPWindow) (httpWindowFilter, error) {
 	if err != nil {
 		return httpWindowFilter{}, err
 	}
-	return httpWindowFilter{HTTPWindow: window, utcPeriod: period}, nil
+	return httpWindowFilter{HTTPWindow: window, EvidencePeriod: period}, nil
 }
 
 func (w httpWindowFilter) matches(stamp time.Time, origin, kind string) bool {
-	return w.includes(stamp) &&
+	return w.Includes(stamp) &&
 		(w.Origin == "" || w.Origin == origin) && (w.Capture == "" || w.Capture == kind)
 }
 

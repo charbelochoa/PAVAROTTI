@@ -64,3 +64,28 @@ func TestAssetCoverageUsesRecordedDaysAndKeepsOriginalCitations(t *testing.T) {
 		t.Fatalf("fechas inválidas: %v", err)
 	}
 }
+
+func TestAssetCoverageLimitsMatchingEvidenceInLargeCases(t *testing.T) {
+	store, err := caso.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	records := make([]caso.Record, RecordLimit+1)
+	for index := range records {
+		records[index] = caso.Record{Kind: "nota", Title: "Referencia anterior", Source: "host.invalid", Time: "2026-11-06T01:00:00Z"}
+	}
+	records[len(records)-1].Time = "2026-11-07T00:00:00Z"
+	if err := store.Save(records); err != nil {
+		t.Fatal(err)
+	}
+	criteria := AssetCoverageCriteria{AssetKey: AssetKey{Type: "dominio", Value: "host.invalid"}, From: "2026-11-07", To: "2026-11-07"}
+	report, err := CoverAsset(t.Context(), store, criteria)
+	if err != nil || report.Direct != 1 || len(report.Sources) != 1 {
+		t.Fatalf("informe acotado: %+v, %v", report, err)
+	}
+	criteria.From = "2026-11-06"
+	if _, err := CoverAsset(t.Context(), store, criteria); !errors.Is(err, ErrLimit) {
+		t.Fatalf("exceso de evidencia dentro del periodo: %v", err)
+	}
+}

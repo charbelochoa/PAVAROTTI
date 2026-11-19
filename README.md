@@ -32,6 +32,8 @@ En **Comparar capturas**, define el origen, el tipo de captura y las fechas UTC 
 
 Usa **Exportar JSON** para conservar los criterios, resultados, citas y la huella de entrada. **Abrir informe JSON** recupera ese resultado guardado con sus criterios, incluso si el expediente ya incorporó capturas nuevas. Abre las citas desde el expediente que contiene la evidencia.
 
+La comparación HTTP y la cobertura por periodo admiten expedientes de más de 10,000 registros cuando los criterios seleccionan hasta 10,000 entradas de evidencia y 32 MiB de metadatos. Las ventanas usan la fecha UTC de cada registro.
+
 - **Tráfico.** Proxy inverso HTTP(S) de un solo destino e importación de HAR. Las reglas pasivas comprueban tipo MIME, `nosniff`, controles de marcos, `Referrer-Policy`, `max-age` de HSTS, redirecciones a HTTP y atributos de cookies. El expediente guarda los recuentos de cookies, el origen y el motivo de cada señal.
 - **Evidencia.** Importación de hallazgos JSON con huella SHA-256 del archivo y búsqueda por texto, origen, ID o huella. También puedes registrar notas manuales.
 - **Binarios.** Triaje estático de cabeceras PE, ELF y Mach-O. Consulta hasta 256 secciones, 128 vistas previas de cadenas ASCII y 2,048 símbolos definidos por archivo. El inspector busca símbolos en las tablas ELF, COFF y Mach-O y muestra su desplazamiento cuando la sección tiene respaldo físico. La huella SHA-256 abre la ficha del activo.
