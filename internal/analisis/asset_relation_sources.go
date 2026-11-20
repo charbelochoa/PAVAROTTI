@@ -7,7 +7,7 @@ import (
 	"pavarotti/internal/caso"
 )
 
-func recordAssetRelations(record caso.Record, anchor AssetKey, address netip.Addr, network assetNetwork, emit func(assetRelationKey)) {
+func recordAssetRelations(record caso.Record, anchor AssetKey, address netip.Addr, network caso.AssetNetwork, emit func(assetRelationKey)) {
 	link := func(source, target AssetKey, kind string) {
 		if source == target {
 			return
@@ -20,14 +20,14 @@ func recordAssetRelations(record caso.Record, anchor AssetKey, address netip.Add
 		}
 	}
 	if address.IsValid() {
-		rangeOfRecord := recordNetwork(record)
-		if rangeOfRecord.contains(address) {
-			link(AssetKey{Type: "red", Value: rangeOfRecord.value}, anchor, record.Kind+"-cobertura")
+		rangeOfRecord := caso.RecordNetwork(record)
+		if rangeOfRecord.Contains(address) {
+			link(AssetKey{Type: "red", Value: rangeOfRecord.Value}, anchor, record.Kind+"-cobertura")
 		}
 	}
-	if network.value != "" {
+	if network.Value != "" {
 		for _, observed := range observedNetworkAddresses(record, network) {
-			link(anchor, hostAsset(observed.String()), "ip-observada")
+			link(anchor, caso.AssetHost(observed.String()), "ip-observada")
 		}
 	}
 	switch record.Kind {
@@ -43,13 +43,13 @@ func recordAssetRelations(record caso.Record, anchor AssetKey, address netip.Add
 			if !ok {
 				return
 			}
-			hosts := sourceHosts(record.Source, true)
-			if len(hosts) < 2 || hosts[0] != owner || hostAsset(owner).Type != "dominio" {
+			hosts := caso.SourceHosts(record.Source, true)
+			if len(hosts) < 2 || hosts[0] != owner || caso.AssetHost(owner).Type != "dominio" {
 				return
 			}
-			source := hostAsset(owner)
+			source := caso.AssetHost(owner)
 			for _, host := range hosts[1:] {
-				server := hostAsset(host)
+				server := caso.AssetHost(host)
 				if server.Type == "dominio" {
 					link(source, server, "rdap-ns")
 				}
@@ -69,7 +69,7 @@ func dnsAssetPair(record caso.Record) (AssetKey, AssetKey, string, bool) {
 	}
 	rr, owner, _ := strings.Cut(record.Title, " ")
 	source, target, found := strings.Cut(record.Source, ",")
-	origin, valid := normalizeAsset(AssetKey{Type: "dominio", Value: source})
+	origin, valid := caso.NormalizeAsset(AssetKey{Type: "dominio", Value: source})
 	if !found || !valid || origin.Value != owner {
 		return AssetKey{}, AssetKey{}, "", false
 	}
@@ -80,9 +80,9 @@ func dnsAssetPair(record caso.Record) (AssetKey, AssetKey, string, bool) {
 		if err != nil || address.Zone() != "" || (rr == "A" && !address.Is4()) || (rr == "AAAA" && !address.Is6()) {
 			return AssetKey{}, AssetKey{}, "", false
 		}
-		destination = hostAsset(address.Unmap().String())
+		destination = caso.AssetHost(address.Unmap().String())
 	case "CNAME", "NS", "PTR", "MX", "SRV":
-		destination, valid = normalizeAsset(AssetKey{Type: "dominio", Value: target})
+		destination, valid = caso.NormalizeAsset(AssetKey{Type: "dominio", Value: target})
 		if !valid {
 			return AssetKey{}, AssetKey{}, "", false
 		}
@@ -97,7 +97,7 @@ func relatedFileHashes(hashes []caso.Indicator, anchor AssetKey, emit func(asset
 	for _, hash := range hashes {
 		switch hash.Type {
 		case "sha256", "sha1", "md5":
-			if key, valid := normalizeAsset(AssetKey(hash)); valid {
+			if key, valid := caso.NormalizeAsset(AssetKey(hash)); valid {
 				seen[key] = true
 			}
 		}

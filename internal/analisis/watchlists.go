@@ -21,7 +21,7 @@ type WatchlistAsset struct {
 func ChangeWatchlist(ctx context.Context, store *caso.Store, name string, action caso.WatchAction, asset AssetKey) (bool, error) {
 	if action == caso.WatchAdd || action == caso.WatchRemove {
 		var valid bool
-		asset, valid = normalizeAsset(asset)
+		asset, valid = caso.NormalizeAsset(asset)
 		if !valid {
 			return false, ErrAssetQuery
 		}
@@ -45,7 +45,7 @@ func ReviewWatchlist(ctx context.Context, store *caso.Store, name string) (Watch
 	}
 	var ips []watchedIP
 	for index, asset := range list.Assets {
-		key, valid := normalizeAsset(AssetKey(asset))
+		key, valid := caso.NormalizeAsset(AssetKey(asset))
 		if !valid || key != AssetKey(asset) {
 			return WatchlistReview{}, caso.ErrWatchlist
 		}
@@ -58,7 +58,7 @@ func ReviewWatchlist(ctx context.Context, store *caso.Store, name string) (Watch
 	direct := make([]string, len(list.Assets))
 	latest := make([]assetSourceCursor, len(list.Assets))
 	err = store.Walk(ctx, func(record caso.Record) error {
-		network := recordNetwork(record)
+		network := caso.RecordNetwork(record)
 		save := func(index int, role, coverage string) {
 			row := &review.Rows[index]
 			if role == "cobertura" {
@@ -73,15 +73,15 @@ func ReviewWatchlist(ctx context.Context, store *caso.Store, name string) (Watch
 				row.Latest = &AssetReference{Evidence: reference(record), Role: role, Network: coverage}
 			}
 		}
-		recordAssets(record, network, "", func(key AssetKey, role string) {
+		caso.RecordAssets(record, network, "", func(key AssetKey, role string) {
 			if index, exists := positions[key]; exists && direct[index] != record.ID {
 				save(index, role, "")
 			}
 		})
-		if network.value != "" {
+		if network.Value != "" {
 			for _, ip := range ips {
-				if direct[ip.position] != record.ID && network.contains(ip.address) {
-					save(ip.position, "cobertura", network.value)
+				if direct[ip.position] != record.ID && network.Contains(ip.address) {
+					save(ip.position, "cobertura", network.Value)
 				}
 			}
 		}

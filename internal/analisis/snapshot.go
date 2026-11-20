@@ -86,8 +86,8 @@ func analysisRecord(base caso.Record) caso.Record {
 	record := caso.Record{
 		ID: base.ID, Revision: base.Revision, UpdatedAt: clip(base.UpdatedAt, 48),
 		Kind: clip(base.Kind, 64), Time: clip(base.Time, 48), Title: clip(base.Title, 160),
-		SourceID: clip(base.SourceID, 160), SHA256: digest(base.SHA256),
-		Network: recordNetwork(base).value,
+		SourceID: clip(base.SourceID, 160), SHA256: caso.SHA256Digest(base.SHA256),
+		Network: caso.RecordNetwork(base).Value,
 	}
 	hosts := observedHosts(base.Source)
 	if base.Traffic != nil {
@@ -97,7 +97,7 @@ func analysisRecord(base caso.Record) caso.Record {
 				record.HTTPFindings = append(record.HTTPFindings, caso.HTTPFinding{Rule: finding.Rule, Label: label})
 			}
 		}
-		if host := networkHost(base.Source); host != "" {
+		if host := caso.NetworkHost(base.Source); host != "" {
 			hosts = []string{host}
 		}
 	}

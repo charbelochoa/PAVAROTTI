@@ -2,10 +2,6 @@ package analisis
 
 import (
 	"context"
-	"encoding/hex"
-	"net"
-	"net/netip"
-	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -100,7 +96,7 @@ func httpSignals(ctx context.Context, observations []observation, citeRules bool
 			continue
 		}
 		reviewed++
-		host := networkHost(item.record.Source)
+		host := caso.NetworkHost(item.record.Source)
 		if status := item.record.Traffic.Status; status >= 100 && status <= 599 {
 			responses.add(groupKey{value: strconv.Itoa(status), scope: host}, item.ref)
 		}
@@ -158,84 +154,7 @@ func chronology(ctx context.Context, observations []observation) result {
 }
 
 func observedHosts(source string) []string {
-	return sourceHosts(source, false)
-}
-
-func sourceHosts(source string, allowSingleLabel bool) []string {
-	if len(source) > 16<<10 {
-		return nil
-	}
-	seen := make(map[string]bool)
-	var hosts []string
-	for part := range strings.SplitSeq(source, ",") {
-		host := networkHost(part)
-		if host == "" && allowSingleLabel {
-			host = namedHost(strings.TrimSpace(part))
-		}
-		if host != "" && !seen[host] {
-			hosts = append(hosts, host)
-			seen[host] = true
-			if len(hosts) == 32 {
-				break
-			}
-		}
-	}
-	return hosts
-}
-
-func networkHost(value string) string {
-	input := strings.TrimSpace(value)
-	if input == "" || len(input) > 2048 {
-		return ""
-	}
-	explicit := strings.Contains(input, "://")
-	if explicit {
-		parsed, err := url.Parse(input)
-		if err != nil || (!strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https")) {
-			return ""
-		}
-		input = parsed.Hostname()
-	} else if host, _, err := net.SplitHostPort(input); err == nil {
-		input = host
-		explicit = true
-	} else if strings.HasPrefix(input, "[") && strings.HasSuffix(input, "]") {
-		input = input[1 : len(input)-1]
-	}
-	if address, err := netip.ParseAddr(input); err == nil {
-		return address.WithZone("").Unmap().String()
-	}
-	if !explicit && !strings.Contains(strings.TrimSuffix(input, "."), ".") {
-		return ""
-	}
-	return namedHost(input)
-}
-
-func namedHost(input string) string {
-	host := strings.ToLower(strings.TrimSuffix(input, "."))
-	if len(host) > 253 {
-		return ""
-	}
-	for label := range strings.SplitSeq(host, ".") {
-		if label == "" || len(label) > 63 || strings.HasPrefix(label, "-") || strings.HasSuffix(label, "-") {
-			return ""
-		}
-		for _, char := range label {
-			if !(char >= 'a' && char <= 'z' || char >= '0' && char <= '9' || char == '-') {
-				return ""
-			}
-		}
-	}
-	return host
-}
-
-func digest(input string) string {
-	if len(input) != 64 {
-		return ""
-	}
-	if _, err := hex.DecodeString(input); err != nil {
-		return ""
-	}
-	return strings.ToLower(input)
+	return caso.SourceHosts(source, false)
 }
 
 func clip(value string, limit int) string {

@@ -34,7 +34,7 @@ type AssetCoverageReport struct {
 }
 
 func CoverAsset(ctx context.Context, store *caso.Store, criteria AssetCoverageCriteria) (AssetCoverageReport, error) {
-	key, valid := normalizeAsset(criteria.AssetKey)
+	key, valid := caso.NormalizeAsset(criteria.AssetKey)
 	if !valid {
 		return AssetCoverageReport{}, ErrAssetQuery
 	}

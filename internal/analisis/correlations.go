@@ -5,10 +5,12 @@ import (
 	"net/netip"
 	"slices"
 	"sort"
+
+	"pavarotti/internal/caso"
 )
 
 type networkSource struct {
-	network assetNetwork
+	network caso.AssetNetwork
 	ref     Evidence
 }
 
@@ -27,15 +29,15 @@ func correlateEvidence(ctx context.Context, observations []observation) result {
 		}
 		if indicator := record.Indicator; indicator != nil {
 			if indicator.Type == "sha256" {
-				value := digest(indicator.Value)
+				value := caso.SHA256Digest(indicator.Value)
 				if _, found := indicators[value]; value != "" && !found {
 					indicators[value] = item.ref
 				}
 			}
 			continue
 		}
-		if network := recordNetwork(record); network.value != "" {
-			key := groupKey{value: network.value, scope: record.Kind}
+		if network := caso.RecordNetwork(record); network.Value != "" {
+			key := groupKey{value: network.Value, scope: record.Kind}
 			if _, found := networks[key]; !found {
 				networks[key] = networkSource{network: network, ref: item.ref}
 			}
@@ -79,13 +81,13 @@ func coveredAddresses(ctx context.Context, networks map[groupKey]networkSource, 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		first := source.network.start
-		if source.network.prefix.IsValid() {
-			first = source.network.prefix.Addr()
+		first := source.network.Start
+		if source.network.Prefix.IsValid() {
+			first = source.network.Prefix.Addr()
 		}
 		start := sort.Search(len(ordered), func(i int) bool { return ordered[i].Compare(first) >= 0 })
 		tail := ordered[start:]
-		count := sort.Search(len(tail), func(i int) bool { return !source.network.contains(tail[i]) })
+		count := sort.Search(len(tail), func(i int) bool { return !source.network.Contains(tail[i]) })
 		if count == 0 {
 			continue
 		}
