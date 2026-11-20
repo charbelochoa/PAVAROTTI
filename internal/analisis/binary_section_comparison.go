@@ -2,6 +2,8 @@ package analisis
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"slices"
@@ -78,7 +80,16 @@ type BinarySectionInventory struct {
 	groups map[binarySectionIdentity][]BinarySectionEntry
 }
 
+type BinarySectionReader struct {
+	original []byte
+}
+
 func ReadBinarySections(ctx context.Context, store *caso.Store, target BinarySectionTarget, sample io.Reader) (BinarySectionInventory, error) {
+	var reader BinarySectionReader
+	return reader.Read(ctx, store, target, sample)
+}
+
+func (reader *BinarySectionReader) Read(ctx context.Context, store *caso.Store, target BinarySectionTarget, sample io.Reader) (BinarySectionInventory, error) {
 	if target.RecordID == "" || target.Revision < 1 || sample == nil {
 		return BinarySectionInventory{}, ErrBinarySectionRequest
 	}
@@ -86,11 +97,15 @@ func ReadBinarySections(ctx context.Context, store *caso.Store, target BinarySec
 	if err != nil {
 		return BinarySectionInventory{}, err
 	}
-	data, err := readVerifiedBinary(ctx, sample, saved.Size, record.SHA256)
+	data, err := readVerifiedBinaryBuffered(ctx, sample, saved.Size, record.SHA256, reader.original)
 	if err != nil {
 		return BinarySectionInventory{}, err
 	}
+	reader.original = data
 	layout := triaje.InspectLayout(data)
+	if err := ctx.Err(); err != nil {
+		return BinarySectionInventory{}, err
+	}
 	switch layout.Format {
 	case "ELF", "PE", "Mach-O", "Mach-O universal":
 	default:
@@ -137,7 +152,10 @@ func ReadBinarySections(ctx context.Context, store *caso.Store, target BinarySec
 				if bytesHashed > 2*triaje.MaxBinaryBytes {
 					return BinarySectionInventory{}, ErrBinarySectionWork
 				}
-				digest = caso.Hash(data[offset : offset+region.Size])
+				digest, err = hashBinarySection(ctx, data[offset:offset+region.Size])
+				if err != nil {
+					return BinarySectionInventory{}, err
+				}
 				digests[region] = digest
 			}
 			entry.SHA256 = digest
@@ -147,6 +165,17 @@ func ReadBinarySections(ctx context.Context, store *caso.Store, target BinarySec
 		inventory.groups[identity] = append(inventory.groups[identity], entry)
 	}
 	return inventory, nil
+}
+
+func hashBinarySection(ctx context.Context, data []byte) (string, error) {
+	hash := sha256.New()
+	for block := range slices.Chunk(data, binaryVerificationBlockSize) {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		_, _ = hash.Write(block)
+	}
+	return hex.EncodeToString(hash.Sum(nil)), ctx.Err()
 }
 
 func sameBinarySection(a, b triaje.Section) bool {

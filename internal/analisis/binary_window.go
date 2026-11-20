@@ -16,6 +16,7 @@ import (
 )
 
 const BinaryWindowSchema = "pavarotti.binary-window-citation.v1"
+const binaryVerificationBlockSize = 64 << 10
 
 var (
 	ErrBinaryWindowRequest  = errors.New("indica una revisión, una ubicación y un recorrido válidos")
@@ -154,18 +155,26 @@ func (evidence *binaryWindowEvidence) readSample(ctx context.Context) error {
 }
 
 func readVerifiedBinary(ctx context.Context, source io.Reader, size int, digest string) ([]byte, error) {
+	return readVerifiedBinaryBuffered(ctx, source, size, digest, nil)
+}
+
+func readVerifiedBinaryBuffered(ctx context.Context, source io.Reader, size int, digest string, buffer []byte) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if source == nil || size <= 0 || size > triaje.MaxBinaryBytes {
 		return nil, ErrBinaryWindowSample
 	}
-	const blockSize = 64 << 10
-	data := make([]byte, min(size, blockSize))
+	var data []byte
+	if cap(buffer) >= size {
+		data = buffer[:size]
+	} else {
+		data = make([]byte, min(size, binaryVerificationBlockSize))
+	}
 	hash := sha256.New()
 	var eof bool
-	for start := 0; start < size; start += blockSize {
-		end := min(start+blockSize, size)
+	for start := 0; start < size; start += binaryVerificationBlockSize {
+		end := min(start+binaryVerificationBlockSize, size)
 		block := data[start:end]
 		n, err := readBinaryBlock(ctx, source, block)
 		if canceled := ctx.Err(); canceled != nil {
