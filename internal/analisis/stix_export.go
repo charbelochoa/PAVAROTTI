@@ -161,7 +161,7 @@ func (build *stixBuilder) add(record caso.Record) {
 		entry.Type, entry.Content = "note", "Procedencia de evidencia del expediente PAVAROTTI."
 	default:
 		if record.Indicator != nil {
-			key, valid := normalizeAsset(AssetKey(*record.Indicator))
+			key, valid := caso.NormalizeAsset(AssetKey(*record.Indicator))
 			if !valid || (key.Type == "dominio" && strings.Contains(key.Value, "_")) {
 				return
 			}
@@ -189,8 +189,8 @@ func (build *stixBuilder) add(record caso.Record) {
 			entry.Last = entry.First
 		} else {
 			entry.Type, entry.Content = "note", "Procedencia de evidencia del expediente PAVAROTTI."
-			if network := recordNetwork(record); network.value != "" {
-				entry.Content += " Red declarada: " + network.value
+			if network := caso.RecordNetwork(record); network.Value != "" {
+				entry.Content += " Red declarada: " + network.Value
 			}
 		}
 	}
@@ -211,8 +211,8 @@ func (build *stixBuilder) observables(record caso.Record) []string {
 	}
 	var ids []string
 	hashes := make(map[string]string)
-	network := recordNetwork(record)
-	recordAssets(record, network, "", func(key AssetKey, _ string) {
+	network := caso.RecordNetwork(record)
+	caso.RecordAssets(record, network, "", func(key AssetKey, _ string) {
 		if key.Type == "dominio" && strings.Contains(key.Value, "_") {
 			return
 		}
@@ -402,7 +402,7 @@ func evidenceOrigin(record caso.Record, stixID string) caso.STIXOrigin {
 	if source := clip(record.SourceID, 160); source != "" {
 		description += " | Posición · " + source
 	}
-	if sha := digest(record.SHA256); sha != "" {
+	if sha := caso.SHA256Digest(record.SHA256); sha != "" {
 		description += " | SHA-256 · " + sha
 	}
 	if stixID != "" {
@@ -411,12 +411,12 @@ func evidenceOrigin(record caso.Record, stixID string) caso.STIXOrigin {
 	return caso.STIXOrigin{SourceName: "PAVAROTTI", ExternalID: record.ID + "@" + strconv.Itoa(record.Revision), Description: clip(description, 512)}
 }
 
-func networkPrefixes(network assetNetwork) []netip.Prefix {
-	if network.prefix.IsValid() {
-		return []netip.Prefix{network.prefix}
+func networkPrefixes(network caso.AssetNetwork) []netip.Prefix {
+	if network.Prefix.IsValid() {
+		return []netip.Prefix{network.Prefix}
 	}
 	var result []netip.Prefix
-	for first := network.start; first.IsValid() && first.Compare(network.end) <= 0; {
+	for first := network.Start; first.IsValid() && first.Compare(network.End) <= 0; {
 		best := netip.PrefixFrom(first, first.BitLen())
 		last := first
 		for bits := best.Bits() - 1; bits >= 0; bits-- {
@@ -425,7 +425,7 @@ func networkPrefixes(network assetNetwork) []netip.Prefix {
 				break
 			}
 			end := prefixLast(candidate)
-			if end.Compare(network.end) > 0 {
+			if end.Compare(network.End) > 0 {
 				break
 			}
 			best, last = candidate, end

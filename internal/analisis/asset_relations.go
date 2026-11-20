@@ -61,7 +61,7 @@ type relationAggregate struct {
 }
 
 func RelateAsset(ctx context.Context, store *caso.Store, criteria AssetRelationCriteria) (AssetRelationsReport, error) {
-	anchor, valid := normalizeAsset(criteria.AssetKey)
+	anchor, valid := caso.NormalizeAsset(criteria.AssetKey)
 	if !valid {
 		return AssetRelationsReport{}, ErrAssetQuery
 	}
@@ -76,9 +76,9 @@ func RelateAsset(ctx context.Context, store *caso.Store, criteria AssetRelationC
 	}
 	report := AssetRelationsReport{Schema: AssetRelationsSchema, Criteria: criteria}
 	address, _ := netip.ParseAddr(anchor.Value)
-	var network assetNetwork
+	var network caso.AssetNetwork
 	if anchor.Type == "red" {
-		network = parseAssetNetwork(anchor.Value)
+		network = caso.ParseAssetNetwork(anchor.Value)
 	}
 	groups := make(map[assetRelationKey]*relationAggregate)
 	err := store.WalkFiltered(ctx, filter, func(record caso.Record) error {

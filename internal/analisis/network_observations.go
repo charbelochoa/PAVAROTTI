@@ -32,17 +32,17 @@ type assetInput struct {
 }
 
 func ListNetworkObservations(ctx context.Context, store *caso.Store, value, after string, limit int) (NetworkObservations, error) {
-	key, ok := normalizeAsset(AssetKey{Type: "red", Value: value})
+	key, ok := caso.NormalizeAsset(AssetKey{Type: "red", Value: value})
 	pageSize, valid := assetPageSize(limit)
 	var cursor netip.Addr
-	network := parseAssetNetwork(key.Value)
+	network := caso.ParseAssetNetwork(key.Value)
 	if !ok || !valid || len(after) > 45 {
 		return NetworkObservations{}, ErrAssetQuery
 	}
 	if after != "" {
 		var err error
 		cursor, err = netip.ParseAddr(after)
-		if err != nil || cursor.String() != after || cursor.Zone() != "" || !network.contains(cursor) {
+		if err != nil || cursor.String() != after || cursor.Zone() != "" || !network.Contains(cursor) {
 			return NetworkObservations{}, ErrAssetQuery
 		}
 	}
@@ -70,7 +70,7 @@ func ListNetworkObservations(ctx context.Context, store *caso.Store, value, afte
 }
 
 func collectAssetInput(ctx context.Context, store *caso.Store, key AssetKey, period *caso.EvidencePeriod, sources bool) ([]assetInput, error) {
-	network := parseAssetNetwork(key.Value)
+	network := caso.ParseAssetNetwork(key.Value)
 	address, _ := netip.ParseAddr(key.Value)
 	var inputs []assetInput
 	filter := caso.EvidenceFilter{}
@@ -117,7 +117,7 @@ func collectAssetInput(ctx context.Context, store *caso.Store, key AssetKey, per
 	return inputs, ctx.Err()
 }
 
-func observedNetworkAddresses(record caso.Record, network assetNetwork) []netip.Addr {
+func observedNetworkAddresses(record caso.Record, network caso.AssetNetwork) []netip.Addr {
 	var hosts []string
 	switch {
 	case record.Indicator != nil:
@@ -126,7 +126,7 @@ func observedNetworkAddresses(record caso.Record, network assetNetwork) []netip.
 		if record.Traffic.Status < 100 || record.Traffic.Status > 599 || record.HTTPTransportFailure() {
 			return nil
 		}
-		hosts = []string{networkHost(record.Source)}
+		hosts = []string{caso.NetworkHost(record.Source)}
 	case record.Kind == "dns":
 		if strings.Contains(record.SourceID, "/pregunta/") {
 			return nil
@@ -136,7 +136,7 @@ func observedNetworkAddresses(record caso.Record, network assetNetwork) []netip.
 				return nil
 			}
 			last := strings.LastIndexByte(record.Source, ',')
-			hosts = []string{networkHost(record.Source[last+1:])}
+			hosts = []string{caso.NetworkHost(record.Source[last+1:])}
 		} else {
 			hosts = observedHosts(record.Source)
 		}
@@ -144,7 +144,7 @@ func observedNetworkAddresses(record caso.Record, network assetNetwork) []netip.
 	var addresses []netip.Addr
 	for _, host := range hosts {
 		address, err := netip.ParseAddr(host)
-		if err == nil && network.contains(address) {
+		if err == nil && network.Contains(address) {
 			addresses = append(addresses, address)
 		}
 	}
@@ -162,7 +162,7 @@ func networkObservationRows(inputs []assetInput) ([]NetworkObservation, int) {
 		for _, address := range in.Addresses {
 			row := members[address]
 			if row == nil {
-				row = &NetworkObservation{AssetKey: hostAsset(address.String())}
+				row = &NetworkObservation{AssetKey: caso.AssetHost(address.String())}
 				members[address] = row
 			}
 			row.Count++

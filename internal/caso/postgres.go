@@ -118,7 +118,14 @@ func (s *Store) beginCaseWrite(ctx context.Context, exclusive bool) (*sql.Tx, er
 func (s *Store) postgresWalk(ctx context.Context, visit func(Record) error) error {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
-	rows, err := s.db.QueryContext(ctx, `
+	return s.postgresBatches(ctx, s.db, nil, func(_ string, records, edits []Record) error {
+		applyPostgresEdits(records, edits)
+		return walkBatchPositions(ctx, records, nil, visit)
+	})
+}
+
+func (s *Store) postgresBatches(ctx context.Context, query queryer, keys []string, visit func(string, []Record, []Record) error) error {
+	rows, err := query.QueryContext(ctx, `
 		SELECT b.batch_key, b.payload, COALESCE((
 			SELECT jsonb_agg(latest.snapshot)
 			FROM (
@@ -129,7 +136,8 @@ func (s *Store) postgresWalk(ctx context.Context, visit func(Record) error) erro
 			) latest
 		), '[]'::jsonb)
 		FROM pavarotti_evidence_batches b
-		WHERE b.expediente = $1 ORDER BY b.batch_key`, s.expediente)
+		WHERE b.expediente = $1 AND ($2::text[] IS NULL OR b.batch_key = ANY($2))
+		ORDER BY b.batch_key`, s.expediente, keys)
 	if err != nil {
 		return err
 	}
@@ -148,20 +156,18 @@ func (s *Store) postgresWalk(ctx context.Context, visit func(Record) error) erro
 		if err := json.Unmarshal(overlays, &edited); err != nil {
 			return err
 		}
-		for _, record := range edited {
-			_, ordinal, valid := recordPosition(record.ID)
-			if valid && ordinal <= len(batch) && batch[ordinal-1].ID == record.ID {
-				batch[ordinal-1] = record
-			}
-		}
-		for _, record := range batch {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			if err := visit(record); err != nil {
-				return err
-			}
+		if err := visit(key, batch, edited); err != nil {
+			return err
 		}
 	}
 	return rows.Err()
+}
+
+func applyPostgresEdits(records, edited []Record) {
+	for _, record := range edited {
+		_, ordinal, valid := recordPosition(record.ID)
+		if valid && ordinal <= len(records) && records[ordinal-1].ID == record.ID {
+			records[ordinal-1] = record
+		}
+	}
 }

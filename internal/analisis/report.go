@@ -136,7 +136,7 @@ func analyze(ctx context.Context, records []caso.Record, version string) (Report
 func reference(record caso.Record) Evidence {
 	return Evidence{ID: clip(record.ID, 160), Revision: record.Revision,
 		Kind: clip(record.Kind, 64), Time: clip(record.Time, 48), Title: clip(record.Title, 160),
-		SourceID: clip(record.SourceID, 160), SHA256: digest(record.SHA256)}
+		SourceID: clip(record.SourceID, 160), SHA256: caso.SHA256Digest(record.SHA256)}
 }
 
 func (r Report) Text() string {
