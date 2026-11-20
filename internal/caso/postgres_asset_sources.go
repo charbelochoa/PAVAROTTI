@@ -19,7 +19,7 @@ type postgresAssetSelection struct {
 	ordinals []int
 }
 
-func (s *Store) postgresAssetCandidates(ctx context.Context, asset AssetKey, address netip.Addr, visit func(Record) error) error {
+func (s *Store) postgresAssetCandidates(ctx context.Context, hash uint64, address netip.Addr, visit func(Record) error) error {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
@@ -27,7 +27,7 @@ func (s *Store) postgresAssetCandidates(ctx context.Context, asset AssetKey, add
 		return err
 	}
 	defer tx.Rollback()
-	selection, err := s.postgresAssetSelection(ctx, tx, asset, address)
+	selection, err := s.postgresAssetSelection(ctx, tx, hash, address)
 	if err != nil {
 		return err
 	}
@@ -41,7 +41,7 @@ func (s *Store) postgresAssetCandidates(ctx context.Context, asset AssetKey, add
 			s.assetIndex.remember(key, index)
 			var positions []int
 			if index != nil {
-				positions = index.candidates(asset, address)
+				positions = index.candidates(hash, address)
 				if len(positions) == 0 {
 					return nil
 				}
@@ -68,7 +68,7 @@ func (s *Store) postgresAssetCandidates(ctx context.Context, asset AssetKey, add
 	return tx.Commit()
 }
 
-func (s *Store) postgresAssetSelection(ctx context.Context, tx *sql.Tx, asset AssetKey, address netip.Addr) (postgresAssetSelection, error) {
+func (s *Store) postgresAssetSelection(ctx context.Context, tx *sql.Tx, hash uint64, address netip.Addr) (postgresAssetSelection, error) {
 	selection := postgresAssetSelection{uncached: make(map[string]assetBatchVersion)}
 	rows, err := tx.QueryContext(ctx, `SELECT batch_key, xmin::text FROM pavarotti_evidence_batches WHERE expediente = $1`, s.expediente)
 	if err != nil {
@@ -86,7 +86,7 @@ func (s *Store) postgresAssetSelection(ctx context.Context, tx *sql.Tx, asset As
 			selection.uncached[key] = version
 			continue
 		}
-		positions := index.candidates(asset, address)
+		positions := index.candidates(hash, address)
 		if len(positions) > maxSparseAssetRows {
 			selection.dense = append(selection.dense, key)
 			continue

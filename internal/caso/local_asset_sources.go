@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-func (s *Store) localAssetCandidates(ctx context.Context, asset AssetKey, address netip.Addr, visit func(Record) error) error {
+func (s *Store) localAssetCandidates(ctx context.Context, hash uint64, address netip.Addr, visit func(Record) error) error {
 	unlock, err := s.lockContext(ctx)
 	if err != nil {
 		return err
@@ -38,7 +38,7 @@ func (s *Store) localAssetCandidates(ctx context.Context, asset AssetKey, addres
 		}
 		var positions []int
 		if index != nil {
-			positions = index.candidates(asset, address)
+			positions = index.candidates(hash, address)
 			if len(positions) == 0 {
 				return nil
 			}
