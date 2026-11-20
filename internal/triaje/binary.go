@@ -68,7 +68,10 @@ func InspectLayout(data []byte) Binary {
 }
 
 func inspectBinary(data []byte, full bool) Binary {
-	result := Binary{SHA256: fmt.Sprintf("%x", sha256.Sum256(data)), Format: "Sin identificar", Size: len(data)}
+	result := Binary{Format: "Sin identificar", Size: len(data)}
+	if full {
+		result.SHA256 = fmt.Sprintf("%x", sha256.Sum256(data))
+	}
 	reader := bytes.NewReader(data)
 	image := binaryImageRange{size: uint64(len(data))}
 	switch {
