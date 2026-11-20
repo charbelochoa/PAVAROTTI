@@ -1,16 +1,20 @@
 package caso
 
 import (
+	"cmp"
 	"context"
+	"hash/maphash"
 	"net/netip"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 )
 
 const maxAssetIndexBytes = 32 << 20
 const maxAssetIndexBatches = 4096
+const assetPostingBytes = 16
+
+var assetHashSeed = maphash.MakeSeed()
 
 type assetBatchVersion struct {
 	modified time.Time
@@ -21,10 +25,14 @@ type assetBatchVersion struct {
 type assetBatchIndex struct {
 	version  assetBatchVersion
 	weight   int
-	keys     map[AssetKey]int
-	ordinals [][]int
+	postings []assetPosting
 	notes    []int
 	networks []assetBatchNetwork
+}
+
+type assetPosting struct {
+	hash    uint64
+	ordinal int
 }
 
 type assetBatchNetwork struct {
@@ -71,7 +79,7 @@ func (cache *assetIndexCache) remember(key string, batch *assetBatchIndex) {
 }
 
 func buildAssetIndex(ctx context.Context, version assetBatchVersion, records []Record) (*assetBatchIndex, error) {
-	index := &assetBatchIndex{version: version, weight: 256, keys: make(map[AssetKey]int)}
+	index := &assetBatchIndex{version: version, weight: 256}
 	for position, record := range records {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -94,35 +102,40 @@ func buildAssetIndex(ctx context.Context, version assetBatchVersion, records []R
 			if index.weight > maxAssetIndexBytes {
 				return
 			}
-			slot, found := index.keys[key]
-			if !found {
-				slot = len(index.ordinals)
-				index.keys[AssetKey{Type: strings.Clone(key.Type), Value: strings.Clone(key.Value)}] = slot
-				index.ordinals = append(index.ordinals, nil)
-				index.weight += 192 + len(key.Type) + len(key.Value)
-			}
-			positions := index.ordinals[slot]
-			if len(positions) == 0 || positions[len(positions)-1] != ordinal {
-				index.ordinals[slot] = append(positions, ordinal)
-				index.weight += 16
-			}
+			capacity := cap(index.postings)
+			index.postings = append(index.postings, assetPosting{maphash.Comparable(assetHashSeed, key), ordinal})
+			index.weight += (cap(index.postings) - capacity) * assetPostingBytes
 		})
 	}
 	if index.weight > maxAssetIndexBytes {
 		return nil, nil
 	}
-	return index, nil
+	slices.SortFunc(index.postings, func(a, b assetPosting) int {
+		if order := cmp.Compare(a.hash, b.hash); order != 0 {
+			return order
+		}
+		return cmp.Compare(a.ordinal, b.ordinal)
+	})
+	index.postings = slices.Compact(index.postings)
+	return index, ctx.Err()
 }
 
-func (index *assetBatchIndex) candidates(key AssetKey, address netip.Addr) []int {
-	var direct []int
-	if slot, found := index.keys[key]; found {
-		direct = index.ordinals[slot]
+func (index *assetBatchIndex) candidates(hash uint64, address netip.Addr) []int {
+	start, _ := slices.BinarySearchFunc(index.postings, hash, func(posting assetPosting, hash uint64) int {
+		return cmp.Compare(posting.hash, hash)
+	})
+	end := start
+	for end < len(index.postings) && index.postings[end].hash == hash {
+		end++
+	}
+	positions := make([]int, end-start, end-start+len(index.notes))
+	for index, posting := range index.postings[start:end] {
+		positions[index] = posting.ordinal
 	}
 	if len(index.notes) == 0 && (!address.IsValid() || len(index.networks) == 0) {
-		return direct
+		return positions
 	}
-	positions := slices.Concat(direct, index.notes)
+	positions = append(positions, index.notes...)
 	if address.IsValid() {
 		for _, cover := range index.networks {
 			if cover.network.Contains(address) {
@@ -136,10 +149,11 @@ func (index *assetBatchIndex) candidates(key AssetKey, address netip.Addr) []int
 
 func (s *Store) WalkAssetCandidates(ctx context.Context, key AssetKey, visit func(Record) error) error {
 	address, _ := netip.ParseAddr(key.Value)
+	hash := maphash.Comparable(assetHashSeed, key)
 	if s.db != nil {
-		return s.postgresAssetCandidates(ctx, key, address, visit)
+		return s.postgresAssetCandidates(ctx, hash, address, visit)
 	}
-	return s.localAssetCandidates(ctx, key, address, visit)
+	return s.localAssetCandidates(ctx, hash, address, visit)
 }
 
 func walkBatchPositions(ctx context.Context, records []Record, positions []int, visit func(Record) error) error {
