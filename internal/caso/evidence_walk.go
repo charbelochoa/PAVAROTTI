@@ -125,6 +125,9 @@ func (s *Store) postgresWalkFiltered(ctx context.Context, filter EvidenceFilter,
 		if err := rows.Scan(&key, &ordinal, &revision, &data); err != nil {
 			return err
 		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		var record Record
 		if err := json.Unmarshal(data, &record); err != nil {
 			return err

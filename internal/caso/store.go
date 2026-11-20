@@ -228,16 +228,12 @@ func (s *Store) walkLocal(ctx context.Context, withEdits bool, visit func(Record
 }
 
 func (s *Store) walkLocalFiltered(ctx context.Context, withEdits bool, filter EvidenceFilter, visit func(Record) error) error {
-	unlock, err := s.lockContext(ctx)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	return s.walkLocalBatches(ctx, func(key string, entry os.DirEntry) error {
+	visitBatch := func(key string, entry os.DirEntry) error {
 		var info os.FileInfo
 		var dates batchDates
 		var knownDates bool
 		if len(filter.Periods) > 0 {
+			var err error
 			info, err = entry.Info()
 			if err != nil {
 				return err
@@ -249,6 +245,9 @@ func (s *Store) walkLocalFiltered(ctx context.Context, withEdits bool, filter Ev
 		}
 		data, err := os.ReadFile(filepath.Join(s.path, entry.Name()))
 		if err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
 			return err
 		}
 		batch, err := decodeBatch(key, data)
@@ -276,7 +275,45 @@ func (s *Store) walkLocalFiltered(ctx context.Context, withEdits bool, filter Ev
 			}
 		}
 		return nil
+	}
+	if filter.HTTP && !withEdits {
+		return s.walkLocalBatchSnapshot(ctx, visitBatch)
+	}
+	unlock, err := s.lockContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return s.walkLocalBatches(ctx, visitBatch)
+}
+
+func (s *Store) walkLocalBatchSnapshot(ctx context.Context, visit func(string, os.DirEntry) error) error {
+	unlock, err := s.lockContext(ctx)
+	if err != nil {
+		return err
+	}
+	type batchFile struct {
+		key   string
+		entry os.DirEntry
+	}
+	var snapshot []batchFile
+	err = s.walkLocalBatches(ctx, func(key string, entry os.DirEntry) error {
+		snapshot = append(snapshot, batchFile{key, entry})
+		return nil
 	})
+	unlock()
+	if err != nil {
+		return err
+	}
+	for _, file := range snapshot {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := visit(file.key, file.entry); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) walkLocalBatches(ctx context.Context, visit func(string, os.DirEntry) error) error {
