@@ -27,8 +27,8 @@ type machOSlice struct {
 	binaryImageRange
 }
 
-func (b *Binary) inspectMachO(data []byte, file *macho.File, image binaryImageRange, remaining int, full bool) {
-	sectionBudget := min(len(file.Sections), (maxBinarySections-len(b.Sections))/remaining)
+func (b *Binary) inspectMachO(data []byte, file *macho.File, image binaryImageRange, remaining, sectionLimit int, full bool) {
+	sectionBudget := min(len(file.Sections), sectionLimit)
 	instructionBudget := len(b.Instructions) + (maxBinaryInstructions-len(b.Instructions))/remaining
 	var decode instructionDecoder
 	if full {
@@ -73,7 +73,9 @@ func (b *Binary) inspectMachOFat(data []byte, full bool) {
 		return
 	}
 	var architectures []string
+	totalSections := 0
 	for _, member := range usable {
+		totalSections += len(member.file.Sections)
 		label := member.file.Cpu.String()
 		if !slices.Contains(architectures, label) {
 			architectures = append(architectures, label)
@@ -81,17 +83,39 @@ func (b *Binary) inspectMachOFat(data []byte, full bool) {
 	}
 	b.Format, b.Architecture = "Mach-O universal", strings.Join(architectures, " / ")
 	b.UnreadableImages = len(headers) - len(usable)
+	completeInventory := b.UnreadableImages == 0 && totalSections <= maxBinarySections
 	for index, member := range usable {
 		header := member.header
 		remaining := len(usable) - index
 		b.Images = append(b.Images, BinaryImage{Architecture: header.cpu.String(), Subtype: fmt.Sprintf("0x%x", header.subtype),
 			File: FileRange{Offset: fmt.Sprintf("0x%x", header.offset), Size: header.size}})
-		b.inspectMachO(data, member.file, header.binaryImageRange, remaining, full)
+		sectionLimit := (maxBinarySections - len(b.Sections)) / remaining
+		if completeInventory {
+			sectionLimit = len(member.file.Sections)
+		}
+		b.inspectMachO(data, member.file, header.binaryImageRange, remaining, sectionLimit, full)
 		if full {
 			hits := printableStrings(data[header.offset:header.offset+header.size], header.offset, (maxBinaryStrings-len(b.Strings))/remaining)
 			b.Strings = append(b.Strings, hits...)
 		}
 	}
+}
+
+func (b Binary) RestoresUniversalSections() bool {
+	if b.Format != "Mach-O universal" || b.UnreadableImages != 0 || len(b.Images) < 2 || b.SectionCount != len(b.Sections) {
+		return false
+	}
+	used := 0
+	for index := range b.Images {
+		start := used
+		for used < len(b.Sections) && b.Sections[used].Image == index+1 {
+			used++
+		}
+		if used-start > (maxBinarySections-start)/(len(b.Images)-index) {
+			return true
+		}
+	}
+	return false
 }
 
 func machOFatSlices(data []byte) []machOSlice {
