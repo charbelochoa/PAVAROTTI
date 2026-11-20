@@ -71,6 +71,8 @@ Usa **Solo diferencias** para acotar las páginas. La mesa conserva la página a
 
 Se comparan binarios PE, ELF o Mach-O del mismo formato y arquitectura. Para dos Mach-O universales, el emparejamiento usa arquitectura y subtipo. Cada archivo puede ocupar hasta 32 MiB y debe tener un inventario completo de hasta 256 secciones. En secciones sin intervalo físico verificable se comparan sus metadatos. La terminal usa las mismas revisiones y archivos.
 
+Si una inspección anterior de Mach-O universal omitió secciones dentro del límite, vuelve a importar el original y elige el registro **Secciones completas**. Las citas anteriores siguen abriendo su revisión original.
+
 ```bash
 pavarotti comparar-secciones --base-id ID_BASE --base antes.bin --actual-id ID_ACTUAL --actual despues.bin --salida secciones.json
 ```

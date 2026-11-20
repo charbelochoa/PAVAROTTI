@@ -121,7 +121,7 @@ func inspectBinary(data []byte, full bool) Binary {
 	default:
 		if file, err := macho.NewFile(reader); err == nil {
 			result.Format, result.Architecture = "Mach-O", file.Cpu.String()
-			result.inspectMachO(data, file, image, 1, full)
+			result.inspectMachO(data, file, image, 1, maxBinarySections, full)
 		} else {
 			result.inspectMachOFat(data, full)
 		}
