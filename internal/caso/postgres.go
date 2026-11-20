@@ -142,13 +142,14 @@ func (s *Store) postgresBatches(ctx context.Context, query queryer, keys []strin
 		return err
 	}
 	defer rows.Close()
+	var batch []Record
 	for rows.Next() {
 		var key string
 		var data, overlays []byte
 		if err := rows.Scan(&key, &data, &overlays); err != nil {
 			return err
 		}
-		batch, err := decodeBatch(key, data)
+		batch, err = decodeBatchInto(key, data, batch)
 		if err != nil {
 			return err
 		}

@@ -228,6 +228,7 @@ func (s *Store) walkLocal(ctx context.Context, withEdits bool, visit func(Record
 }
 
 func (s *Store) walkLocalFiltered(ctx context.Context, withEdits bool, filter EvidenceFilter, visit func(Record) error) error {
+	var batch []Record
 	visitBatch := func(key string, entry os.DirEntry) error {
 		var info os.FileInfo
 		var dates batchDates
@@ -250,7 +251,7 @@ func (s *Store) walkLocalFiltered(ctx context.Context, withEdits bool, filter Ev
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		batch, err := decodeBatch(key, data)
+		batch, err = decodeBatchInto(key, data, batch)
 		if err != nil {
 			return fmt.Errorf("%s: %w", entry.Name(), err)
 		}
@@ -360,7 +361,12 @@ func (s *Store) latestLocal(record Record) (Record, error) {
 }
 
 func decodeBatch(key string, data []byte) ([]Record, error) {
-	var batch []Record
+	return decodeBatchInto(key, data, nil)
+}
+
+func decodeBatchInto(key string, data []byte, batch []Record) ([]Record, error) {
+	clear(batch[:cap(batch)])
+	batch = batch[:0]
 	if err := json.Unmarshal(data, &batch); err != nil {
 		return nil, err
 	}
