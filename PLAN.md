@@ -47,7 +47,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | --- | --- | --- |
 | Expedientes, terminal y agentes | Evidencia con procedencia, inventario paginado, relaciones y listas de seguimiento con citas, cobertura por periodo, cola persistente, revisión de código Go y exportación STIX. La consulta paginada de fuentes con pocas coincidencias se midió con 180,000 observaciones en el almacén local y PostgreSQL. | Verificar cómo responden el inventario y las fichas cuando coinciden con la mayoría de las observaciones. |
 | Inspección estática de binarios | PE, ELF y Mach-O con ventanas verificadas, referencias por símbolo e imagen y comparación de informes y secciones con citas de ambos lados. La verificación de referencias está medida hasta 6,208 orígenes por informe. La comparación de secciones está medida con dos originales de 32 MiB en cada uno de los tres formatos. | Conservar las citas de inspecciones anteriores al ampliar la cobertura de formatos y arquitecturas. |
-| Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros, reglas pasivas y comparación de hasta 50,000 observaciones con citas a la revisión exacta. La mesa permite cancelar consultas y el almacén local admite importaciones durante una comparación. | Medir la concurrencia de comparaciones que consultan expedientes distintos en un despliegue compartido. |
+| Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros, reglas pasivas y comparación de hasta 50,000 observaciones con citas a la revisión exacta. Las comparaciones concurrentes se verificaron en distintos expedientes de PostgreSQL. | Medir la transferencia y la latencia con ventanas acotadas dentro de lotes que abarcan varios días. |
 | Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, auditoría y restauración. Se prueban la apertura y la edición de otros expedientes durante una restauración. La carga sostenida de ediciones e ingesta está medida en un SSD. | Repetir la carga con los datos y el registro de escritura anticipada de PostgreSQL (WAL) en dispositivos independientes. |
 
 ## Hallazgos de la revisión de 0.3
@@ -105,6 +105,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 42. **Secciones en originales grandes.** La 0.4.32 verifica dos originales con un búfer reutilizable y analiza el inventario con las huellas ya comprobadas. La mesa pagina las secciones, permite cancelar la verificación y conserva la página del resultado al volver de una cita base o actual.
 43. **Inventarios completos de Mach-O universal.** La 0.4.33 conserva todas las secciones cuando el total cabe en el límite de 256. Reimportar un original con un inventario anterior incompleto crea una inspección completa y conserva las citas existentes. Las pruebas con ELF y Mach-O universal usan originales de 32 MiB y, para Mach-O universal, verifican citas cuando cambia el orden de las imágenes.
 44. **Fichas de activos en expedientes grandes.** La 0.4.34 guarda un índice compacto por lote en la caché del proceso. La ficha comprueba cada coincidencia contra la evidencia y consulta la revisión vigente de las notas. Las fichas paginadas de un expediente de 180,000 observaciones coinciden en recuentos, orden y citas con un recorrido completo.
+45. **Comparaciones HTTP entre expedientes.** La 0.4.35 lee los lotes HTTP seleccionados en PostgreSQL y verifica cada observación antes de agregarla al informe. La prueba compartida abre dos expedientes por HTTPS, cancela una comparación y verifica el resultado y las citas del otro expediente.
 
 ## Medición de consultas por fecha
 
@@ -146,6 +147,21 @@ Cuatro trabajadores alternaron 20 comparaciones acotadas y 20 amplias en el mism
 En un expediente de 12,000 observaciones, el CLI de ambas versiones produjo archivos iguales byte a byte para los dos formatos. La prueba de cancelación detuvo una consulta HTTP mientras PostgreSQL esperaba un bloqueo. La consulta abandonó el servidor antes de liberar el bloqueo y la mesa conservó el informe anterior.
 
 Repite la prueba con `go test ./internal/analisis -run '^$' -bench '^BenchmarkConcurrentHTTPComparisons$' -benchtime=40x -benchmem -cpu=4`. Usa una base de pruebas con `PAVAROTTI_TEST_POSTGRES` para medir ambos almacenes.
+
+### Comparaciones entre expedientes de PostgreSQL
+
+Cuatro expedientes con 50,000 observaciones cada uno compartieron PostgreSQL 17.12 en Windows x64. Se hicieron diez rondas simultáneas de cuatro comparaciones. Las consultas acotadas encontraron 125 observaciones por periodo y las amplias encontraron 25,000. Cada expediente tuvo una huella distinta. Los informes, incluidos sus recuentos, orden y citas, coincidieron con sus respectivas consultas secuenciales.
+
+| Expediente y consulta | Mediana 0.4.34 | Mediana 0.4.35 | p95 0.4.34 | p95 0.4.35 |
+| --- | ---: | ---: | ---: | ---: |
+| 1, acotada | 81 ms | 82 ms | 120 ms | 106 ms |
+| 2, amplia | 802 ms | 605 ms | 1,044 ms | 712 ms |
+| 3, acotada | 53 ms | 81 ms | 120 ms | 100 ms |
+| 4, amplia | 837 ms | 618 ms | 1,045 ms | 725 ms |
+
+La memoria asignada promedio bajó de 76.1 a 65.2 MiB por comparación. Se calculó dividiendo los bytes de cada ronda entre sus cuatro consultas. Repite la medición con `go test ./internal/analisis -run '^$' -bench '^BenchmarkHTTPComparisonAcrossCases$' -benchtime=10x -benchmem -cpu=4` en una base separada configurada con `PAVAROTTI_TEST_POSTGRES`.
+
+La prueba de la mesa usó dos instancias HTTPS con cuentas separadas y 50,000 observaciones por expediente. Ambas consultas esperaron un bloqueo controlado. PostgreSQL liberó la espera del primer expediente en 24 ms desde el aborto del navegador. El segundo terminó al liberar el bloqueo y abrió su cita exacta. El primero conservó su informe anterior y pudo reintentar. Los archivos JSON exportados coincidieron con el CLI de la 0.4.34, y la consulta de una cita ajena devolvió 404.
 
 ## Medición del historial HTTP
 
@@ -306,7 +322,8 @@ Repite la medición con `go test ./internal/analisis -run '^$' -bench '^Benchmar
 
 | Vista | Trabajo pendiente | Criterio de cierre |
 | --- | --- | --- |
-| Historial HTTP | Medir comparaciones concurrentes en distintos expedientes compartidos | Comprobar latencia por expediente y confirmar que se puede cancelar una consulta mientras otra conserva su resultado y sus citas. |
+| Activos y fuentes | Medir consultas con muchas coincidencias | Verificar rendimiento, paginación, recuentos y citas en el inventario y en fichas que coinciden con la mayoría de las observaciones. |
+| Historial HTTP | Medir ventanas acotadas dentro de lotes que abarcan varios días | Comparar transferencia, latencia y citas con las mismas observaciones repartidas en lotes diarios. |
 
 ## Ramas y commits
 
