@@ -128,7 +128,7 @@ func DescribeAsset(ctx context.Context, store *caso.Store, query AssetQuery) (As
 	afterFound := query.After == ""
 	rows := make([]orderedAssetSource, 0, limit+1)
 	address, _ := netip.ParseAddr(key.Value)
-	err := store.Walk(ctx, func(record caso.Record) error {
+	err := store.WalkAssetCandidates(ctx, key, func(record caso.Record) error {
 		role, network := assetSource(record, key, address)
 		switch role {
 		case "":

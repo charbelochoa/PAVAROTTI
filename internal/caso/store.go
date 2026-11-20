@@ -72,6 +72,7 @@ type Store struct {
 	expediente string
 	batchDates localBatchDates
 	pageCache  localPageCache
+	assetIndex assetIndexCache
 	searchWork postgresPageWorker
 	httpWork   postgresPageWorker
 }
