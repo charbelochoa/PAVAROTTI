@@ -17,7 +17,7 @@ func openAuditTest(t *testing.T) *Store {
 	return openAuditTestAt(t, os.Getenv("PAVAROTTI_TEST_POSTGRES"))
 }
 
-func openAuditTestAt(t *testing.T, dsn string) *Store {
+func openAuditTestAt(t testing.TB, dsn string) *Store {
 	t.Helper()
 	if dsn == "" {
 		t.Skip("PAVAROTTI_TEST_POSTGRES no configurado")
@@ -66,10 +66,14 @@ func TestAuditFollowsCommittedEvidenceAndRevisions(t *testing.T) {
 		t.Fatalf("página de notas: %+v, %v", listed, err)
 	}
 	noteID := listed.Rows[0].ID
+	const priorText = "Revisión intermedia de la nota"
+	if revised, err := first.EditContext(ctx, noteID, 1, note.Title, "", priorText); err != nil || revised.Revision != 2 {
+		t.Fatalf("revisión previa: %+v, %v", revised, err)
+	}
 	results := make(chan error, 6)
 	for range cap(results) {
 		go func() {
-			_, err := first.EditContext(ctx, noteID, 1, note.Title, "", privateText)
+			_, err := first.EditContext(ctx, noteID, 2, note.Title, "", privateText)
 			results <- err
 		}()
 	}
@@ -85,6 +89,10 @@ func TestAuditFollowsCommittedEvidenceAndRevisions(t *testing.T) {
 	if committed != 1 {
 		t.Fatalf("ediciones confirmadas: %d", committed)
 	}
+	previous, err := first.History(noteID)
+	if err != nil || len(previous) != 2 || previous[0].Details != privateText || previous[1].Details != priorText {
+		t.Fatalf("revisiones anteriores: %+v, %v", previous, err)
+	}
 	if _, err := first.ClassifyCode(ctx, code.ID, fixtureSignal, 0, "confirmada", privateText); err != nil {
 		t.Fatal(err)
 	}
@@ -92,23 +100,24 @@ func TestAuditFollowsCommittedEvidenceAndRevisions(t *testing.T) {
 		t.Fatalf("decisión obsoleta: %v", err)
 	}
 	page, err := first.AuditPage(ctx, 0, 2)
-	if err != nil || len(page.Events) != 2 || page.Next != 3 {
+	if err != nil || len(page.Events) != 2 || page.Next != 4 {
 		t.Fatalf("actividad reciente: %+v, %v", page, err)
 	}
 	triage, edit := page.Events[0], page.Events[1]
-	if triage.Action != AuditTriage || triage.Target != code.ID || triage.Position != 4 || triage.Actor != "revisor" ||
+	if triage.Action != AuditTriage || triage.Target != code.ID || triage.Position != 5 || triage.Actor != "revisor" ||
 		triage.Source != "sesion" || triage.Details.Finding == nil || *triage.Details.Finding != fixtureSignal || triage.Details.Status != "confirmada" {
 		t.Fatalf("evento de triaje: %+v", triage)
 	}
-	if edit.Action != AuditEdit || edit.Target != noteID || edit.Details.Revision != 2 || edit.Actor != "revisor" {
+	if edit.Action != AuditEdit || edit.Target != noteID || edit.Details.Revision != 3 || edit.Actor != "revisor" {
 		t.Fatalf("evento de edición: %+v", edit)
 	}
 	encoded, err := json.Marshal(page)
 	if err != nil || strings.Contains(string(encoded), privateText) {
 		t.Fatal("el registro de actividad incluyó contenido de la evidencia")
 	}
-	earlier, err := first.AuditPage(ctx, page.Next, 2)
-	if err != nil || len(earlier.Events) != 2 || earlier.Next != 0 || earlier.Events[0].Action != AuditNote || earlier.Events[1].Action != AuditEvidence {
+	earlier, err := first.AuditPage(ctx, page.Next, 3)
+	if err != nil || len(earlier.Events) != 3 || earlier.Next != 0 || earlier.Events[0].Action != AuditEdit ||
+		earlier.Events[0].Details.Revision != 2 || earlier.Events[1].Action != AuditNote || earlier.Events[2].Action != AuditEvidence {
 		t.Fatalf("actividad anterior: %+v, %v", earlier, err)
 	}
 	other, err := second.AuditPage(ctx, 0, 100)

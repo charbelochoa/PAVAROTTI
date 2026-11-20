@@ -48,7 +48,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | Expedientes, terminal y agentes | Evidencia con procedencia, inventario y fichas por página en expedientes de 50,000 observaciones, relaciones y listas de seguimiento con citas, cobertura por periodo, cola persistente, revisión de código Go y exportación STIX. | Reducir el trabajo por página en fichas cuyos activos aparecen en pocos lotes y medir consultas concurrentes. |
 | Inspección estática de binarios | PE, ELF y Mach-O con ventanas verificadas, referencias por símbolo e imagen y comparación de informes y secciones con citas de ambos lados. | Medir tiempo y memoria en comparaciones de archivos e informes cercanos a sus límites. |
 | Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros, reglas pasivas y comparación de hasta 50,000 observaciones con citas a la revisión exacta. | Medir latencia y memoria con varias comparaciones simultáneas y verificar la cancelación de las consultas. |
-| Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, auditoría y restauración. Se prueban la apertura y la edición de otros expedientes durante una restauración. | Medir la latencia de escritura con carga sostenida y distintos almacenamientos del registro de escritura anticipada de PostgreSQL (WAL). |
+| Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, auditoría y restauración. Se prueban la apertura y la edición de otros expedientes durante una restauración. La carga sostenida de ediciones e ingesta está medida en un SSD. | Repetir la carga con los datos y el registro de escritura anticipada de PostgreSQL (WAL) en dispositivos independientes. |
 
 ## Hallazgos de la revisión de 0.3
 
@@ -98,7 +98,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 35. **Relaciones de activos.** La 0.4.25 abre relaciones de DNS, RDAP, redes y huellas STIX desde el inspector y desde el CLI. El informe ordena por registros de soporte, conserva las citas y permite acotar por las fechas guardadas. Las pruebas cubren la dirección del vínculo, el orden de las citas, los nombres de servicio DNS, las relaciones omitidas y la paridad tras migrar a PostgreSQL.
 36. **Comparación de secciones binarias.** La 0.4.26 confronta los inventarios completos de dos originales verificados contra las revisiones guardadas. Distingue movimiento, cambios de bytes y tamaño, altas, ausencias y coincidencias ambiguas. La mesa abre ambas secciones y exporta el mismo resultado que el CLI. Las pruebas incluyen archivos invertidos, inspecciones alteradas y reordenamiento de imágenes Mach-O universales.
 37. **Capturas DNS.** La 0.4.27 importa respuestas UDP desde PCAP y PCAPNG en la mesa y el CLI. Conserva el número de paquete, su fecha UTC y la huella del archivo. Las pruebas cubren endianidad, resoluciones de microsegundos y nanosegundos, interfaces y secciones múltiples, IPv4 con VLAN, IPv6 y capturas truncadas.
-38. **Capacidad de escritura.** Repetir la prueba con carga sostenida y medir el efecto del almacenamiento del WAL.
+38. **Capacidad de escritura.** La 0.4.28 consulta la revisión vigente al editar una nota en PostgreSQL. La prueba de concurrencia confirma una sola edición cuando seis peticiones parten de la misma revisión y comprueba el historial y la auditoría. Queda por medir el efecto de un dispositivo dedicado al WAL.
 
 ## Medición de consultas por fecha
 
@@ -179,6 +179,18 @@ En PostgreSQL 17.12 local, una copia de 23.4 MiB contenía 50,000 capturas HTTP,
 | Dos restauraciones | 3,543 ms | 268 ms |
 
 PostgreSQL registró esperas de bloqueo en `CREATE UNIQUE INDEX IF NOT EXISTS` con 0.4.12. Esa espera desapareció con 0.4.13. Con dos restauraciones, la mediana de lectura desde la mesa fue de 15 ms en la segunda pasada. El guardado de notas alcanzó un máximo de 0.94 s en esa pasada y de 2.54 s en la primera. PostgreSQL siguió registrando esperas de escritura y sincronización del WAL. Las restauraciones conservaron la huella y los recuentos de la copia.
+
+## Medición de escrituras sostenidas
+
+Se ejecutó una medición por escenario y versión con PostgreSQL 17.12 en Windows x64, un SSD SATA y `fsync` y `synchronous_commit` activos. El servidor usó `open_datasync`. Cada escenario completó 3,000 transacciones a través de la capa de almacenamiento de PAVAROTTI. Las notas partieron de su versión original y 1,000 revisiones. El 80 % de la carga editó esas notas y el 20 % incorporó lotes de 16 indicadores. Cada escritura medida generó un evento y la prueba comprobó que las posiciones de auditoría fueran consecutivas.
+
+| Carga | p95 de edición 0.4.27 | p95 de edición 0.4.28 | Transacciones/s 0.4.27 | Transacciones/s 0.4.28 |
+| --- | --- | --- | --- | --- |
+| Un analista | 26.60 ms | 5.17 ms | 65 | 221 |
+| Cuatro analistas en un expediente | 47.12 ms | 7.96 ms | 155 | 819 |
+| Cuatro analistas en cuatro expedientes | 47.39 ms | 7.78 ms | 157 | 743 |
+
+La medición se reproduce con `go test ./internal/caso -run '^$' -bench '^BenchmarkPostgresSustainedWrites$' -benchtime=3000x -benchmem` y `PAVAROTTI_TEST_POSTGRES` apuntando a un clúster de pruebas aislado. El benchmark reporta p50, p95 y p99 para edición e ingesta y el avance del WAL por operación. El avance incluye la actividad de todo el clúster. Para medir el efecto de separar el WAL, repite la prueba con un clúster creado con `initdb --waldir` en un segundo dispositivo y conserva la misma versión, carga y configuración de sincronización.
 
 ## Medición del inventario de activos
 

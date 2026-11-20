@@ -31,13 +31,9 @@ func (s *Store) EditContext(ctx context.Context, id string, revision int, title,
 	if title == "" || details == "" || len(title) > 160 || len(source) > 512 || len(details) > 8000 {
 		return Record{}, ErrInvalidEdit
 	}
-	rewrite := func(original Record, edits []Record) (Record, error) {
+	rewrite := func(original, current Record) (Record, error) {
 		if original.Kind != "nota" {
 			return Record{}, ErrReadOnly
-		}
-		current := original
-		if len(edits) > 0 {
-			current = edits[len(edits)-1]
 		}
 		if current.Revision != revision {
 			return Record{}, ErrRevisionConflict
@@ -63,7 +59,11 @@ func (s *Store) EditContext(ctx context.Context, id string, revision int, title,
 	if err != nil {
 		return Record{}, err
 	}
-	current, err := rewrite(original, edits)
+	latest := original
+	if len(edits) > 0 {
+		latest = edits[len(edits)-1]
+	}
+	current, err := rewrite(original, latest)
 	if err != nil {
 		return Record{}, err
 	}
@@ -156,7 +156,7 @@ func batchRecord(key string, ordinal int, data []byte) (Record, error) {
 	return batch[ordinal-1], nil
 }
 
-func (s *Store) postgresEdit(ctx context.Context, key string, ordinal int, rewrite func(Record, []Record) (Record, error)) (Record, error) {
+func (s *Store) postgresEdit(ctx context.Context, key string, ordinal int, rewrite func(Record, Record) (Record, error)) (Record, error) {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	tx, err := s.beginCaseWrite(ctx, false)
@@ -178,15 +178,27 @@ func (s *Store) postgresEdit(ctx context.Context, key string, ordinal int, rewri
 	if err != nil {
 		return Record{}, err
 	}
-	edits, err := postgresEdits(ctx, tx, s.expediente, key, ordinal)
+	var snapshot []byte
+	var latest Record
+	err = tx.QueryRowContext(ctx, `
+		SELECT snapshot FROM pavarotti_note_revisions
+		WHERE expediente = $1 AND batch_key = $2 AND ordinal = $3
+		ORDER BY revision DESC LIMIT 1`, s.expediente, key, ordinal).Scan(&snapshot)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		latest = original
+	case err != nil:
+		return Record{}, err
+	default:
+		if err := json.Unmarshal(snapshot, &latest); err != nil {
+			return Record{}, err
+		}
+	}
+	current, err := rewrite(original, latest)
 	if err != nil {
 		return Record{}, err
 	}
-	current, err := rewrite(original, edits)
-	if err != nil {
-		return Record{}, err
-	}
-	snapshot, err := json.Marshal(current)
+	snapshot, err = json.Marshal(current)
 	if err != nil {
 		return Record{}, err
 	}
