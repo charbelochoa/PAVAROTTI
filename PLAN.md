@@ -46,7 +46,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | Flujo | Disponible | Trabajo pendiente y prueba de cierre |
 | --- | --- | --- |
 | Expedientes, terminal y agentes | Evidencia con procedencia, inventario y fichas por página en expedientes de 50,000 observaciones, relaciones y listas de seguimiento con citas, cobertura por periodo, cola persistente, revisión de código Go y exportación STIX. Las fichas reutilizan la selección de lotes en el almacén local y PostgreSQL. | Medir la primera consulta en expedientes que superan el presupuesto de caché de lotes. |
-| Inspección estática de binarios | PE, ELF y Mach-O con ventanas verificadas, referencias por símbolo e imagen y comparación de informes y secciones con citas de ambos lados. La verificación de referencias está medida hasta 6,208 orígenes por informe. La comparación de secciones está medida con dos PE de 32 MiB. | Validar inventarios ELF y Mach-O universal en el límite de tamaño. |
+| Inspección estática de binarios | PE, ELF y Mach-O con ventanas verificadas, referencias por símbolo e imagen y comparación de informes y secciones con citas de ambos lados. La verificación de referencias está medida hasta 6,208 orígenes por informe. La comparación de secciones está medida con dos originales de 32 MiB en cada uno de los tres formatos. | Conservar las citas de inspecciones anteriores al ampliar la cobertura de formatos y arquitecturas. |
 | Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros, reglas pasivas y comparación de hasta 50,000 observaciones con citas a la revisión exacta. La mesa permite cancelar consultas y el almacén local admite importaciones durante una comparación. | Medir la concurrencia de comparaciones que consultan expedientes distintos en un despliegue compartido. |
 | Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, auditoría y restauración. Se prueban la apertura y la edición de otros expedientes durante una restauración. La carga sostenida de ediciones e ingesta está medida en un SSD. | Repetir la carga con los datos y el registro de escritura anticipada de PostgreSQL (WAL) en dispositivos independientes. |
 
@@ -103,6 +103,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 40. **Comparaciones HTTP concurrentes.** La 0.4.30 acumula recuentos y citas al leer las observaciones. El almacén local fija la lista de lotes al inicio y admite nuevas importaciones durante el análisis. El botón **Cancelar consulta** conserva el informe anterior y permite volver a comparar desde la misma vista. El CLI `comparar-http` responde a la interrupción de la terminal.
 41. **Referencias binarias de gran tamaño.** La 0.4.31 verifica el tamaño y la huella del original por bloques. Reutiliza las citas idénticas ya verificadas cuando coinciden la evidencia, su revisión, la imagen y el destino. La mesa permite cancelar la verificación o reintentar con los mismos archivos.
 42. **Secciones en originales grandes.** La 0.4.32 verifica dos originales con un búfer reutilizable y analiza el inventario con las huellas ya comprobadas. La mesa pagina las secciones, permite cancelar la verificación y conserva la página del resultado al volver de una cita base o actual.
+43. **Inventarios completos de Mach-O universal.** La 0.4.33 conserva todas las secciones cuando el total cabe en el límite de 256. Reimportar un original con un inventario anterior incompleto crea una inspección completa y conserva las citas existentes. Las pruebas con ELF y Mach-O universal usan originales de 32 MiB y, para Mach-O universal, verifican citas cuando cambia el orden de las imágenes.
 
 ## Medición de consultas por fecha
 
@@ -271,6 +272,15 @@ Con dos originales de 32 MiB, la mesa mostró nueve páginas y abrió la misma s
 
 Repite la medición con `go test ./internal/analisis -run '^$' -bench '^BenchmarkBinarySectionVerification$' -benchtime=10x -benchmem`.
 
+La 0.4.33 añade mediciones con dos originales sintéticos de 32 MiB y 256 secciones por comparación. Se promediaron diez comparaciones por formato en Windows x64 con almacén local. En Mach-O universal, las imágenes x86-64 y ARM64 tienen 192 y 64 secciones respectivamente y aparecen en orden inverso en el segundo archivo.
+
+| Formato | Tiempo por comparación | Memoria asignada por comparación |
+| --- | ---: | ---: |
+| ELF | 350 ms | 33.1 MiB |
+| Mach-O universal | 361 ms | 33.3 MiB |
+
+Repite la medición con `go test ./internal/analisis -run '^$' -bench '^BenchmarkLargeSectionFormats$' -benchtime=10x -benchmem`.
+
 ## Flujo de trabajo OSINT
 
 1. **Incorporar.** Un expediente reúne indicadores, capturas HTTP, binarios, DNS, RDAP y paquetes STIX aportados por el analista. Las entradas conservan su huella y sus referencias de origen cuando el formato las proporciona.
@@ -283,7 +293,6 @@ Repite la medición con `go test ./internal/analisis -run '^$' -bench '^Benchmar
 | Vista | Trabajo pendiente | Criterio de cierre |
 | --- | --- | --- |
 | Activos y fuentes | Medir expedientes que superan el presupuesto de caché de lotes | Registrar tiempo y memoria en la primera consulta y en consultas repetidas. Comparar el orden, recuentos y revisiones con un recorrido completo. |
-| Triaje de binarios | Verificar comparaciones de secciones en ELF y Mach-O universal de gran tamaño | Comparar duración, asignaciones, navegación entre imágenes y citas de ambos originales. |
 | Historial HTTP | Medir comparaciones concurrentes en distintos expedientes compartidos | Comprobar latencia por expediente y confirmar que se puede cancelar una consulta mientras otra conserva su resultado y sus citas. |
 
 ## Ramas y commits
