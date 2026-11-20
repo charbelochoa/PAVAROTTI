@@ -63,6 +63,9 @@ func binaryReferenceComparisonRoute(mux *http.ServeMux, store *caso.Store) {
 			return
 		}
 		comparison, err := analisis.CompareBinaryReferences(r.Context(), store, baseline, current, original)
+		if r.Context().Err() != nil {
+			return
+		}
 		switch {
 		case errors.As(err, &limit):
 			tooLarge()
