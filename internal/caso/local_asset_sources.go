@@ -50,9 +50,6 @@ func (s *Store) localAssetCandidates(ctx context.Context, asset AssetKey, addres
 			}
 		}
 		visitLatest := func(record Record) error {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
 			record, err := s.latestLocal(record)
 			if err != nil {
 				return err
@@ -60,19 +57,9 @@ func (s *Store) localAssetCandidates(ctx context.Context, asset AssetKey, addres
 			return visit(record)
 		}
 		if index == nil || positions[len(positions)-1] > len(records) {
-			for _, record := range records {
-				if err := visitLatest(record); err != nil {
-					return err
-				}
-			}
-			return nil
+			positions = nil
 		}
-		for _, ordinal := range positions {
-			if err := visitLatest(records[ordinal-1]); err != nil {
-				return err
-			}
-		}
-		return nil
+		return walkBatchPositions(ctx, records, positions, visitLatest)
 	})
 }
 

@@ -135,9 +135,32 @@ func (index *assetBatchIndex) candidates(key AssetKey, address netip.Addr) []int
 }
 
 func (s *Store) WalkAssetCandidates(ctx context.Context, key AssetKey, visit func(Record) error) error {
-	if s.db != nil {
-		return s.postgresWalk(ctx, visit)
-	}
 	address, _ := netip.ParseAddr(key.Value)
+	if s.db != nil {
+		return s.postgresAssetCandidates(ctx, key, address, visit)
+	}
 	return s.localAssetCandidates(ctx, key, address, visit)
+}
+
+func walkBatchPositions(ctx context.Context, records []Record, positions []int, visit func(Record) error) error {
+	if positions == nil {
+		for _, record := range records {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := visit(record); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, ordinal := range positions {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := visit(records[ordinal-1]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
