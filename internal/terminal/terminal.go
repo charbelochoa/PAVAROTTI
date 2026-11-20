@@ -166,7 +166,7 @@ func terminalFlags(name, usage string, stderr io.Writer) *flag.FlagSet {
 }
 
 func terminalImport(args []string, stdout, stderr io.Writer, open openExpediente) error {
-	flags := terminalFlags("importar", "importar <har|hallazgos|binario|codigo|gomod|npmlock|indicadores|dns|rdap|stix> <archivo>", stderr)
+	flags := terminalFlags("importar", "importar <har|hallazgos|binario|codigo|gomod|npmlock|indicadores|dns|pcap-dns|rdap|stix> <archivo>", stderr)
 	if err := flags.Parse(args); err != nil {
 		return err
 	}

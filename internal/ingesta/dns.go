@@ -20,8 +20,9 @@ type dnsResponse struct {
 }
 
 type dnsQuestion struct {
-	Name string `json:"name"`
-	Type int    `json:"type"`
+	Name    string `json:"name"`
+	Type    int    `json:"type"`
+	ordinal int
 }
 
 type dnsAnswer struct {
@@ -30,7 +31,7 @@ type dnsAnswer struct {
 	Data string  `json:"data"`
 }
 
-var rrTypes = map[int]string{1: "A", 2: "NS", 5: "CNAME", 6: "SOA", 12: "PTR", 15: "MX", 16: "TXT", 28: "AAAA", 33: "SRV", 257: "CAA"}
+var rrTypes = map[int]string{1: "A", 2: "NS", 5: "CNAME", 6: "SOA", 12: "PTR", 15: "MX", 16: "TXT", 28: "AAAA", 33: "SRV", 64: "SVCB", 65: "HTTPS", 257: "CAA"}
 var dnsStatuses = map[int]string{0: "NOERROR", 1: "FORMERR", 2: "SERVFAIL", 3: "NXDOMAIN", 4: "NOTIMP", 5: "REFUSED"}
 
 func parseDNS(data []byte) ([]caso.Record, error) {
@@ -67,54 +68,62 @@ func parseDNS(data []byte) ([]caso.Record, error) {
 		return nil
 	}
 	for idx, capture := range captures {
-		if capture.Status == nil || *capture.Status < 0 || *capture.Status > 4095 ||
-			(len(capture.Answer) == 0 && len(capture.Question) == 0) {
-			return nil, fmt.Errorf("respuesta %d: faltan el estado, las preguntas o las respuestas DNS", idx+1)
+		items, err := dnsRecords(capture, strconv.Itoa(idx+1))
+		if err != nil {
+			return nil, fmt.Errorf("respuesta %d: %w", idx+1, err)
 		}
-		status := dnsStatuses[*capture.Status]
-		if status == "" {
-			status = "RCODE " + strconv.Itoa(*capture.Status)
-		}
-		base := "Estado DNS · " + status
-		if capture.TC {
-			base += "\nRespuesta truncada"
-		}
-		for questionIndex, question := range capture.Question {
-			name, valid := caso.NormalizeDNSName(question.Name)
-			if !valid || question.Type < 1 || question.Type > 65535 {
-				return nil, fmt.Errorf("respuesta %d, pregunta %d: nombre o tipo DNS inválido", idx+1, questionIndex+1)
-			}
-			if len(capture.Answer) == 0 || *capture.Status != 0 {
-				record := caso.Record{Title: "DNS " + dnsType(question.Type) + " " + name,
-					Source: name, Details: base, SourceID: fmt.Sprintf("%d/pregunta/%d", idx+1, questionIndex+1)}
-				if err := add(record); err != nil {
-					return nil, err
-				}
-			}
-		}
-		for answerIndex, answer := range capture.Answer {
-			name, valid := caso.NormalizeDNSName(answer.Name)
-			if !valid || answer.Type < 1 || answer.Type > 65535 {
-				return nil, fmt.Errorf("respuesta %d, registro %d: nombre o tipo DNS inválido", idx+1, answerIndex+1)
-			}
-			value, target, err := dnsData(answer.Type, answer.Data)
-			if err != nil {
-				return nil, fmt.Errorf("respuesta %d, registro %d: %w", idx+1, answerIndex+1, err)
-			}
-			details := base + "\nValor · " + value
-			if answer.TTL != nil {
-				details += fmt.Sprintf("\nTTL · %d s", *answer.TTL)
-			}
-			source := name
-			if target != "" && target != name && target != "." {
-				source += ", " + target
-			}
-			record := caso.Record{Title: dnsType(answer.Type) + " " + name,
-				Source: source, Details: details, SourceID: fmt.Sprintf("%d/respuesta/%d", idx+1, answerIndex+1)}
+		for _, record := range items {
 			if err := add(record); err != nil {
 				return nil, err
 			}
 		}
+	}
+	return records, nil
+}
+
+func dnsRecords(capture dnsResponse, position string) ([]caso.Record, error) {
+	if capture.Status == nil || *capture.Status < 0 || *capture.Status > 4095 ||
+		(len(capture.Answer) == 0 && len(capture.Question) == 0) {
+		return nil, errors.New("faltan el estado, las preguntas o las respuestas DNS")
+	}
+	status := dnsStatuses[*capture.Status]
+	if status == "" {
+		status = "RCODE " + strconv.Itoa(*capture.Status)
+	}
+	base := "Estado DNS · " + status
+	if capture.TC {
+		base += "\nRespuesta truncada"
+	}
+	var records []caso.Record
+	for index, question := range capture.Question {
+		name, valid := caso.NormalizeDNSName(question.Name)
+		if !valid || question.Type < 1 || question.Type > 65535 {
+			return nil, fmt.Errorf("pregunta %d: nombre o tipo DNS inválido", index+1)
+		}
+		if len(capture.Answer) == 0 || *capture.Status != 0 {
+			records = append(records, caso.Record{Title: "DNS " + dnsType(question.Type) + " " + name,
+				Source: name, Details: base, SourceID: fmt.Sprintf("%s/pregunta/%d", position, max(question.ordinal, index+1))})
+		}
+	}
+	for index, answer := range capture.Answer {
+		name, valid := caso.NormalizeDNSName(answer.Name)
+		if !valid || answer.Type < 1 || answer.Type > 65535 {
+			return nil, fmt.Errorf("registro %d: nombre o tipo DNS inválido", index+1)
+		}
+		value, target, err := dnsData(answer.Type, answer.Data)
+		if err != nil {
+			return nil, fmt.Errorf("registro %d: %w", index+1, err)
+		}
+		details := base + "\nValor · " + value
+		if answer.TTL != nil {
+			details += fmt.Sprintf("\nTTL · %d s", *answer.TTL)
+		}
+		source := name
+		if target != "" && target != name && target != "." {
+			source += ", " + target
+		}
+		records = append(records, caso.Record{Title: dnsType(answer.Type) + " " + name,
+			Source: source, Details: details, SourceID: fmt.Sprintf("%s/respuesta/%d", position, max(answer.ordinal, index+1))})
 	}
 	return records, nil
 }

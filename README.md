@@ -70,6 +70,7 @@ pavarotti comparar-secciones --base-id ID_BASE --base antes.bin --actual-id ID_A
 ```
 - **Indicadores.** Importa dominios, direcciones IP y huellas desde un archivo de texto, un valor por línea. El informe correlaciona dominios e IP con los activos que ya constan en el expediente y cita los registros que justifican cada coincidencia.
 - **DNS.** Carga una respuesta DNS en JSON o un arreglo de respuestas con `Status`, `Question` y `Answer`. La vista **DNS** conserva valores, TTL, respuestas negativas y huella del archivo. Los destinos de A, AAAA, CNAME, NS, PTR, MX y SRV entran en el inventario de activos del expediente.
+- **Capturas DNS.** Elige **Captura DNS PCAP o PCAPNG** en **Incorporar evidencia** para extraer respuestas DNS UDP del puerto de origen 53 sin conexión a la red. El expediente conserva el número de paquete, la fecha UTC de captura y la huella SHA-256 del archivo. Admite IPv4 e IPv6 en Ethernet con VLAN, Linux cooked, loopback e IP sin cabecera de enlace. Cada archivo admite hasta 32 MiB y 5,000 registros. El análisis omite tráfico cifrado, TCP, datagramas que necesitan reensamblado y paquetes sin fecha.
 - **RDAP.** Importa archivos JSON de dominio, resultados de búsqueda de dominios y rangos IP. El inspector conserva la posición en el archivo, su huella, servidores de nombre, estados y fechas del registro. La importación omite las fichas de contacto y los enlaces del archivo.
 - **STIX 2.1.** Importa paquetes JSON con dominios, direcciones, prefijos IP, relaciones y periodos de observación. Reconoce indicadores por igualdad simple de dominio, IP o huella. El informe cruza dominios y direcciones exactas con el expediente. Los patrones complejos se conservan por ID para revisión en el archivo de origen.
 - **Activos.** Busca dominios, direcciones, redes y huellas. Cada ficha muestra las fechas y distingue observaciones de tráfico o DNS, registros RDAP, declaraciones STIX, indicadores y referencias manuales. Las fichas de IP muestran los rangos RDAP y prefijos STIX que las cubren. El inventario y las fichas calculan los recuentos en todo el expediente y muestran los resultados por página. Abre desde la ficha la revisión de evidencia que sustenta cada fuente.
@@ -129,6 +130,7 @@ Usa el nombre del ejecutable de tu plataforma en lugar de `pavarotti` en estos e
 pavarotti ayuda
 pavarotti -datos ./expediente importar indicadores indicadores.txt
 pavarotti -datos ./expediente importar dns observaciones.json
+pavarotti -datos ./expediente importar pcap-dns observaciones.pcapng
 pavarotti -datos ./expediente importar rdap registro-dominio.json
 pavarotti -datos ./expediente importar stix indicadores-stix.json
 pavarotti -datos ./expediente listar --tipo har --regla-http hsts-ausente --json

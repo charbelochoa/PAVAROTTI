@@ -97,7 +97,8 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 34. **Paquetes nativos y portátiles.** La 0.4.24 genera paquetes para Kali, Arch y uso portátil en Windows y Linux. El manifiesto registra el commit, los módulos de Go y la huella de cada binario. La matriz comprueba las sumas, instala y retira los paquetes nativos y vuelve a abrir el expediente creado por el ZIP de Windows.
 35. **Relaciones de activos.** La 0.4.25 abre relaciones de DNS, RDAP, redes y huellas STIX desde el inspector y desde el CLI. El informe ordena por registros de soporte, conserva las citas y permite acotar por las fechas guardadas. Las pruebas cubren la dirección del vínculo, el orden de las citas, los nombres de servicio DNS, las relaciones omitidas y la paridad tras migrar a PostgreSQL.
 36. **Comparación de secciones binarias.** La 0.4.26 confronta los inventarios completos de dos originales verificados contra las revisiones guardadas. Distingue movimiento, cambios de bytes y tamaño, altas, ausencias y coincidencias ambiguas. La mesa abre ambas secciones y exporta el mismo resultado que el CLI. Las pruebas incluyen archivos invertidos, inspecciones alteradas y reordenamiento de imágenes Mach-O universales.
-37. **Capacidad de escritura.** Repetir la prueba con carga sostenida y medir el efecto del almacenamiento del WAL.
+37. **Capturas DNS.** La 0.4.27 importa respuestas UDP desde PCAP y PCAPNG en la mesa y el CLI. Conserva el número de paquete, su fecha UTC y la huella del archivo. Las pruebas cubren endianidad, resoluciones de microsegundos y nanosegundos, interfaces y secciones múltiples, IPv4 con VLAN, IPv6 y capturas truncadas.
+38. **Capacidad de escritura.** Repetir la prueba con carga sostenida y medir el efecto del almacenamiento del WAL.
 
 ## Medición de consultas por fecha
 
