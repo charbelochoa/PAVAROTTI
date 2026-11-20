@@ -108,3 +108,78 @@ func TestPostgresCanceledHTTPWalkReleasesQuery(t *testing.T) {
 		t.Fatalf("consulta después de cancelar: %d capturas, %v", count, err)
 	}
 }
+
+func TestCancelingHTTPReadKeepsOtherCaseAvailable(t *testing.T) {
+	cases := [2]*Store{openAuditTest(t), openAuditTest(t)}
+	titles := [2]string{"Captura del primer expediente", "Captura del segundo expediente"}
+	timeout, stop := context.WithTimeout(t.Context(), 5*time.Second)
+	defer stop()
+	var (
+		cancelFirst context.CancelFunc
+		active      [2]chan Record
+		resume      [2]chan struct{}
+		finished    [2]chan error
+	)
+	for index, store := range cases {
+		title := titles[index]
+		if err := store.Save([]Record{{Kind: "nota", Title: "Encabezado local"},
+			{Kind: "archivo HAR", Title: title, Traffic: &Traffic{Status: 200}}}); err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(timeout)
+		defer cancel()
+		if index == 0 {
+			cancelFirst = cancel
+		}
+		active[index], resume[index], finished[index] = make(chan Record, 1), make(chan struct{}), make(chan error, 1)
+		go func() {
+			finished[index] <- store.WalkHTTP(ctx, func(record Record) error {
+				active[index] <- record
+				select {
+				case <-resume[index]:
+					return nil
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			})
+		}()
+	}
+	var cites [2]Record
+	for index := range cases {
+		select {
+		case cites[index] = <-active[index]:
+			if cites[index].Title != titles[index] || cites[index].Revision != 1 {
+				t.Fatalf("fuente en expediente %d: %+v", index, cites[index])
+			}
+		case err := <-finished[index]:
+			t.Fatalf("lectura %d terminó antes de empezar: %v", index, err)
+		case <-timeout.Done():
+			t.Fatal(timeout.Err())
+		}
+	}
+	cancelFirst()
+	select {
+	case err := <-finished[0]:
+		if !errors.Is(err, context.Canceled) || cases[0].db.Stats().InUse != 0 {
+			t.Fatalf("consulta cancelada: %v", err)
+		}
+	case <-timeout.Done():
+		t.Fatal(timeout.Err())
+	}
+	close(resume[1])
+	select {
+	case err := <-finished[1]:
+		if err != nil || len(active[1]) != 0 {
+			t.Fatalf("consulta del segundo expediente: %v", err)
+		}
+	case <-timeout.Done():
+		t.Fatal(timeout.Err())
+	}
+	got, err := cases[1].RecordRevision(timeout, cites[1].ID, cites[1].Revision)
+	if err != nil || got.Title != titles[1] {
+		t.Fatalf("cita del segundo expediente: %+v, %v", got, err)
+	}
+	if _, err := cases[1].RecordRevision(timeout, cites[0].ID, cites[0].Revision); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("cita de otro expediente: %v", err)
+	}
+}

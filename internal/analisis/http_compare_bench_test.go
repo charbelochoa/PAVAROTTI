@@ -12,6 +12,11 @@ import (
 
 func seedHTTPComparison(tb testing.TB, store *caso.Store, size int) (string, string) {
 	tb.Helper()
+	return seedHTTPComparisonForCase(tb, store, size, "")
+}
+
+func seedHTTPComparisonForCase(tb testing.TB, store *caso.Store, size int, label string) (string, string) {
+	tb.Helper()
 	const batchSize = 1000
 	first := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 	day := first
@@ -25,7 +30,7 @@ func seedHTTPComparison(tb testing.TB, store *caso.Store, size int) (string, str
 			}
 			status := [...]int{200, 204, 302, 403, 502}[index%5]
 			record := caso.Record{Kind: kind, Time: day.Add(time.Duration(index) * time.Second).Format(time.RFC3339Nano),
-				Title: fmt.Sprintf("GET %d", status), Source: fmt.Sprintf("https://host-%d.example.invalid", index%8),
+				Title: fmt.Sprintf("GET %d%s", status, label), Source: fmt.Sprintf("https://host-%d.example.invalid", index%8),
 				Traffic: &caso.Traffic{Method: "GET", Status: status, Type: "text/html"}, HTTPRuleSet: 1}
 			if index%8 == 1 {
 				record.HTTPFindings = []caso.HTTPFinding{{Rule: "nosniff-ausente", Label: "Falta nosniff"}}
