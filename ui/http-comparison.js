@@ -7,6 +7,7 @@
   const status = byId("http-compare-status");
   const result = byId("http-compare-result");
   const run = byId("http-compare-run");
+  const cancel = byId("http-compare-cancel");
   const saved = byId("http-compare-export");
   const limits = new Map([["pavarotti.http-comparison.v1", 10000], ["pavarotti.http-comparison.v2", 50000]]);
   const captures = ["", "archivo HAR", "tráfico"];
@@ -161,31 +162,41 @@
     saved.hidden = false;
   }
 
-  function begin(message) {
+  function begin(message, cancellable = false) {
     active?.abort();
     active = new AbortController();
     status.textContent = message;
     run.disabled = true;
+    cancel.hidden = !cancellable;
     return active.signal;
   }
 
   function end(signal) {
-    if (signal.aborted) return;
+    if (active?.signal !== signal) return;
     active = undefined;
     run.disabled = false;
+    cancel.hidden = true;
+  }
+
+  function stop(message) {
+    if (!active) return;
+    const {signal} = active;
+    active.abort();
+    end(signal);
+    status.textContent = message;
   }
 
   byId("open-http-comparison").onclick = show;
+  cancel.onclick = () => {
+    stop("Consulta cancelada.");
+    run.focus();
+  };
   dialog.addEventListener("close", () => {
-    if (dialog.open || !active) return;
-    active.abort();
-    active = undefined;
-    run.disabled = false;
-    status.textContent = "";
+    if (!dialog.open) stop("");
   });
   form.onsubmit = async (event) => {
     event.preventDefault();
-    const signal = begin("Comparando el historial del expediente…");
+    const signal = begin("Comparando el historial del expediente…", true);
     try {
       const query = new URLSearchParams(new FormData(form));
       for (const [name, value] of [...query]) if (!value) query.delete(name);

@@ -21,6 +21,9 @@ func httpComparisonRoute(mux *http.ServeMux, store *caso.Store) {
 				From: params.Get("desde_" + side), To: params.Get("hasta_" + side)}
 		}
 		report, err := analisis.CompareHTTP(r.Context(), store, analisis.HTTPCompareCriteria{Baseline: window("a"), Current: window("b")})
+		if r.Context().Err() != nil {
+			return
+		}
 		switch {
 		case errors.Is(err, analisis.ErrHTTPComparisonCriteria):
 			http.Error(w, err.Error(), http.StatusBadRequest)
