@@ -59,7 +59,7 @@ func CompareBinaryReferences(ctx context.Context, store *caso.Store, baseline, c
 	if err != nil {
 		return BinaryReferenceComparison{}, err
 	}
-	prior, err := evidence.reviewReferences(ctx, baseline, true)
+	prior, err := evidence.reviewReferences(ctx, baseline, true, nil)
 	if err != nil {
 		return BinaryReferenceComparison{}, err
 	}
@@ -74,14 +74,14 @@ func CompareBinaryReferences(ctx context.Context, store *caso.Store, baseline, c
 		other.data, other.images = evidence.data, evidence.images
 		evidence = other
 	}
-	later, err := evidence.reviewReferences(ctx, current, true)
+	later, err := evidence.reviewReferences(ctx, current, true, &prior)
 	if err != nil {
 		return BinaryReferenceComparison{}, err
 	}
-	return compareVerifiedReferences(prior, later), nil
+	return compareVerifiedReferences(ctx, prior, later)
 }
 
-func compareVerifiedReferences(baseline, current BinaryReferenceReview) BinaryReferenceComparison {
+func compareVerifiedReferences(ctx context.Context, baseline, current BinaryReferenceReview) (BinaryReferenceComparison, error) {
 	side := func(report BinaryReferenceReport) BinaryReferenceSide {
 		return BinaryReferenceSide{RecordID: report.RecordID, Revision: report.Revision,
 			InspectionSHA256: report.InspectionSHA256, ReportSHA256: report.ReportSHA256, Count: len(report.Origins)}
@@ -91,11 +91,15 @@ func compareVerifiedReferences(baseline, current BinaryReferenceReview) BinaryRe
 		DestinationOffset: current.Report.Destination.Offset, Baseline: side(baseline.Report), Current: side(current.Report)}
 	rows := make(map[[2]string]BinaryReferenceChange, len(baseline.Origins)+len(current.Origins))
 	for index, instruction := range baseline.Origins {
-		location := baseline.Report.Origins[index]
-		rows[[2]string{instruction.Address, instruction.Offset}] = BinaryReferenceChange{State: "ausente", Instruction: instruction, Baseline: &location}
+		if err := ctx.Err(); err != nil {
+			return BinaryReferenceComparison{}, err
+		}
+		rows[[2]string{instruction.Address, instruction.Offset}] = BinaryReferenceChange{State: "ausente", Instruction: instruction, Baseline: &baseline.Report.Origins[index]}
 	}
 	for index, instruction := range current.Origins {
-		location := current.Report.Origins[index]
+		if err := ctx.Err(); err != nil {
+			return BinaryReferenceComparison{}, err
+		}
 		key := [2]string{instruction.Address, instruction.Offset}
 		row, found := rows[key]
 		if found {
@@ -105,7 +109,7 @@ func compareVerifiedReferences(baseline, current BinaryReferenceReview) BinaryRe
 			row.State = "agregado"
 			comparison.Added++
 		}
-		row.Instruction, row.Current = instruction, &location
+		row.Instruction, row.Current = instruction, &current.Report.Origins[index]
 		rows[key] = row
 	}
 	comparison.Absent = len(baseline.Origins) - comparison.Shared
@@ -123,5 +127,8 @@ func compareVerifiedReferences(baseline, current BinaryReferenceReview) BinaryRe
 		y, _ = triaje.ParseBinaryHex(b.Instruction.Offset)
 		return cmp.Compare(x, y)
 	})
-	return comparison
+	if err := ctx.Err(); err != nil {
+		return BinaryReferenceComparison{}, err
+	}
+	return comparison, nil
 }

@@ -65,7 +65,7 @@ func ReviewBinaryReferences(ctx context.Context, store *caso.Store, report Binar
 	if err != nil {
 		return BinaryReferenceReview{}, err
 	}
-	return evidence.reviewReferences(ctx, report, verify)
+	return evidence.reviewReferences(ctx, report, verify, nil)
 }
 
 func validateBinaryReferenceReport(report BinaryReferenceReport, verify bool) error {
@@ -85,7 +85,7 @@ func validateBinaryReferenceReport(report BinaryReferenceReport, verify bool) er
 	return nil
 }
 
-func (evidence *binaryWindowEvidence) reviewReferences(ctx context.Context, report BinaryReferenceReport, verify bool) (BinaryReferenceReview, error) {
+func (evidence *binaryWindowEvidence) reviewReferences(ctx context.Context, report BinaryReferenceReport, verify bool, prior *BinaryReferenceReview) (BinaryReferenceReview, error) {
 	if report.SHA256 != evidence.record.SHA256 || (report.InspectionSHA256 != "" && report.InspectionSHA256 != evidence.inspectionHash) {
 		return BinaryReferenceReview{}, ErrBinaryReferenceReport
 	}
@@ -132,12 +132,29 @@ func (evidence *binaryWindowEvidence) reviewReferences(ctx context.Context, repo
 	if err != nil || !image.MatchesLocation(report.Destination.Address, report.Destination.Offset) {
 		return BinaryReferenceReview{}, ErrBinaryReferenceReport
 	}
+	var verified map[BinaryReferenceLocation]int
+	if verify && prior != nil && prior.Report.RecordID == report.RecordID && prior.Report.Revision == report.Revision &&
+		prior.Report.SHA256 == report.SHA256 && prior.Report.InspectionSHA256 == report.InspectionSHA256 && prior.Report.Image == report.Image &&
+		prior.Report.Destination.Address == report.Destination.Address && prior.Report.Destination.Offset == report.Destination.Offset {
+		verified = make(map[BinaryReferenceLocation]int, len(prior.Origins))
+		for index, location := range prior.Report.Origins {
+			verified[location] = index
+		}
+	}
 	seen := make(map[[2]string]bool, len(report.Origins))
 	origins := make([]triaje.Instruction, 0, len(report.Origins))
 	for index := range report.Origins {
-		_, instruction, err := open(&report.Origins[index])
-		if err != nil {
+		if err := ctx.Err(); err != nil {
 			return BinaryReferenceReview{}, err
+		}
+		var instruction triaje.Instruction
+		if previous, found := verified[report.Origins[index]]; found {
+			instruction = prior.Origins[previous]
+		} else {
+			_, instruction, err = open(&report.Origins[index])
+			if err != nil {
+				return BinaryReferenceReview{}, err
+			}
 		}
 		key := [2]string{instruction.Address, instruction.Offset}
 		if instruction.Target != report.Destination.Address || seen[key] {
