@@ -45,7 +45,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 
 | Flujo | Disponible | Trabajo pendiente y prueba de cierre |
 | --- | --- | --- |
-| Expedientes, terminal y agentes | Evidencia con procedencia, inventario y fichas por página en expedientes de 50,000 observaciones, relaciones y listas de seguimiento con citas, cobertura por periodo, cola persistente, revisión de código Go y exportación STIX. | Reducir el trabajo por página en fichas cuyos activos aparecen en pocos lotes y medir consultas concurrentes. |
+| Expedientes, terminal y agentes | Evidencia con procedencia, inventario y fichas por página en expedientes de 50,000 observaciones, relaciones y listas de seguimiento con citas, cobertura por periodo, cola persistente, revisión de código Go y exportación STIX. Las fichas reutilizan la selección de lotes en el almacén local y PostgreSQL. | Medir la primera consulta en expedientes que superan el presupuesto de caché de lotes. |
 | Inspección estática de binarios | PE, ELF y Mach-O con ventanas verificadas, referencias por símbolo e imagen y comparación de informes y secciones con citas de ambos lados. | Medir tiempo y memoria en comparaciones de archivos e informes cercanos a sus límites. |
 | Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros, reglas pasivas y comparación de hasta 50,000 observaciones con citas a la revisión exacta. | Medir latencia y memoria con varias comparaciones simultáneas y verificar la cancelación de las consultas. |
 | Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, auditoría y restauración. Se prueban la apertura y la edición de otros expedientes durante una restauración. La carga sostenida de ediciones e ingesta está medida en un SSD. | Repetir la carga con los datos y el registro de escritura anticipada de PostgreSQL (WAL) en dispositivos independientes. |
@@ -99,6 +99,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 36. **Comparación de secciones binarias.** La 0.4.26 confronta los inventarios completos de dos originales verificados contra las revisiones guardadas. Distingue movimiento, cambios de bytes y tamaño, altas, ausencias y coincidencias ambiguas. La mesa abre ambas secciones y exporta el mismo resultado que el CLI. Las pruebas incluyen archivos invertidos, inspecciones alteradas y reordenamiento de imágenes Mach-O universales.
 37. **Capturas DNS.** La 0.4.27 importa respuestas UDP desde PCAP y PCAPNG en la mesa y el CLI. Conserva el número de paquete, su fecha UTC y la huella del archivo. Las pruebas cubren endianidad, resoluciones de microsegundos y nanosegundos, interfaces y secciones múltiples, IPv4 con VLAN, IPv6 y capturas truncadas.
 38. **Capacidad de escritura.** La 0.4.28 consulta la revisión vigente al editar una nota en PostgreSQL. La prueba de concurrencia confirma una sola edición cuando seis peticiones parten de la misma revisión y comprueba el historial y la auditoría. Queda por medir el efecto de un dispositivo dedicado al WAL.
+39. **Fuentes de activos.** La 0.4.29 conserva en memoria los candidatos de los lotes ya leídos y consulta las revisiones vigentes de las notas en cada página. PostgreSQL selecciona lotes y lee las fuentes en la misma instantánea. Las pruebas comprueban fuentes directas, coberturas y cursores tras modificar el expediente desde otra conexión.
 
 ## Medición de consultas por fecha
 
@@ -210,6 +211,21 @@ La 0.4.20 rechazaba el inventario y las fichas tras recorrer 10,000 registros. L
 
 Repite la medición con `go test ./internal/analisis -run '^$' -bench '^BenchmarkAssetScale$' -benchtime=7x -benchmem`. Con `PAVAROTTI_TEST_POSTGRES` configurado, usa una base de pruebas para los expedientes que crea el benchmark.
 
+## Medición de fuentes con pocas coincidencias
+
+Se consultó una ficha de IP con dos fuentes directas y dos coberturas en un expediente con 50,000 observaciones DNS ajenas a esa IP. Cada muestra comprende 64 consultas en Windows x64 con PostgreSQL 17.12. El tiempo por operación divide la duración total de la muestra entre el número de consultas. En las muestras paralelas hay cuatro trabajadores.
+
+| Consultas repetidas | 0.4.28 | 0.4.29 |
+| --- | --- | --- |
+| Local, un trabajador | 176.18 ms/op | 0.27 ms/op |
+| Local, cuatro trabajadores | 177.39 ms/op | 1.22 ms/op |
+| PostgreSQL, un trabajador | 196.35 ms/op | 0.95 ms/op |
+| PostgreSQL, cuatro trabajadores | 99.56 ms/op | 0.80 ms/op |
+
+En una muestra de la primera consulta de la 0.4.29, preparar los lotes y responder llevó 212 ms en local y 229 ms en PostgreSQL. La caché vive en el proceso, con un presupuesto estimado de 32 MiB y hasta 4,096 lotes por expediente abierto. La ficha consulta los lotes que excedan el presupuesto cuando se necesitan y vuelve a preparar los lotes que han cambiado. Las notas siguen usando su revisión vigente, incluso si otro proceso las edita.
+
+Repite la prueba con `go test ./internal/analisis -run '^$' -bench '^BenchmarkConcurrentAssetSources$' -benchtime=64x -benchmem -cpu=4`. Usa `PAVAROTTI_TEST_POSTGRES` con una base de pruebas para medir ambos almacenes.
+
 ## Flujo de trabajo OSINT
 
 1. **Incorporar.** Un expediente reúne indicadores, capturas HTTP, binarios, DNS, RDAP y paquetes STIX aportados por el analista. Las entradas conservan su huella y sus referencias de origen cuando el formato las proporciona.
@@ -221,7 +237,7 @@ Repite la medición con `go test ./internal/analisis -run '^$' -bench '^Benchmar
 
 | Vista | Trabajo pendiente | Criterio de cierre |
 | --- | --- | --- |
-| Activos y fuentes | Reducir el tiempo de consulta al navegar entre activos de expedientes grandes | Medir fichas con pocas coincidencias durante consultas concurrentes y comprobar orden, recuentos y revisiones tras importar evidencia o editar una nota. |
+| Activos y fuentes | Medir expedientes que superan el presupuesto de caché de lotes | Registrar tiempo y memoria en la primera consulta y en consultas repetidas. Comparar el orden, recuentos y revisiones con un recorrido completo. |
 | Triaje de binarios | Medir comparaciones de referencias de gran tamaño | Registrar duración y memoria al verificar informes de varios tamaños y comprobar que la mesa filtra y pagina sus orígenes. |
 | Historial HTTP | Medir comparaciones simultáneas sobre un expediente grande | Registrar latencia y memoria con ventanas acotadas y amplias simultáneas y confirmar que cancelar una consulta libera sus recursos. |
 
