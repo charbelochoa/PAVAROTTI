@@ -2,15 +2,11 @@ package analisis
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"net/netip"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -100,12 +96,6 @@ type httpComparisonInput struct {
 	Signals  []httpMetric           `json:"signals,omitempty"`
 }
 
-type httpComparisonSource struct {
-	timestamp time.Time
-	input     httpComparisonInput
-	data      []byte
-}
-
 func CompareHTTP(ctx context.Context, store *caso.Store, criteria HTTPCompareCriteria) (HTTPComparison, error) {
 	a, err := normalizeHTTPWindow(criteria.Baseline)
 	if err != nil {
@@ -116,10 +106,12 @@ func CompareHTTP(ctx context.Context, store *caso.Store, criteria HTTPCompareCri
 		return HTTPComparison{}, fmt.Errorf("%w en el periodo B: %w", ErrHTTPComparisonCriteria, err)
 	}
 	criteria = HTTPCompareCriteria{Baseline: a.HTTPWindow, Current: b.HTTPWindow}
-	var inputs []httpComparisonSource
-	bytes := 0
+	comparison := httpComparisonAccumulator{groups: make(map[httpRowKey]*httpComparisonGroup)}
 	filter := caso.EvidenceFilter{HTTP: true, Periods: []caso.EvidencePeriod{a.EvidencePeriod, b.EvidencePeriod}}
 	err = store.WalkFiltered(ctx, filter, func(record caso.Record) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		stamp, err := time.Parse(time.RFC3339Nano, record.Time)
 		if err != nil {
 			return nil
@@ -129,31 +121,15 @@ func CompareHTTP(ctx context.Context, store *caso.Store, criteria HTTPCompareCri
 		if !inA && !inB {
 			return nil
 		}
-		if len(inputs) == HTTPComparisonRecordLimit {
+		if len(comparison.sources) == HTTPComparisonRecordLimit {
 			return ErrHTTPComparisonLimit
 		}
-		input := compareHTTPInput(record, origin, inA, inB)
-		data, err := json.Marshal(input)
-		if err != nil {
-			return err
-		}
-		bytes += len(data) + 1
-		if bytes > SnapshotByteLimit {
-			return ErrSnapshotBytes
-		}
-		inputs = append(inputs, httpComparisonSource{timestamp: stamp, input: input, data: data})
-		return nil
+		return comparison.add(ctx, stamp, compareHTTPInput(record, origin, inA, inB))
 	})
 	if err != nil {
 		return HTTPComparison{}, err
 	}
-	slices.SortFunc(inputs, func(x, y httpComparisonSource) int {
-		if cmp := y.timestamp.Compare(x.timestamp); cmp != 0 {
-			return cmp
-		}
-		return strings.Compare(x.input.Ref.ID, y.input.Ref.ID)
-	})
-	return compileHTTPComparison(ctx, criteria, inputs)
+	return comparison.finish(ctx, criteria)
 }
 
 func normalizeHTTPWindow(window HTTPWindow) (httpWindowFilter, error) {
@@ -267,50 +243,6 @@ func compareHTTPInput(record caso.Record, origin string, inA, inB bool) httpComp
 	return input
 }
 
-func compileHTTPComparison(ctx context.Context, criteria HTTPCompareCriteria, inputs []httpComparisonSource) (HTTPComparison, error) {
-	schema := HTTPComparisonSchema
-	if len(inputs) > RecordLimit {
-		schema = HTTPComparisonWideSchema
-	}
-	comparison := HTTPComparison{Schema: schema, Criteria: criteria, Rows: []HTTPCompareRow{}}
-	hash := sha256.New()
-	encoder := json.NewEncoder(hash)
-	if err := encoder.Encode(comparison.Schema); err != nil {
-		return HTTPComparison{}, err
-	}
-	if err := encoder.Encode(criteria); err != nil {
-		return HTTPComparison{}, err
-	}
-	rows := make(map[httpRowKey]*HTTPCompareRow)
-	newline := []byte{'\n'}
-	for _, source := range inputs {
-		if err := ctx.Err(); err != nil {
-			return HTTPComparison{}, err
-		}
-		input := source.input
-		_, _ = hash.Write(source.data)
-		_, _ = hash.Write(newline)
-		if input.Baseline {
-			comparison.Baseline.count(input)
-		}
-		if input.Current {
-			comparison.Current.count(input)
-		}
-		tallyHTTP(rows, input.Category, input)
-		for _, signal := range input.Signals {
-			tallyHTTP(rows, signal, input)
-		}
-	}
-	comparison.InputSHA256 = hex.EncodeToString(hash.Sum(nil))
-	for _, row := range rows {
-		comparison.Rows = append(comparison.Rows, *row)
-	}
-	slices.SortFunc(comparison.Rows, compareHTTPRows)
-	comparison.OmittedRows = max(0, len(comparison.Rows)-groupLimit)
-	comparison.Rows = comparison.Rows[:min(groupLimit, len(comparison.Rows))]
-	return comparison, nil
-}
-
 func (stats *HTTPWindowStats) count(input httpComparisonInput) {
 	stats.Observations++
 	switch input.Category.Kind {
@@ -322,42 +254,4 @@ func (stats *HTTPWindowStats) count(input httpComparisonInput) {
 	if input.Assessed {
 		stats.Assessed++
 	}
-}
-
-func tallyHTTP(rows map[httpRowKey]*HTTPCompareRow, metric httpMetric, input httpComparisonInput) {
-	row := rows[metric.httpRowKey]
-	if row == nil {
-		row = &HTTPCompareRow{Kind: metric.Kind, Code: metric.Code, Label: metric.Label}
-		rows[metric.httpRowKey] = row
-	}
-	ref := input.Ref
-	if metric.Kind == "rule" {
-		ref.HTTPRule = metric.Code
-	}
-	if input.Baseline {
-		row.Baseline.add(ref)
-	}
-	if input.Current {
-		row.Current.add(ref)
-	}
-}
-
-func (tally *HTTPTally) add(ref HTTPComparisonEvidence) {
-	tally.Count++
-	if len(tally.Evidence) < referenceLimit {
-		tally.Evidence = append(tally.Evidence, ref)
-	}
-}
-
-func compareHTTPRows(a, b HTTPCompareRow) int {
-	kinds := [...]string{"status", "transport", "unknown", "rule", "legacy"}
-	if order := slices.Index(kinds[:], a.Kind) - slices.Index(kinds[:], b.Kind); order != 0 {
-		return order
-	}
-	if a.Kind == "rule" || a.Kind == "legacy" {
-		if count := b.Baseline.Count + b.Current.Count - a.Baseline.Count - a.Current.Count; count != 0 {
-			return count
-		}
-	}
-	return strings.Compare(a.Code, b.Code)
 }

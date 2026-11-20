@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"pavarotti/internal/analisis"
 )
@@ -32,11 +35,16 @@ func terminalHTTPComparison(args []string, stdout, stderr io.Writer, open openEx
 		return err
 	}
 	defer store.Close()
-	report, err := analisis.CompareHTTP(context.Background(), store, criteria)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	report, err := analisis.CompareHTTP(ctx, store, criteria)
 	if err != nil {
 		return err
 	}
 	return writeExport(stdout, *output, func(w io.Writer) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		encoder := json.NewEncoder(w)
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(report)
