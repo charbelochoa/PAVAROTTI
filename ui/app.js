@@ -767,11 +767,12 @@ async function loadRecord(id, scroll = false, citation) {
   }
 }
 
-function selectAsset(asset, after = "") {
+function selectAsset(asset) {
   selectedKey = "";
   selectedRevision = 0;
   returnToEvidence = undefined;
-  selectedAsset = {type: asset.type, value: asset.value, after, back: asset.back, networkAfter: asset.networkAfter, watched: asset.watched};
+  const {type, value, after = "", sourcePages = [], back, networkAfter, watched} = asset;
+  selectedAsset = {type, value, after, sourcePages, back, networkAfter, watched};
   paintSelection();
   byId("inspector-heading").focus({preventScroll: true});
   if (window.matchMedia("(max-width: 970px)").matches) {
@@ -812,7 +813,7 @@ function assetEvidenceButton(reference, back, beforeSelect) {
 function inspectAsset(detail, asset, signal) {
   const list = element("div", "", "asset-sources");
   list.append(...detail.rows.map((reference) => assetEvidenceButton(reference, {
-    label: "Volver al activo", open: () => selectAsset(asset, asset.after)
+    label: "Volver al activo", open: () => selectAsset(asset)
   })));
   const actions = element("div", "", "tools");
   const report = element("button", "Cobertura por periodo");
@@ -833,12 +834,17 @@ function inspectAsset(detail, asset, signal) {
   const controls = element("div", "", "tools");
   if (asset.after) {
     const first = element("button", "Primeros registros");
-    first.onclick = () => selectAsset(asset);
+    first.onclick = () => selectAsset({...asset, after: "", sourcePages: []});
     controls.append(first);
+  }
+  if (asset.sourcePages.length) {
+    const previous = element("button", "Registros anteriores");
+    previous.onclick = () => selectAsset({...asset, after: asset.sourcePages.at(-1), sourcePages: asset.sourcePages.slice(0, -1)});
+    controls.append(previous);
   }
   if (detail.next) {
     const next = element("button", "Más registros");
-    next.onclick = () => selectAsset(asset, detail.next);
+    next.onclick = () => selectAsset({...asset, after: detail.next, sourcePages: [...asset.sourcePages, asset.after]});
     controls.append(next);
   }
   const view = byId("record-detail");

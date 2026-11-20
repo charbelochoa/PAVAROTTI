@@ -14,6 +14,7 @@ func (s *Store) localAssetCandidates(ctx context.Context, hash uint64, address n
 		return err
 	}
 	defer unlock()
+	var batch []Record
 	return s.walkLocalBatches(ctx, func(key string, entry os.DirEntry) error {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -24,18 +25,6 @@ func (s *Store) localAssetCandidates(ctx context.Context, hash uint64, address n
 		}
 		version := assetBatchVersion{modified: info.ModTime(), size: info.Size()}
 		index := s.assetIndex.lookup(key, version)
-		var records []Record
-		if index == nil {
-			records, err = s.readLocalAssetBatch(key, entry.Name())
-			if err != nil {
-				return err
-			}
-			index, err = buildAssetIndex(ctx, version, records)
-			if err != nil {
-				return err
-			}
-			s.assetIndex.remember(key, index)
-		}
 		var positions []int
 		if index != nil {
 			positions = index.candidates(hash, address)
@@ -43,10 +32,21 @@ func (s *Store) localAssetCandidates(ctx context.Context, hash uint64, address n
 				return nil
 			}
 		}
-		if records == nil {
-			records, err = s.readLocalAssetBatch(key, entry.Name())
+		batch, err = s.readLocalAssetBatch(key, entry.Name(), batch)
+		if err != nil {
+			return err
+		}
+		if index == nil {
+			index, err = buildAssetIndex(ctx, version, batch)
 			if err != nil {
 				return err
+			}
+			s.assetIndex.remember(key, index)
+			if index != nil {
+				positions = index.candidates(hash, address)
+				if len(positions) == 0 {
+					return nil
+				}
 			}
 		}
 		visitLatest := func(record Record) error {
@@ -56,19 +56,19 @@ func (s *Store) localAssetCandidates(ctx context.Context, hash uint64, address n
 			}
 			return visit(record)
 		}
-		if index == nil || positions[len(positions)-1] > len(records) {
+		if len(positions) != 0 && positions[len(positions)-1] > len(batch) {
 			positions = nil
 		}
-		return walkBatchPositions(ctx, records, positions, visitLatest)
+		return walkBatchPositions(ctx, batch, positions, visitLatest)
 	})
 }
 
-func (s *Store) readLocalAssetBatch(key, name string) ([]Record, error) {
+func (s *Store) readLocalAssetBatch(key, name string, batch []Record) ([]Record, error) {
 	data, err := os.ReadFile(filepath.Join(s.path, name))
 	if err != nil {
 		return nil, err
 	}
-	records, err := decodeBatch(key, data)
+	records, err := decodeBatchInto(key, data, batch)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", name, err)
 	}
