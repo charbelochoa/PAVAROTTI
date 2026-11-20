@@ -2,6 +2,8 @@ package analisis
 
 import (
 	"fmt"
+	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -71,6 +73,55 @@ func BenchmarkHTTPComparisonScale(b *testing.B) {
 						})
 					}
 				})
+			}
+		})
+	}
+}
+
+func BenchmarkConcurrentHTTPComparisons(b *testing.B) {
+	for _, backend := range []string{"local", "postgres"} {
+		b.Run(backend, func(b *testing.B) {
+			store := openScaleStore(b, backend)
+			first, last := seedHTTPComparison(b, store, HTTPComparisonRecordLimit)
+			windows := [2]HTTPCompareCriteria{
+				{Baseline: HTTPWindow{Origin: "https://host-0.example.invalid", Capture: "har", From: first, To: first},
+					Current: HTTPWindow{Origin: "https://host-1.example.invalid", Capture: "proxy", From: last, To: last}},
+				{Baseline: HTTPWindow{Capture: "har", From: first, To: last}, Current: HTTPWindow{Capture: "proxy", From: first, To: last}},
+			}
+			expected := [2]int{125, HTTPComparisonRecordLimit / 2}
+			var hashes [2]string
+			for index, criteria := range windows {
+				report, err := CompareHTTP(b.Context(), store, criteria)
+				if err != nil || report.Baseline.Observations != expected[index] || report.Current.Observations != expected[index] {
+					b.Fatalf("periodos de control: %d/%d, %v", report.Baseline.Observations, report.Current.Observations, err)
+				}
+				hashes[index] = report.InputSHA256
+			}
+			samples := [2][]time.Duration{make([]time.Duration, (b.N+1)/2), make([]time.Duration, b.N/2)}
+			var next atomic.Int64
+			b.ReportAllocs()
+			b.ResetTimer()
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
+					index := int(next.Add(1) - 1)
+					kind := index % 2
+					started := time.Now()
+					report, err := CompareHTTP(b.Context(), store, windows[kind])
+					samples[kind][index/2] = time.Since(started)
+					if err != nil || report.InputSHA256 != hashes[kind] {
+						b.Errorf("resultado concurrente con huella %s: %v", report.InputSHA256, err)
+						return
+					}
+				}
+			})
+			b.StopTimer()
+			for kind, durations := range samples {
+				if len(durations) != 0 {
+					slices.Sort(durations)
+					p95 := (95*len(durations)+99)/100 - 1
+					label := [2]string{"acotada-p95-ms", "amplia-p95-ms"}[kind]
+					b.ReportMetric(float64(durations[p95])/float64(time.Millisecond), label)
+				}
 			}
 		})
 	}
