@@ -63,6 +63,8 @@ En **Símbolos**, busca por nombre, ordinal o dirección y activa **Solo símbol
 
 En **Binarios → Comparar informes**, adjunta el JSON base, el actual y el archivo original. Ambos informes deben corresponder al mismo SHA-256, imagen y destino, y sus revisiones deben estar disponibles en el expediente. La comparación muestra orígenes comunes, agregados y ausentes del informe actual. Cada fila permite reabrir las citas disponibles en el inspector, y **Exportar JSON** guarda el resultado completo. La ausencia describe el alcance del informe actual. En terminal, usa `comparar-referencias --base antes.json --actual despues.json --archivo muestra --salida comparacion.json`.
 
+Mientras se comprueban los informes, **Cancelar verificación** detiene la consulta y deja los archivos seleccionados listos para reintentar.
+
 Para comparar dos versiones de un binario, importa ambas en el expediente. En el inspector de la primera elige **Usar como base**, abre la segunda y selecciona **Comparar secciones**. Adjunta los dos originales para verificar sus huellas y los inventarios guardados. El resultado distingue cambios de contenido y tamaño, secciones movidas, agregadas y ausentes. Los nombres repetidos en la misma imagen se muestran como grupos ambiguos cuando hay varias candidatas. Puedes abrir cada sección en su revisión exacta y exportar el resultado JSON.
 
 Se comparan binarios PE, ELF o Mach-O del mismo formato y arquitectura. Para dos Mach-O universales, el emparejamiento usa arquitectura y subtipo. Cada archivo puede ocupar hasta 32 MiB y debe tener un inventario completo de hasta 256 secciones. En secciones sin intervalo físico verificable se comparan sus metadatos. La terminal usa las mismas revisiones y archivos.

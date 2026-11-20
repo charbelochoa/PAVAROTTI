@@ -27,7 +27,7 @@ import (
 	"pavarotti/internal/trafico"
 )
 
-const version = "0.4.30"
+const version = "0.4.31"
 
 //go:embed ui/* licenses/*
 var resources embed.FS
