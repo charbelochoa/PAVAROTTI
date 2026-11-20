@@ -47,7 +47,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | --- | --- | --- |
 | Expedientes, terminal y agentes | Evidencia con procedencia, inventario y fichas por página en expedientes de 50,000 observaciones, relaciones y listas de seguimiento con citas, cobertura por periodo, cola persistente, revisión de código Go y exportación STIX. Las fichas reutilizan la selección de lotes en el almacén local y PostgreSQL. | Medir la primera consulta en expedientes que superan el presupuesto de caché de lotes. |
 | Inspección estática de binarios | PE, ELF y Mach-O con ventanas verificadas, referencias por símbolo e imagen y comparación de informes y secciones con citas de ambos lados. | Medir tiempo y memoria en comparaciones de archivos e informes cercanos a sus límites. |
-| Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros, reglas pasivas y comparación de hasta 50,000 observaciones con citas a la revisión exacta. | Medir latencia y memoria con varias comparaciones simultáneas y verificar la cancelación de las consultas. |
+| Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros, reglas pasivas y comparación de hasta 50,000 observaciones con citas a la revisión exacta. La mesa permite cancelar consultas y el almacén local admite importaciones durante una comparación. | Medir la concurrencia de comparaciones que consultan expedientes distintos en un despliegue compartido. |
 | Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, auditoría y restauración. Se prueban la apertura y la edición de otros expedientes durante una restauración. La carga sostenida de ediciones e ingesta está medida en un SSD. | Repetir la carga con los datos y el registro de escritura anticipada de PostgreSQL (WAL) en dispositivos independientes. |
 
 ## Hallazgos de la revisión de 0.3
@@ -100,6 +100,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 37. **Capturas DNS.** La 0.4.27 importa respuestas UDP desde PCAP y PCAPNG en la mesa y el CLI. Conserva el número de paquete, su fecha UTC y la huella del archivo. Las pruebas cubren endianidad, resoluciones de microsegundos y nanosegundos, interfaces y secciones múltiples, IPv4 con VLAN, IPv6 y capturas truncadas.
 38. **Capacidad de escritura.** La 0.4.28 consulta la revisión vigente al editar una nota en PostgreSQL. La prueba de concurrencia confirma una sola edición cuando seis peticiones parten de la misma revisión y comprueba el historial y la auditoría. Queda por medir el efecto de un dispositivo dedicado al WAL.
 39. **Fuentes de activos.** La 0.4.29 conserva en memoria los candidatos de los lotes ya leídos y consulta las revisiones vigentes de las notas en cada página. PostgreSQL selecciona lotes y lee las fuentes en la misma instantánea. Las pruebas comprueban fuentes directas, coberturas y cursores tras modificar el expediente desde otra conexión.
+40. **Comparaciones HTTP concurrentes.** La 0.4.30 acumula recuentos y citas al leer las observaciones. El almacén local fija la lista de lotes al inicio y admite nuevas importaciones durante el análisis. El botón **Cancelar consulta** conserva el informe anterior y permite volver a comparar desde la misma vista. El CLI `comparar-http` responde a la interrupción de la terminal.
 
 ## Medición de consultas por fecha
 
@@ -127,6 +128,20 @@ Se probaron 1,000, 10,000 y 50,000 observaciones sintéticas de HAR y proxy con 
 Una prueba con 12,000 entradas HAR y dos observaciones del proxy comparó el JSON de la mesa y del CLI antes y después de migrar a PostgreSQL. Los informes de formato 1 coincidieron byte a byte con la 0.4.22. La mesa reabrió el informe de formato 2 y saltó a la cabecera de la respuesta citada.
 
 Repite la medición con `go test ./internal/analisis -run '^$' -bench '^BenchmarkHTTPComparisonScale$' -benchtime=7x -benchmem`. Usa una base de pruebas con `PAVAROTTI_TEST_POSTGRES` para incluir PostgreSQL.
+
+## Medición de comparaciones HTTP concurrentes
+
+Cuatro trabajadores alternaron 20 comparaciones acotadas y 20 amplias en el mismo expediente de 50,000 observaciones. La prueba se ejecutó en Windows x64 y PostgreSQL 17.12 local. Cada comparación acotada encontró 125 observaciones por periodo y cada comparación amplia encontró 25,000 por periodo. `-benchmem` reporta los bytes asignados por operación de la muestra mixta.
+
+| Medición | Local 0.4.29 | Local 0.4.30 | PostgreSQL 0.4.29 | PostgreSQL 0.4.30 |
+| --- | --- | --- | --- | --- |
+| p95, comparación acotada | 2,733 ms | 18 ms | 220 ms | 134 ms |
+| p95, comparación amplia | 2,372 ms | 740 ms | 3,136 ms | 1,065 ms |
+| Memoria asignada por operación | 109.2 MiB | 75.6 MiB | 107.3 MiB | 73.8 MiB |
+
+En un expediente de 12,000 observaciones, el CLI de ambas versiones produjo archivos iguales byte a byte para los dos formatos. La prueba de cancelación detuvo una consulta HTTP mientras PostgreSQL esperaba un bloqueo. La consulta abandonó el servidor antes de liberar el bloqueo y la mesa conservó el informe anterior.
+
+Repite la prueba con `go test ./internal/analisis -run '^$' -bench '^BenchmarkConcurrentHTTPComparisons$' -benchtime=40x -benchmem -cpu=4`. Usa una base de pruebas con `PAVAROTTI_TEST_POSTGRES` para medir ambos almacenes.
 
 ## Medición del historial HTTP
 
@@ -239,7 +254,7 @@ Repite la prueba con `go test ./internal/analisis -run '^$' -bench '^BenchmarkCo
 | --- | --- | --- |
 | Activos y fuentes | Medir expedientes que superan el presupuesto de caché de lotes | Registrar tiempo y memoria en la primera consulta y en consultas repetidas. Comparar el orden, recuentos y revisiones con un recorrido completo. |
 | Triaje de binarios | Medir comparaciones de referencias de gran tamaño | Registrar duración y memoria al verificar informes de varios tamaños y comprobar que la mesa filtra y pagina sus orígenes. |
-| Historial HTTP | Medir comparaciones simultáneas sobre un expediente grande | Registrar latencia y memoria con ventanas acotadas y amplias simultáneas y confirmar que cancelar una consulta libera sus recursos. |
+| Historial HTTP | Medir comparaciones concurrentes en distintos expedientes compartidos | Comprobar latencia por expediente y confirmar que se puede cancelar una consulta mientras otra conserva su resultado y sus citas. |
 
 ## Ramas y commits
 

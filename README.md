@@ -34,6 +34,8 @@ El buscador encuentra fragmentos literales, incluidos los caracteres `%` y `_`, 
 
 En **Comparar capturas**, define el origen, el tipo de captura y las fechas UTC inclusivas de cada periodo. La tabla usa los registros guardados y muestra recuentos y diferencias por clase de respuesta, fallo del proxy y señal. **Con evaluación confirmada** cuenta las respuestas cuyo registro identifica la aplicación de reglas. Las señales históricas siguen visibles aunque falte ese dato. Cada fila admite hasta cinco citas por periodo a la revisión original. La comparación admite hasta 50,000 observaciones distintas entre ambos periodos, 32 MiB de entrada y 100 filas de resultados. Las comparaciones de hasta 10,000 observaciones conservan el formato 1 y las más amplias usan el formato 2. La mesa abre informes de ambos formatos.
 
+Mientras se genera una comparación, usa **Cancelar consulta** para detenerla y conservar el informe que ya tenías abierto.
+
 Usa **Exportar JSON** para conservar los criterios, resultados, citas y la huella de entrada. **Abrir informe JSON** recupera ese resultado guardado con sus criterios, incluso si el expediente ya incorporó capturas nuevas. Abre las citas desde el expediente que contiene la evidencia.
 
 La comparación HTTP y la cobertura por periodo admiten expedientes de más de 10,000 registros cuando los criterios seleccionan hasta 10,000 entradas de evidencia y 32 MiB de metadatos. Las ventanas usan la fecha UTC de cada registro.
