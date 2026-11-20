@@ -35,7 +35,7 @@ function assetNetworkPanel(asset, signal) {
       title.textContent = `IP observadas · ${page.addresses}`;
       status.textContent = page.rows.length ? `${page.records} ${page.records === 1 ? "registro DNS o HTTP" : "registros DNS o HTTP"}` :
         "Sin direcciones observadas para mostrar.";
-      const back = {label: "Volver a la red", open: () => selectAsset({...asset, networkAfter: after}, asset.after)};
+      const back = {label: "Volver a la red", open: () => selectAsset({...asset, networkAfter: after})};
       rows.append(...page.rows.map((member) => networkMemberNode(member, () => selectAsset({...member, back}), back)));
       if (after) {
         const first = element("button", "Primeras IP observadas");
