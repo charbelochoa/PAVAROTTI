@@ -45,7 +45,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 
 | Flujo | Disponible | Trabajo pendiente y prueba de cierre |
 | --- | --- | --- |
-| Expedientes, terminal y agentes | Evidencia con procedencia, inventario paginado, relaciones y listas de seguimiento con citas, cobertura por periodo, cola persistente, revisión de código Go y exportación STIX. La consulta paginada de fuentes con pocas coincidencias se midió con 180,000 observaciones en el almacén local y PostgreSQL. | Verificar cómo responden el inventario y las fichas cuando coinciden con la mayoría de las observaciones. |
+| Expedientes, terminal y agentes | Evidencia con procedencia, inventario paginado, relaciones y listas de seguimiento con citas, cobertura por periodo, cola persistente, revisión de código Go y exportación STIX. Se midieron fichas con pocas coincidencias en 180,000 observaciones y fichas con 50,000 coincidencias en el almacén local y PostgreSQL. | Medir la consulta de fichas con muchas coincidencias mientras se incorpora evidencia en el mismo expediente. |
 | Inspección estática de binarios | PE, ELF y Mach-O con ventanas verificadas, referencias por símbolo e imagen y comparación de informes y secciones con citas de ambos lados. La verificación de referencias está medida hasta 6,208 orígenes por informe. La comparación de secciones está medida con dos originales de 32 MiB en cada uno de los tres formatos. | Conservar las citas de inspecciones anteriores al ampliar la cobertura de formatos y arquitecturas. |
 | Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros, reglas pasivas y comparación de hasta 50,000 observaciones con citas a la revisión exacta. Las comparaciones concurrentes se verificaron en distintos expedientes de PostgreSQL. | Medir la transferencia y la latencia con ventanas acotadas dentro de lotes que abarcan varios días. |
 | Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, auditoría y restauración. Se prueban la apertura y la edición de otros expedientes durante una restauración. La carga sostenida de ediciones e ingesta está medida en un SSD. | Repetir la carga con los datos y el registro de escritura anticipada de PostgreSQL (WAL) en dispositivos independientes. |
@@ -106,6 +106,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 43. **Inventarios completos de Mach-O universal.** La 0.4.33 conserva todas las secciones cuando el total cabe en el límite de 256. Reimportar un original con un inventario anterior incompleto crea una inspección completa y conserva las citas existentes. Las pruebas con ELF y Mach-O universal usan originales de 32 MiB y, para Mach-O universal, verifican citas cuando cambia el orden de las imágenes.
 44. **Fichas de activos en expedientes grandes.** La 0.4.34 guarda un índice compacto por lote en la caché del proceso. La ficha comprueba cada coincidencia contra la evidencia y consulta la revisión vigente de las notas. Las fichas paginadas de un expediente de 180,000 observaciones coinciden en recuentos, orden y citas con un recorrido completo.
 45. **Comparaciones HTTP entre expedientes.** La 0.4.35 lee los lotes HTTP seleccionados en PostgreSQL y verifica cada observación antes de agregarla al informe. La prueba compartida abre dos expedientes por HTTPS, cancela una comparación y verifica el resultado y las citas del otro expediente.
+46. **Fichas con muchas fuentes.** La 0.4.36 reutiliza la memoria para decodificar los lotes de una consulta. En la mesa se puede avanzar, retroceder o volver a los primeros registros de una ficha. Al abrir una cita y volver se recupera la página con sus controles.
 
 ## Medición de consultas por fecha
 
@@ -274,6 +275,19 @@ El expediente tiene 180,000 observaciones DNS en lotes de 1,000, seis fuentes di
 
 El recorrido completo se comparó con todas las páginas de la ficha y sus citas en ambos almacenes. La prueba reproduce un empate de fecha, una revisión editada y coberturas RDAP y STIX. Repite la medición con `go test ./internal/analisis -run '^$' -bench '^BenchmarkAssetSourceCachePressure$' -benchtime=7x -benchmem -cpu=4`.
 
+### Activo con 50,000 fuentes
+
+Se midió la segunda página del inventario y la tercera página de la ficha para un dominio presente en 50,000 observaciones DNS. Cada página presentó 50 resultados y cada valor es el promedio de diez consultas en Windows x64 con PostgreSQL 17.12. La memoria corresponde a los bytes asignados en Go por consulta.
+
+| Consulta | 0.4.35 | 0.4.36 |
+| --- | ---: | ---: |
+| Inventario local | 161 ms · 77.1 MiB | 147 ms · 25.3 MiB |
+| Ficha local | 190 ms · 84.4 MiB | 186 ms · 32.6 MiB |
+| Inventario PostgreSQL | 164 ms · 86.2 MiB | 158 ms · 34.3 MiB |
+| Ficha PostgreSQL | 203 ms · 92.1 MiB | 186 ms · 40.3 MiB |
+
+Se compararon las páginas de la ficha con un recorrido completo. La prueba de la mesa verificó el retroceso entre tres páginas y la apertura de una nota en revisión 2 y una observación DNS en revisión 1. El inventario y las fichas coincidieron con el JSON del CLI de la 0.4.35 después de migrar a PostgreSQL. Repite la medición con `go test ./internal/analisis -run '^$' -bench '^BenchmarkDenseAssetPages$' -benchtime=10x -benchmem -cpu=4`.
+
 ## Medición de referencias binarias grandes
 
 Cada resultado es el promedio de diez verificaciones en Windows x64 con almacén local y muestras PE sintéticas. El informe actual reordena las citas y conserva el 93.75 % de los orígenes del informe base. Las asignaciones por comparación se midieron con `-benchmem`.
@@ -322,7 +336,6 @@ Repite la medición con `go test ./internal/analisis -run '^$' -bench '^Benchmar
 
 | Vista | Trabajo pendiente | Criterio de cierre |
 | --- | --- | --- |
-| Activos y fuentes | Medir consultas con muchas coincidencias | Verificar rendimiento, paginación, recuentos y citas en el inventario y en fichas que coinciden con la mayoría de las observaciones. |
 | Historial HTTP | Medir ventanas acotadas dentro de lotes que abarcan varios días | Comparar transferencia, latencia y citas con las mismas observaciones repartidas en lotes diarios. |
 
 ## Ramas y commits
