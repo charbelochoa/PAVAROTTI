@@ -32,6 +32,9 @@ func (s *Store) WalkFiltered(ctx context.Context, filter EvidenceFilter, visit f
 	if s.db == nil {
 		return s.walkLocalFiltered(ctx, !filter.HTTP, filter, visit)
 	}
+	if filter.HTTP {
+		return s.postgresWalkHTTP(ctx, filter, visit)
+	}
 	return s.postgresWalkFiltered(ctx, filter, visit)
 }
 
@@ -68,9 +71,6 @@ func (filter EvidenceFilter) sqlDays() ([]string, []string) {
 
 func (filter EvidenceFilter) preferHTTPBatchIndex() bool {
 	const narrow = 7 * 24 * time.Hour
-	if !filter.HTTP {
-		return false
-	}
 	var span time.Duration
 	for _, period := range filter.Periods {
 		width := period.End.Sub(period.Start)
@@ -88,32 +88,22 @@ func (s *Store) postgresWalkFiltered(ctx context.Context, filter EvidenceFilter,
 	starts, ends := filter.sqlDays()
 	rows, err := s.db.QueryContext(ctx, `
 		WITH periods AS MATERIALIZED (
-			SELECT first_day, last_day FROM unnest($3::text[], $4::text[]) AS period(first_day, last_day)
-		), indexed_batches AS MATERIALIZED (
-			SELECT page.batch_key
-			FROM periods JOIN pavarotti_http_page page
-			  ON page.day BETWEEN periods.first_day AND periods.last_day
-			WHERE $5::boolean AND page.expediente = $1
-			UNION
-			SELECT page.batch_key
-			FROM pavarotti_http_page page
-			WHERE $5::boolean AND page.expediente = $1 AND right(page.observed_at, 1) <> 'Z'
+			SELECT first_day, last_day FROM unnest($2::text[], $3::text[]) AS period(first_day, last_day)
 		)
 		SELECT b.batch_key, entry.ordinal, COALESCE(edited.revision, 1), COALESCE(edited.snapshot, entry.item)
 		FROM pavarotti_evidence_batches b
 		CROSS JOIN LATERAL jsonb_array_elements(b.payload) WITH ORDINALITY AS entry(item, ordinal)
 		LEFT JOIN LATERAL (
 			SELECT revision, snapshot FROM pavarotti_note_revisions
-			WHERE NOT $2::boolean AND entry.item->>'kind' = 'nota'
+			WHERE entry.item->>'kind' = 'nota'
 			  AND expediente = b.expediente AND batch_key = b.batch_key AND ordinal = entry.ordinal
 			ORDER BY revision DESC LIMIT 1
 		) edited ON true
-		WHERE b.expediente = $1 AND (NOT $2::boolean OR jsonb_typeof(entry.item->'traffic') = 'object')
-		  AND (NOT $5::boolean OR NOT b.http_page_indexed OR b.batch_key IN (SELECT batch_key FROM indexed_batches))
-		  AND (COALESCE(cardinality($3::text[]), 0) = 0 OR right(COALESCE(entry.item->>'time', ''), 1) <> 'Z'
+		WHERE b.expediente = $1
+		  AND (COALESCE(cardinality($2::text[]), 0) = 0 OR right(COALESCE(entry.item->>'time', ''), 1) <> 'Z'
 		       OR EXISTS (SELECT 1 FROM periods period
 		                  WHERE left(entry.item->>'time', 10) COLLATE "C" BETWEEN period.first_day AND period.last_day))
-	`, s.expediente, filter.HTTP, starts, ends, len(starts) > 0 && filter.preferHTTPBatchIndex())
+	`, s.expediente, starts, ends)
 	if err != nil {
 		return err
 	}
