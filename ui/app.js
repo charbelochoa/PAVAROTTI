@@ -71,9 +71,13 @@ function inspect(record, message = "Selecciona un registro para examinarlo.", ci
     view.append(element("p", message));
     return;
   }
-  view.append(element("span", record.kind, "type"), element("h3", record.title), element("p", formatTime(record.time)));
+  const capture = record.kind === "dns" && /^pcap\/(\d+)\/(pregunta|respuesta)\/(\d+)$/.exec(record.source_id);
+  const stamp = capture ? `Captura UTC · ${record.time}` : formatTime(record.time);
+  view.append(element("span", record.kind, "type"), element("h3", record.title), element("p", stamp));
   if (record.source) view.append(element("p", record.source));
-  if (record.source_id) {
+  if (capture) {
+    view.append(element("p", `Paquete ${capture[1]} · ${capture[2]} ${capture[3]}`));
+  } else if (record.source_id) {
     const label = record.kind === "archivo HAR" ? "Entrada HAR" : record.code_review || record.dependencies || record.kind === "binario" ? "Archivo" : "ID";
     view.append(element("p", `${label} · ${record.source_id}`));
   }
