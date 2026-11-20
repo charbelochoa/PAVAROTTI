@@ -18,7 +18,7 @@ import (
 const MaxBytes = 32 << 20
 
 var (
-	ErrKind = errors.New("tipo de archivo desconocido, usa har, hallazgos, binario, codigo, gomod, npmlock, indicadores, dns, rdap o stix")
+	ErrKind = errors.New("tipo de archivo desconocido, usa har, hallazgos, binario, codigo, gomod, npmlock, indicadores, dns, pcap-dns, rdap o stix")
 	ErrSize = errors.New("el archivo supera el límite")
 )
 
@@ -29,7 +29,7 @@ func Parse(kind string, reader io.Reader) ([]caso.Record, error) {
 func ParseNamed(kind string, reader io.Reader, name string) ([]caso.Record, error) {
 	limit := MaxBytes
 	switch kind {
-	case "har", "hallazgos", "indicadores", "dns", "rdap", "stix":
+	case "har", "hallazgos", "indicadores", "dns", "pcap-dns", "rdap", "stix":
 	case "binario":
 		limit = triaje.MaxBinaryBytes
 	case "codigo":
@@ -60,6 +60,8 @@ func ParseNamed(kind string, reader io.Reader, name string) ([]caso.Record, erro
 		return parseIndicators(data)
 	case "dns":
 		return parseDNS(data)
+	case "pcap-dns":
+		return parseCaptureDNS(data, sourceName(name))
 	case "rdap":
 		return parseRDAP(data)
 	case "stix":

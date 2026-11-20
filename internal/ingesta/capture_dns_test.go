@@ -40,7 +40,7 @@ func TestCaptureDNSClassicPreservesPacketEvidence(t *testing.T) {
 			otherPort[18+21] = 54
 			data := classicDNSCapture(format.order, format.magic, ethernetDNS4(query), frame[:len(frame)-1],
 				fragment, otherPort, frame, ethernetDNS4(negative), frame)
-			records, err := parseCaptureDNS(data, "muestra.pcap")
+			records, err := ParseNamed("pcap-dns", bytes.NewReader(data), `C:\expediente\muestra.pcap`)
 			if err != nil || len(records) != 5 {
 				t.Fatalf("records = %#v, error = %v", records, err)
 			}
