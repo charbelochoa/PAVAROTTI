@@ -141,7 +141,7 @@ func checkMigration(t *testing.T, destination *Store) {
 	}
 }
 
-func randBytes(t *testing.T) []byte {
+func randBytes(t testing.TB) []byte {
 	t.Helper()
 	buf := make([]byte, 16)
 	if _, err := rand.Read(buf); err != nil {
