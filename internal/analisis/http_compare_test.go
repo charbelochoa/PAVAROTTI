@@ -3,8 +3,10 @@ package analisis
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"pavarotti/internal/caso"
 )
@@ -137,5 +139,52 @@ func TestHTTPComparisonCountsOverlappingLargeWindows(t *testing.T) {
 	}
 	if _, err := CompareHTTP(t.Context(), store, criteria); !errors.Is(err, ErrHTTPComparisonLimit) {
 		t.Fatalf("límite de observaciones únicas: %v", err)
+	}
+}
+
+func TestHTTPComparisonKeepsLatestLabelsAndCitations(t *testing.T) {
+	store, err := caso.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	const rule = "nosniff-ausente"
+	stamps := []string{
+		"2026-11-01T01:00:00Z", "2026-11-01T03:00:00Z", "2026-11-01T05:00:00+02:00", "2026-11-01T04:00:00Z",
+		"2026-11-01T07:00:00+03:00", "2026-11-01T06:00:00Z", "2026-11-01T06:00:00.000000001Z", "2026-11-01T05:00:00Z",
+	}
+	for _, stamp := range stamps {
+		record := caso.Record{Kind: "archivo HAR", Time: stamp, Title: stamp, Source: "https://capture.invalid",
+			Traffic: &caso.Traffic{Status: 200}, HTTPFindings: []caso.HTTPFinding{{Rule: rule, Label: stamp}}}
+		if err := store.Save([]caso.Record{record}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	records, err := store.Records()
+	if err != nil || len(records) != len(stamps) {
+		t.Fatalf("evidencia: %d capturas, %v", len(records), err)
+	}
+	slices.SortFunc(records, func(a, b caso.Record) int {
+		first, _ := time.Parse(time.RFC3339Nano, a.Time)
+		second, _ := time.Parse(time.RFC3339Nano, b.Time)
+		if order := second.Compare(first); order != 0 {
+			return order
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	window := HTTPWindow{From: "2026-11-01", To: "2026-11-01"}
+	report, err := CompareHTTP(t.Context(), store, HTTPCompareCriteria{Baseline: window, Current: window})
+	if err != nil || len(report.Rows) != 2 {
+		t.Fatalf("filas: %+v, %v", report.Rows, err)
+	}
+	row := report.Rows[1]
+	if row.Code != rule || row.Label != records[0].Title || row.Baseline.Count != len(stamps) ||
+		len(row.Baseline.Evidence) != referenceLimit || !reflect.DeepEqual(row.Baseline, row.Current) {
+		t.Fatalf("regla: %+v", row)
+	}
+	for index, cite := range row.Baseline.Evidence {
+		if cite.ID != records[index].ID || cite.HTTPRule != rule || cite.Revision != 1 {
+			t.Fatalf("cita %d: %+v", index, cite)
+		}
 	}
 }
