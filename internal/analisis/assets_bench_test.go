@@ -116,3 +116,42 @@ func openScaleStore(tb testing.TB, backend string) *caso.Store {
 	tb.Cleanup(func() { _ = store.Close() })
 	return store
 }
+
+func BenchmarkConcurrentAssetSources(b *testing.B) {
+	for _, backend := range []string{"local", "postgres"} {
+		b.Run(backend, func(b *testing.B) {
+			store := openScaleStore(b, backend)
+			saveAssetScaleFixture(b, store, 50000)
+			query := AssetQuery{AssetKey: benchmarkAssetKeys[0], Limit: 2}
+			check := func(b *testing.B) bool {
+				detail, err := DescribeAsset(b.Context(), store, query)
+				if err != nil || detail.Count != 2 || detail.Coverage != 2 || len(detail.Rows) != 2 || detail.Next == "" {
+					b.Errorf("fuentes directas %d, coberturas %d, filas %d, error %v", detail.Count, detail.Coverage, len(detail.Rows), err)
+					return false
+				}
+				return true
+			}
+			if !check(b) {
+				return
+			}
+			b.Run("una", func(b *testing.B) {
+				b.ReportAllocs()
+				for b.Loop() {
+					if !check(b) {
+						return
+					}
+				}
+			})
+			b.Run("paralelas", func(b *testing.B) {
+				b.ReportAllocs()
+				b.RunParallel(func(pb *testing.PB) {
+					for pb.Next() {
+						if !check(b) {
+							return
+						}
+					}
+				})
+			})
+		})
+	}
+}
