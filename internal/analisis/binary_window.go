@@ -2,6 +2,7 @@ package analisis
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -156,17 +157,66 @@ func readVerifiedBinary(ctx context.Context, source io.Reader, size int, digest 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if size <= 0 || size > triaje.MaxBinaryBytes {
+	if source == nil || size <= 0 || size > triaje.MaxBinaryBytes {
 		return nil, ErrBinaryWindowSample
 	}
-	data, err := io.ReadAll(io.LimitReader(source, int64(size)+1))
-	if err != nil {
-		return nil, fmt.Errorf("leer el archivo original: %w", err)
+	const blockSize = 64 << 10
+	data := make([]byte, min(size, blockSize))
+	hash := sha256.New()
+	var eof bool
+	for start := 0; start < size; start += blockSize {
+		end := min(start+blockSize, size)
+		block := data[start:end]
+		n, err := readBinaryBlock(ctx, source, block)
+		if canceled := ctx.Err(); canceled != nil {
+			return nil, canceled
+		}
+		if err != nil && err != io.EOF {
+			return nil, fmt.Errorf("leer el archivo original: %w", err)
+		}
+		eof = err == io.EOF
+		if n != len(block) || (eof && end != size) {
+			return nil, ErrBinaryWindowSample
+		}
+		_, _ = hash.Write(block)
+		if len(data) < size {
+			complete := make([]byte, size)
+			copy(complete, data)
+			data = complete
+		}
 	}
-	if len(data) != size || caso.Hash(data) != digest {
+	if !eof {
+		var extra [1]byte
+		n, err := readBinaryBlock(ctx, source, extra[:])
+		if canceled := ctx.Err(); canceled != nil {
+			return nil, canceled
+		}
+		if err != nil && err != io.EOF {
+			return nil, fmt.Errorf("leer el archivo original: %w", err)
+		}
+		if n != 0 {
+			return nil, ErrBinaryWindowSample
+		}
+	}
+	if hex.EncodeToString(hash.Sum(nil)) != digest {
 		return nil, ErrBinaryWindowSample
 	}
 	return data, ctx.Err()
+}
+
+func readBinaryBlock(ctx context.Context, source io.Reader, block []byte) (int, error) {
+	read := 0
+	for read < len(block) {
+		if err := ctx.Err(); err != nil {
+			return read, err
+		}
+		n, err := source.Read(block[read:])
+		read += n
+		if err != nil {
+			return read, err
+		}
+	}
+	return read, nil
 }
 
 func (evidence *binaryWindowEvidence) image(index int) (*triaje.InstructionImage, error) {

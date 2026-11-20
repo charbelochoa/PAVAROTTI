@@ -3,6 +3,8 @@
 {
   const dialog = byId("binary-reference-comparison");
   const form = byId("binary-reference-comparison-form");
+  const run = byId("binary-reference-comparison-run");
+  const cancel = byId("binary-reference-comparison-cancel");
   const status = byId("binary-reference-comparison-status");
   const result = byId("binary-reference-comparison-result");
   const destination = byId("binary-reference-comparison-destination");
@@ -22,8 +24,31 @@
 
   byId("open-binary-reference-comparison").onclick = () => dialog.showModal();
 
+  function finish(controller) {
+    if (pending !== controller) return;
+    pending = undefined;
+    run.disabled = false;
+    cancel.hidden = true;
+  }
+
+  function stop(message) {
+    if (!pending) return;
+    const controller = pending;
+    controller.abort();
+    finish(controller);
+    status.textContent = message;
+  }
+
+  cancel.onclick = () => {
+    stop("Verificación cancelada.");
+    run.focus();
+  };
+  dialog.addEventListener("close", () => {
+    if (!dialog.open) stop("");
+  });
+
   function invalidate() {
-    pending?.abort();
+    stop("");
     verified = undefined;
     result.hidden = true;
     exportButton.hidden = true;
@@ -97,8 +122,11 @@
       status.textContent = "El archivo supera los 32 MiB.";
       return;
     }
-    pending = new AbortController();
-    const {signal} = pending;
+    const controller = new AbortController();
+    pending = controller;
+    const {signal} = controller;
+    run.disabled = true;
+    cancel.hidden = false;
     status.textContent = "Verificando los informes y el archivo original…";
     try {
       const comparison = await request("/api/referencias-binarias/comparar", {method: "POST", body, signal});
@@ -116,6 +144,8 @@
       exportButton.hidden = false;
     } catch (error) {
       if (!signal.aborted) status.textContent = error.message;
+    } finally {
+      finish(controller);
     }
   };
 }
