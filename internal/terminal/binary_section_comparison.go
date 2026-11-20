@@ -39,13 +39,14 @@ func terminalCompareSections(args []string, stdout, stderr io.Writer, open openE
 	defer store.Close()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	var reader analisis.BinarySectionReader
 	read := func(label, path string, target analisis.BinarySectionTarget) (analisis.BinarySectionInventory, error) {
 		file, err := openRegularFile(path)
 		if err != nil {
 			return analisis.BinarySectionInventory{}, err
 		}
 		defer file.Close()
-		inventory, err := analisis.ReadBinarySections(ctx, store, target, file)
+		inventory, err := reader.Read(ctx, store, target, file)
 		if err != nil {
 			return analisis.BinarySectionInventory{}, fmt.Errorf("archivo %s · %w", label, err)
 		}
@@ -64,6 +65,9 @@ func terminalCompareSections(args []string, stdout, stderr io.Writer, open openE
 		return err
 	}
 	return writeExport(stdout, *output, func(writer io.Writer) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		encoder := json.NewEncoder(writer)
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(comparison)

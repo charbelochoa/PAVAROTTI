@@ -29,6 +29,9 @@ func binarySectionComparisonRoute(mux *http.ServeMux, store *caso.Store) {
 			return
 		}
 		comparison, err := loadSectionComparison(r, store, form)
+		if r.Context().Err() != nil {
+			return
+		}
 		if err != nil {
 			binarySectionError(w, err)
 			return
@@ -51,12 +54,13 @@ func loadSectionComparison(r *http.Request, store *caso.Store, form *multipart.R
 	if len(data) > maxSelection || json.Unmarshal(data, &selection) != nil {
 		return analisis.BinarySectionComparison{}, analisis.ErrBinarySectionRequest
 	}
+	var reader analisis.BinarySectionReader
 	read := func(name string, target analisis.BinarySectionTarget) (analisis.BinarySectionInventory, error) {
 		file, err := form.NextPart()
 		if err != nil || file.FormName() != "archivo_"+name || file.FileName() == "" {
 			return analisis.BinarySectionInventory{}, multipartSectionError(err)
 		}
-		inventory, err := analisis.ReadBinarySections(r.Context(), store, target, file)
+		inventory, err := reader.Read(r.Context(), store, target, file)
 		if err != nil {
 			return analisis.BinarySectionInventory{}, fmt.Errorf("archivo %s · %w", name, err)
 		}
