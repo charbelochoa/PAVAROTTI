@@ -46,7 +46,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 | Flujo | Disponible | Trabajo pendiente y prueba de cierre |
 | --- | --- | --- |
 | Expedientes, terminal y agentes | Evidencia con procedencia, inventario y fichas por página en expedientes de 50,000 observaciones, relaciones y listas de seguimiento con citas, cobertura por periodo, cola persistente, revisión de código Go y exportación STIX. Las fichas reutilizan la selección de lotes en el almacén local y PostgreSQL. | Medir la primera consulta en expedientes que superan el presupuesto de caché de lotes. |
-| Inspección estática de binarios | PE, ELF y Mach-O con ventanas verificadas, referencias por símbolo e imagen y comparación de informes y secciones con citas de ambos lados. La verificación de informes de referencias está medida hasta 6,208 orígenes por informe. | Medir inventarios de secciones con dos originales cercanos a 32 MiB. |
+| Inspección estática de binarios | PE, ELF y Mach-O con ventanas verificadas, referencias por símbolo e imagen y comparación de informes y secciones con citas de ambos lados. La verificación de referencias está medida hasta 6,208 orígenes por informe. La comparación de secciones está medida con dos PE de 32 MiB. | Validar inventarios ELF y Mach-O universal en el límite de tamaño. |
 | Observación HTTP | Proxy local de destino fijo, importación HAR, cronología, filtros, reglas pasivas y comparación de hasta 50,000 observaciones con citas a la revisión exacta. La mesa permite cancelar consultas y el almacén local admite importaciones durante una comparación. | Medir la concurrencia de comparaciones que consultan expedientes distintos en un despliegue compartido. |
 | Operación compartida | Instalación nativa, Docker Compose local y HTTPS con roles, auditoría y restauración. Se prueban la apertura y la edición de otros expedientes durante una restauración. La carga sostenida de ediciones e ingesta está medida en un SSD. | Repetir la carga con los datos y el registro de escritura anticipada de PostgreSQL (WAL) en dispositivos independientes. |
 
@@ -102,6 +102,7 @@ Construir una estación OSINT para equipos Blue Team. El flujo principal parte d
 39. **Fuentes de activos.** La 0.4.29 conserva en memoria los candidatos de los lotes ya leídos y consulta las revisiones vigentes de las notas en cada página. PostgreSQL selecciona lotes y lee las fuentes en la misma instantánea. Las pruebas comprueban fuentes directas, coberturas y cursores tras modificar el expediente desde otra conexión.
 40. **Comparaciones HTTP concurrentes.** La 0.4.30 acumula recuentos y citas al leer las observaciones. El almacén local fija la lista de lotes al inicio y admite nuevas importaciones durante el análisis. El botón **Cancelar consulta** conserva el informe anterior y permite volver a comparar desde la misma vista. El CLI `comparar-http` responde a la interrupción de la terminal.
 41. **Referencias binarias de gran tamaño.** La 0.4.31 verifica el tamaño y la huella del original por bloques. Reutiliza las citas idénticas ya verificadas cuando coinciden la evidencia, su revisión, la imagen y el destino. La mesa permite cancelar la verificación o reintentar con los mismos archivos.
+42. **Secciones en originales grandes.** La 0.4.32 verifica dos originales con un búfer reutilizable y analiza el inventario con las huellas ya comprobadas. La mesa pagina las secciones, permite cancelar la verificación y conserva la página del resultado al volver de una cita base o actual.
 
 ## Medición de consultas por fecha
 
@@ -256,6 +257,20 @@ La prueba de la mesa usó dos informes de 6,208 orígenes cada uno. Verificó 21
 
 Repite la prueba con `go test ./internal/analisis -run '^$' -bench '^BenchmarkBinaryReferenceVerification$' -benchtime=10x -benchmem`.
 
+## Medición de secciones en originales grandes
+
+Cada resultado es el promedio de diez comparaciones con dos PE sintéticos del mismo tamaño en Windows x64 con almacén local. Un cuarto de las secciones cambió de contenido, otro cuarto cambió de dirección y las demás conservaron su estado. La memoria asignada por comparación se midió con `-benchmem`.
+
+| Tamaño y secciones de cada original | 0.4.31 | 0.4.32 |
+| --- | --- | --- |
+| 256 KiB y 16 secciones | 4.81 ms · 0.70 MiB | 3.40 ms · 0.39 MiB |
+| 4 MiB y 64 secciones | 67.8 ms · 8.38 MiB | 45.5 ms · 4.32 MiB |
+| 32 MiB y 256 secciones | 540 ms · 65.2 MiB | 366 ms · 33.1 MiB |
+
+Con dos originales de 32 MiB, la mesa mostró nueve páginas y abrió la misma sección en las revisiones base y actual. La prueba incluyó el filtro **Solo diferencias**, la cancelación y el reintento. El JSON del CLI coincidió byte a byte con la 0.4.31 y tras migrar el expediente de archivos a PostgreSQL.
+
+Repite la medición con `go test ./internal/analisis -run '^$' -bench '^BenchmarkBinarySectionVerification$' -benchtime=10x -benchmem`.
+
 ## Flujo de trabajo OSINT
 
 1. **Incorporar.** Un expediente reúne indicadores, capturas HTTP, binarios, DNS, RDAP y paquetes STIX aportados por el analista. Las entradas conservan su huella y sus referencias de origen cuando el formato las proporciona.
@@ -268,7 +283,7 @@ Repite la prueba con `go test ./internal/analisis -run '^$' -bench '^BenchmarkBi
 | Vista | Trabajo pendiente | Criterio de cierre |
 | --- | --- | --- |
 | Activos y fuentes | Medir expedientes que superan el presupuesto de caché de lotes | Registrar tiempo y memoria en la primera consulta y en consultas repetidas. Comparar el orden, recuentos y revisiones con un recorrido completo. |
-| Triaje de binarios | Medir comparaciones de secciones entre dos originales grandes | Registrar duración y memoria con archivos cercanos a 32 MiB y verificar la apertura de citas de ambos lados. |
+| Triaje de binarios | Verificar comparaciones de secciones en ELF y Mach-O universal de gran tamaño | Comparar duración, asignaciones, navegación entre imágenes y citas de ambos originales. |
 | Historial HTTP | Medir comparaciones concurrentes en distintos expedientes compartidos | Comprobar latencia por expediente y confirmar que se puede cancelar una consulta mientras otra conserva su resultado y sus citas. |
 
 ## Ramas y commits

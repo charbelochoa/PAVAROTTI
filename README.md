@@ -67,6 +67,8 @@ Mientras se comprueban los informes, **Cancelar verificación** detiene la consu
 
 Para comparar dos versiones de un binario, importa ambas en el expediente. En el inspector de la primera elige **Usar como base**, abre la segunda y selecciona **Comparar secciones**. Adjunta los dos originales para verificar sus huellas y los inventarios guardados. El resultado distingue cambios de contenido y tamaño, secciones movidas, agregadas y ausentes. Los nombres repetidos en la misma imagen se muestran como grupos ambiguos cuando hay varias candidatas. Puedes abrir cada sección en su revisión exacta y exportar el resultado JSON.
 
+Usa **Solo diferencias** para acotar las páginas. La mesa conserva la página al volver de una cita y permite cancelar una verificación con los archivos seleccionados listos para reintentar.
+
 Se comparan binarios PE, ELF o Mach-O del mismo formato y arquitectura. Para dos Mach-O universales, el emparejamiento usa arquitectura y subtipo. Cada archivo puede ocupar hasta 32 MiB y debe tener un inventario completo de hasta 256 secciones. En secciones sin intervalo físico verificable se comparan sus metadatos. La terminal usa las mismas revisiones y archivos.
 
 ```bash
