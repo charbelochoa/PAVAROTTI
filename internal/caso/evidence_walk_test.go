@@ -54,16 +54,24 @@ func TestHTTPWindowReadsPendingAndLegacyBatches(t *testing.T) {
 	}
 	start := time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC)
 	filter := EvidenceFilter{HTTP: true, Periods: []EvidencePeriod{{Start: start, End: start.AddDate(0, 0, 1)}}}
-	var titles []string
-	if err := store.WalkFiltered(ctx, filter, func(record Record) error {
-		titles = append(titles, record.Title)
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	slices.Sort(titles)
-	if !slices.Equal(titles, []string{"Con desfase", "En el índice", "Por indexar"}) {
-		t.Fatalf("ventana acotada: %v", titles)
+	for _, name := range []string{"acotada", "amplia"} {
+		t.Run(name, func(t *testing.T) {
+			windows := filter
+			if name == "amplia" {
+				windows.Periods = append(windows.Periods, EvidencePeriod{Start: start.AddDate(0, 0, -14), End: start.AddDate(0, 0, -7)})
+			}
+			var titles []string
+			if err := store.WalkFiltered(t.Context(), windows, func(record Record) error {
+				titles = append(titles, record.Title)
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			slices.Sort(titles)
+			if !slices.Equal(titles, []string{"Con desfase", "En el índice", "Por indexar"}) {
+				t.Fatalf("ventana: %v", titles)
+			}
+		})
 	}
 }
 
