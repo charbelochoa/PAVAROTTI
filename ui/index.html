@@ -410,6 +410,7 @@
       </div>
       <div class="tools">
         <button type="submit" class="primary">Comparar</button>
+        <button type="button" id="binary-section-comparison-cancel" hidden>Cancelar verificación</button>
         <button type="button" id="binary-section-comparison-export" hidden>Exportar JSON</button>
       </div>
     </form>
@@ -418,6 +419,11 @@
       <p id="binary-section-comparison-totals"></p>
       <label class="binary-symbol-filter"><input id="binary-section-differences" type="checkbox" checked>Solo diferencias</label>
       <ul id="binary-section-comparison-rows" class="binary-list"></ul>
+      <div class="pager" id="binary-section-comparison-pager" hidden>
+        <button type="button" id="binary-section-comparison-previous">Anterior</button>
+        <output id="binary-section-comparison-page"></output>
+        <button type="button" id="binary-section-comparison-next">Siguiente</button>
+      </div>
     </div>
   </dialog>
   <dialog id="triage-panel" aria-labelledby="triage-title">

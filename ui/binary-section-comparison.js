@@ -9,8 +9,14 @@ const binarySectionComparisonTools = (() => {
   const result = byId("binary-section-comparison-result");
   const differences = byId("binary-section-differences");
   const exportButton = byId("binary-section-comparison-export");
+  const cancelButton = byId("binary-section-comparison-cancel");
+  const pager = byId("binary-section-comparison-pager");
+  const previous = byId("binary-section-comparison-previous");
+  const next = byId("binary-section-comparison-next");
+  const pageLabel = byId("binary-section-comparison-page");
   const submit = form.querySelector("button[type=submit]");
   const maxBytes = 32 * 1024 * 1024;
+  const pageSize = 30;
   const states = {igual: "Igual", movida: "Movida", modificada: "Modificada",
     agregada: "Agregada", ausente: "Ausente del binario actual", ambigua: "Emparejamiento ambiguo"};
   const changes = {direccion: "Dirección", desplazamiento: "Desplazamiento",
@@ -19,10 +25,19 @@ const binarySectionComparisonTools = (() => {
   let view;
   let pending;
 
-  function cancel() {
-    pending?.abort();
+  function finish(controller) {
+    if (pending !== controller) return;
     pending = undefined;
     submit.disabled = false;
+    cancelButton.hidden = true;
+  }
+
+  function stop(message) {
+    if (!pending) return;
+    const controller = pending;
+    controller.abort();
+    finish(controller);
+    status.textContent = message;
   }
 
   function clearResult() {
@@ -34,7 +49,7 @@ const binarySectionComparisonTools = (() => {
 
   function show(snapshot) {
     if (view !== snapshot) {
-      cancel();
+      stop("");
       view = snapshot;
       form.reset();
       clearResult();
@@ -84,7 +99,10 @@ const binarySectionComparisonTools = (() => {
     for (const row of report.rows) counts[row.state]++;
     totals.textContent = `Iguales ${counts.igual} · Movidas ${counts.movida} · Modificadas ${counts.modificada} · Agregadas ${counts.agregada} · Ausentes ${counts.ausente} · Ambiguas ${counts.ambigua}`;
     const visible = snapshot.differences ? report.rows.filter((row) => row.state !== "igual") : report.rows;
-    rows.replaceChildren(...visible.map((row) => {
+    const pages = Math.max(1, Math.ceil(visible.length / pageSize));
+    snapshot.page = Math.min(snapshot.page, pages - 1);
+    const start = snapshot.page * pageSize;
+    rows.replaceChildren(...visible.slice(start, start + pageSize).map((row) => {
       const item = element("li");
       const name = row.name || "Sin nombre";
       const architecture = row.subtype ? `${row.architecture} · subtipo ${row.subtype}` : row.architecture;
@@ -97,22 +115,27 @@ const binarySectionComparisonTools = (() => {
       return item;
     }));
     if (!visible.length) rows.append(element("li", snapshot.differences ? "Sin diferencias registradas." : "Sin secciones registradas."));
+    pager.hidden = pages <= 1;
+    previous.disabled = snapshot.page === 0;
+    next.disabled = snapshot.page + 1 >= pages;
+    pageLabel.textContent = `Página ${snapshot.page + 1} de ${pages}`;
     status.textContent = "Archivos originales verificados";
     result.hidden = false;
     exportButton.hidden = false;
   }
 
   form.onchange = () => {
-    cancel();
+    stop("");
     view.report = undefined;
     clearResult();
   };
   form.onsubmit = async (event) => {
     event.preventDefault();
-    cancel();
+    stop("");
     clearResult();
     const snapshot = view;
     snapshot.report = undefined;
+    snapshot.page = 0;
     const original = form.elements.archivo_base.files[0];
     const current = form.elements.archivo_actual.files[0];
     if (!original || !current) return;
@@ -128,6 +151,7 @@ const binarySectionComparisonTools = (() => {
     pending = controller;
     const {signal} = controller;
     submit.disabled = true;
+    cancelButton.hidden = false;
     status.textContent = "Verificando ambos archivos y sus secciones…";
     try {
       const report = await request("/api/secciones-binarias/comparar", {method: "POST", body, signal});
@@ -138,18 +162,25 @@ const binarySectionComparisonTools = (() => {
     } catch (error) {
       if (!signal.aborted) status.textContent = error.message;
     } finally {
-      if (pending === controller) cancel();
+      finish(controller);
     }
   };
   differences.onchange = () => {
     view.differences = differences.checked;
+    view.page = 0;
     render();
+  };
+  previous.onclick = () => { view.page--; render(); };
+  next.onclick = () => { view.page++; render(); };
+  cancelButton.onclick = () => {
+    stop("Verificación cancelada.");
+    submit.focus();
   };
   exportButton.onclick = () => {
     const data = JSON.stringify(view.report, null, 2) + "\n";
     download(new Blob([data], {type: "application/json"}), "PAVAROTTI-comparacion-secciones.json");
   };
-  dialog.addEventListener("close", () => { if (!dialog.open) cancel(); });
+  dialog.addEventListener("close", () => { if (!dialog.open) stop(""); });
 
   return (record) => {
     const candidate = {target: {record_id: record.id, revision: record.revision}, name: record.source_id || record.title};
@@ -168,7 +199,7 @@ const binarySectionComparisonTools = (() => {
       baseline = isBase() ? undefined : candidate;
       update();
     };
-    compare.onclick = () => show({baseline, current: candidate, differences: true});
+    compare.onclick = () => show({baseline, current: candidate, differences: true, page: 0});
     update();
     actions.append(choose, compare);
     controls.append(actions, selected);
