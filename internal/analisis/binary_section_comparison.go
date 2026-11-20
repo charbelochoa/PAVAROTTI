@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"slices"
 	"strconv"
@@ -110,6 +111,9 @@ func (reader *BinarySectionReader) Read(ctx context.Context, store *caso.Store, 
 	case "ELF", "PE", "Mach-O", "Mach-O universal":
 	default:
 		return BinarySectionInventory{}, ErrBinarySectionPair
+	}
+	if layout.RestoresUniversalSections() && saved.SectionCount == layout.SectionCount && len(saved.Sections) < saved.SectionCount {
+		return BinarySectionInventory{}, fmt.Errorf("%w · vuelve a importar el original y selecciona el registro con secciones completas", ErrBinarySectionInventory)
 	}
 	if layout.SectionCount != len(layout.Sections) || layout.UnreadableImages != 0 || saved.UnreadableImages != 0 ||
 		(saved.SectionCount != 0 && saved.SectionCount != layout.SectionCount) ||

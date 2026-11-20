@@ -16,6 +16,7 @@ import (
 )
 
 const MaxBytes = 32 << 20
+const completeBinarySectionListing = 2
 
 var (
 	ErrKind = errors.New("tipo de archivo desconocido, usa har, hallazgos, binario, codigo, gomod, npmlock, indicadores, dns, pcap-dns, rdap o stix")
@@ -106,6 +107,10 @@ func ParseNamed(kind string, reader io.Reader, name string) ([]caso.Record, erro
 		if len(result.Instructions) > 0 {
 			title += " · Instrucciones"
 			listing = 1
+		}
+		if result.RestoresUniversalSections() {
+			title += " · Secciones completas"
+			listing = completeBinarySectionListing
 		}
 		return []caso.Record{{
 			Kind: "binario", Time: caso.Now(), Title: title,
